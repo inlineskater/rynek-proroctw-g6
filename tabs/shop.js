@@ -988,6 +988,7 @@ function syncShopNavCountsFromShop() {
 }
 
 async function loadShop() {
+  const activationId = _tabActivationId;
   const grid = document.getElementById('shop-grid');
   grid.replaceChildren(makeSpinner());
 
@@ -1012,6 +1013,7 @@ async function loadShop() {
     refreshMyCoins(),
   ]);
 
+  if (activeTab !== 'shop' || activationId !== _tabActivationId) return;
   if (error) { grid.replaceChildren(); grid.append(document.createTextNode('Błąd ładowania sklepu.')); return; }
 
   grid.replaceChildren();
@@ -1052,6 +1054,13 @@ async function loadShop() {
       else document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
+}
+
+// Lifecycle hook for the lazy tab. Without this, logging out from Sklep leaves
+// its countdown interval alive because activeTab still equals "shop".
+function stopShopTimer() {
+  if (auctionTimerInterval) clearInterval(auctionTimerInterval);
+  auctionTimerInterval = null;
 }
 
 function buildShopCard(item) {

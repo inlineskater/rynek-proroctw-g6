@@ -128,9 +128,11 @@ function startBankTimer() {
 }
 
 async function loadBank() {
+  const activationId = _tabActivationId;
   const body = document.getElementById('bank-body');
   if (!body) return;
   const { data, error } = await sb.rpc('bank_state');
+  if (activeTab !== 'bank' || activationId !== _tabActivationId) return;
   if (error) {
     body.replaceChildren(el('div', { className: 'bk-empty' },
       'Bank G6 jest niedostępny — wdróż supabase/bank.sql. (' + error.message + ')'));

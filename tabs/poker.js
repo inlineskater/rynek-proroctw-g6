@@ -30,11 +30,14 @@ async function invokePoker(payload) {
 }
 
 async function loadPokerState(showSpinner = true) {
+  const activationId = _tabActivationId;
   if (showSpinner && !pokerState) pokerWrap.replaceChildren(makeSpinner());
   try {
     const data = await invokePoker({ action: 'state' });
+    if (activeTab !== 'poker' || activationId !== _tabActivationId) return;
     applyPokerState(data);
   } catch (err) {
+    if (activeTab !== 'poker' || activationId !== _tabActivationId) return;
     stopPokerClock();
     // Transient backend error — show toast and auto-retry once instead of breaking the panel.
     if (err.message === 'Nie udało się wykonać akcji pokerowej.') {

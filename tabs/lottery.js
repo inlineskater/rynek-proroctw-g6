@@ -39,15 +39,18 @@ const LOTTERY_OWNER_KEYS = ['ogrod','ozdoby','dzialki'];
 
 let lotteryData = null;
 let lotteryLoading = false;
+let lotteryLoadingActivation = null;
 let lotteryDraws = [];          // lottery_draws rows, newest first
 let lotteryDrawsMissing = false; // supabase/lottery-draw.sql not installed yet
 
 async function renderLottery(force) {
+  const activationId = _tabActivationId;
   const body = document.getElementById('lottery-body');
   if (!body) return;
   if (lotteryData && !force) { body.replaceChildren(buildLotteryPanel(lotteryData)); return; }
-  if (lotteryLoading) return;
+  if (lotteryLoading && lotteryLoadingActivation === activationId) return;
   lotteryLoading = true;
+  lotteryLoadingActivation = activationId;
   if (!lotteryData) body.replaceChildren(makeSpinner());
   else body.replaceChildren(buildLotteryPanel(lotteryData)); // keep showing stale data with a spinning refresh button
   try {
@@ -55,6 +58,7 @@ async function renderLottery(force) {
       sb.rpc('mundial_lottery_standings'),
       sb.from('lottery_draws').select('*').order('committed_at', { ascending: false }).limit(12),
     ]);
+    if (activeTab !== 'lottery' || activationId !== _tabActivationId) return;
     if (standRes.error) throw standRes.error;
     // The draw tables may not be installed yet (supabase/lottery-draw.sql) — the
     // machine degrades to a note instead of taking the whole tab down with it.
@@ -65,10 +69,14 @@ async function renderLottery(force) {
     body.replaceChildren(buildLotteryPanel(data));
     setupLotteryRealtime();
   } catch (_e) {
+    if (activeTab !== 'lottery' || activationId !== _tabActivationId) return;
     body.replaceChildren(el('div', { className: 'lot' },
       el('p', { className: 'lot-lede' }, 'Nie udało się wczytać loterii. Spróbuj odświeżyć stronę.')));
   } finally {
-    lotteryLoading = false;
+    if (lotteryLoadingActivation === activationId) {
+      lotteryLoading = false;
+      lotteryLoadingActivation = null;
+    }
   }
 }
 
@@ -343,6 +351,13 @@ function lotMachineStop() {
   lotMachRaf = 0;
   if (lotMach && lotMach._ro) { try { lotMach._ro.disconnect(); } catch (_e) {} }
   lotMach = null;
+}
+
+// Lifecycle hook used by switchTab()/doLogout() even while the machine is idle:
+// the idle drum also owns a perpetual RAF and a ResizeObserver.
+function stopLotteryAnimation() {
+  lotMachineStop();
+  if (lotIsFs()) lotExitFs();
 }
 
 // ── Verification (mirrors public.lottery_roll) ──────────────────────────────

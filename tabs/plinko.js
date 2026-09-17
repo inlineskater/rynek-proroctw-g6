@@ -64,10 +64,13 @@ async function invokePlinko(payload) {
 }
 
 async function loadPlinkoState(showToastOnError = true) {
+  const activationId = _tabActivationId;
   try {
     const data = await invokePlinko({ action: 'state' });
+    if (activeTab !== 'plinko' || activationId !== _tabActivationId) return;
     applyPlinkoState(data);
   } catch (err) {
+    if (activeTab !== 'plinko' || activationId !== _tabActivationId) return;
     if (showToastOnError) showToast('❌ ' + err.message);
     renderPlinko();
   }
@@ -860,10 +863,13 @@ async function invokeWheel(payload) {
 }
 
 async function loadWheelState(showToastOnError = true) {
+  const activationId = _tabActivationId;
   try {
     const data = await invokeWheel({ action: 'state' });
+    if (activeTab !== 'wheel' || activationId !== _tabActivationId) return;
     applyWheelState(data);
   } catch (err) {
+    if (activeTab !== 'wheel' || activationId !== _tabActivationId) return;
     if (showToastOnError) showToast('❌ ' + err.message);
     renderWheel();
   }

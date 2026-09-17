@@ -8386,8 +8386,9 @@
        retro signature, kept only in the header + launcher. z-index above nav
        (40/41), below modals (100+). */
     /* #pu-overlay is in the list because the player window lives outside the
-       rail in the DOM but is painted from the same palette. */
-    #chat-rail, #chat-toasts, #pu-overlay {
+       rail in the DOM but is painted from the same palette. So is #cfx-pop, the
+       reactions/naklejki picker from tabs/chat-reactions.js. */
+    #chat-rail, #chat-toasts, #pu-overlay, #cfx-pop {
       --c-surface:     rgba(255,255,255,.82);
       --c-solid:       #ffffff;
       --c-bubble:      #eef1f5;
@@ -12266,8 +12267,10 @@ const TAB_MODULES = {
   bank:        'tabs/bank.js',    // Bank G6: Lokata, Skarbonka, Obligacje, Udziały
   poker:       'tabs/poker.js',
   hilo:        'tabs/hilo.js',   // Drabina Kariery (Hi-Lo)
+  chatfx:      'tabs/chat-reactions.js', // not a tab: Czat G6 reactions + naklejki, fetched by initChat()
 };
 const _tabModulePromises = {};
+let _tabActivationId = 0;
 function ensureTabModule(tab) {
   const src = TAB_MODULES[tab];
   if (!src) return Promise.resolve();
@@ -12286,9 +12289,15 @@ function ensureTabModule(tab) {
 // by the time this runs, so a slow network shows an empty panel rather than a
 // frozen one; a genuine failure tells the user to refresh instead of leaving a
 // blank tab with no explanation.
-function withTabModule(tab, fn) {
+function withTabModule(tab, fn, requiredActiveTab = null) {
   if (!TAB_MODULES[tab]) { fn(); return; }
-  ensureTabModule(tab).then(fn).catch(err => {
+  const activationId = _tabActivationId;
+  ensureTabModule(tab).then(() => {
+    // Navigation can finish before a cold module request does. Do not start a
+    // hidden tab's polling/animation after its switchTab() teardown already ran.
+    if (requiredActiveTab && (activeTab !== requiredActiveTab || activationId !== _tabActivationId)) return;
+    return fn();
+  }).catch(err => {
     console.error('tab module', tab, err);
     toast('Nie udało się wczytać zakładki. Odśwież stronę.');
   });
@@ -12337,9 +12346,18 @@ function stopPokerClock() {}
 function stopPlinkoAnimation() {}
 function stopWheelAnimation() {}
 function stopBankTimer() {}
+function stopLotteryAnimation() {}
+function stopShopTimer() {}
 // Overwritten by tabs/hilo.js. switchTab() calls it unconditionally, so it has
 // to exist before the module is ever fetched.
 function stopHiloTimer() {}
+// Overwritten by tabs/chat-reactions.js. The chat renders plain text until it
+// arrives, and keeps working as plain text if it never does.
+function chatFxDecorate(node, m) {}
+function chatFxOnRealtime(row) {}
+function chatFxLoadFor(ids) { return Promise.resolve(); }
+function chatFxPreview(m) { return m.body || ''; }
+function chatFxReset() {}
 const lwCharts = new Map();
 const HERO_APPEARANCE_FIELDS = [
   'skin_tone', 'hair_style', 'hair_color', 'beard',
@@ -12948,12 +12966,15 @@ async function refreshMeCoins() {
 }
 
 async function doLogout() {
+  _tabActivationId += 1; // invalidate any cold lazy-tab callback before awaiting network
   try { await sb.rpc('chat_set_offline'); } catch (e) {}   // prompt "wyszedł z sieci" for peers
   resetChatState();
   teardownRealtime();
   await sb.auth.signOut();
   me = null; markets = []; tradesByMarket = {}; myPositionsByMarket = {}; marketsDirty = false;
   pokerState = null; pokerRealtimeReady = false; stopPokerClock();
+  stopPlinkoAnimation(); stopWheelAnimation(); stopBankTimer(); stopHiloTimer();
+  stopLotteryAnimation(); stopShopTimer();
   rouletteState = null; rouletteRealtimeReady = false; rouletteLastResultId = null; stopRouletteHeartbeat();
   rouletteLocalBets = null; if (rouletteFlushTimer) { clearTimeout(rouletteFlushTimer); rouletteFlushTimer = null; }
   minesState = null; minesViewRound = null; minesBusy = false; minesLastTile = null; minesLastOutcome = '';
@@ -12965,6 +12986,7 @@ async function doLogout() {
   stopTetrisRound(); // also drops handheld fullscreen + the body scroll lock
   stopHealerDungeonRound();
   stopBubbleBreakerRound();
+  stopSaperRound();
   resetGardenState();
   resetHeroState();
   hide(screenApp);
@@ -13282,7 +13304,7 @@ function loadAllGamesTab() {
 
 function leaveAllGamesTab() {
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound();
   stopAgPreviews();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesMode = false;
@@ -13307,7 +13329,7 @@ function selectAllGame(gameType) {
   if (gameType === 'healer_dungeon') agRequestFullscreen();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound();
   stopAgPreviews();   // the picker's previews borrow the same canvas globals
 
   allGamesSelectedGame = gameType;
@@ -13647,7 +13669,7 @@ document.querySelectorAll('.ag-card').forEach(card => {
 });
 document.getElementById('ag-back').addEventListener('click', () => {
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesSelectedGame = null;
   allGamesMode = false;
@@ -13662,7 +13684,7 @@ function switchTab(tab) {
   if (tab === 'invoice-horde-test' && !isAdmin()) tab = 'markets';
   if (tab === 'garden') tab = 'farm';
   const previousTab = activeTab;
-  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); if (typeof healerExitView === 'function') healerExitView(); }
+  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); if (typeof healerExitView === 'function') healerExitView(); }
   if (previousTab === 'all-games' && tab !== 'all-games') leaveAllGamesTab();
   if (previousTab === 'flappy-test' && tab !== 'flappy-test') { stopFlappyPantsRound(); restoreFlappyPanelHome(); }
   if (previousTab === 'bug-jumper-test' && tab !== 'bug-jumper-test') { stopBugJumperRound(); restoreBugJumperPanelHome(); }
@@ -13674,7 +13696,10 @@ function switchTab(tab) {
   if (previousTab === 'wheel' && tab !== 'wheel') stopWheelAnimation();
   if (previousTab === 'bank' && tab !== 'bank') stopBankTimer();
   if (previousTab === 'hilo' && tab !== 'hilo') stopHiloTimer();
+  if (previousTab === 'lottery' && tab !== 'lottery') stopLotteryAnimation();
+  if (previousTab === 'shop' && tab !== 'shop') stopShopTimer();
   activeTab = tab;
+  _tabActivationId += 1;
   if (CASINO_LUCK_EFFECT_LABELS[tab]) loadCasinoLuckStatus();
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.nav-group').forEach(g => {
@@ -13724,10 +13749,10 @@ function switchTab(tab) {
     else flushMarketsIfDirty();   // catch up on trades that landed while away
   } else if (tab === 'leaderboard') {
     hide(tM); show(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
-    withTabModule('leaderboard', () => loadLeaderboard());
+    withTabModule('leaderboard', () => loadLeaderboard(), 'leaderboard');
   } else if (tab === 'poker') {
     hide(tM); hide(tL); show(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
-    withTabModule('poker', () => { setupPokerRealtime(); loadPokerState(); });
+    withTabModule('poker', () => { setupPokerRealtime(); loadPokerState(); }, 'poker');
   } else if (tab === 'roulette') {
     hide(tM); hide(tL); hide(tP); show(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     setupRouletteRealtime();
@@ -13738,7 +13763,7 @@ function switchTab(tab) {
   } else if (tab === 'plinko') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tPl);
-    withTabModule('plinko', () => loadPlinkoState());
+    withTabModule('plinko', () => loadPlinkoState(), 'plinko');
   } else if (tab === 'mines') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tMi);
@@ -13751,7 +13776,7 @@ function switchTab(tab) {
   } else if (tab === 'wheel') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tWl);
-    withTabModule('plinko', () => { setupWheelRealtime(); startWheelPoll(); loadWheelState(); });
+    withTabModule('plinko', () => { setupWheelRealtime(); startWheelPoll(); loadWheelState(); }, 'wheel');
   } else if (tab === 'whack-boss') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); show(tWb); hide(tS); hide(tG);
     loadSeasonalTab();
@@ -13761,7 +13786,7 @@ function switchTab(tab) {
     loadAllGamesTab();
   } else if (tab === 'shop') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); show(tS); hide(tG);
-    withTabModule('shop', () => loadShop());
+    withTabModule('shop', () => loadShop(), 'shop');
   } else if (tab === 'garden') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); show(tG);
     loadGarden();
@@ -13780,15 +13805,15 @@ function switchTab(tab) {
   } else if (tab === 'lottery') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tLot);
-    withTabModule('lottery', () => renderLottery(true));
+    withTabModule('lottery', () => renderLottery(true), 'lottery');
   } else if (tab === 'bank') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tBk);
-    withTabModule('bank', () => loadBank());
+    withTabModule('bank', () => loadBank(), 'bank');
   } else if (tab === 'hilo') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tHl);
-    withTabModule('hilo', () => loadHilo());
+    withTabModule('hilo', () => loadHilo(), 'hilo');
   } else if (tab === 'canvas') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tCv);
@@ -14567,6 +14592,9 @@ function setupRealtime() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
       if (chatReady) chatIngest(payload.new);
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reactions' }, (payload) => {
+      if (chatReady && payload.new) chatFxOnRealtime(payload.new);
+    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_presence' }, (payload) => {
       chatOnPresence(payload.new);
     });
@@ -14974,6 +15002,10 @@ async function initChat() {
 
   chatHeartbeatPing();               // mark myself online immediately
   startChatHeartbeat();
+
+  // Reactions + naklejki load after the chat is already usable. The module
+  // loads the reactions for what is on screen and re-renders it.
+  ensureTabModule('chatfx').then(() => chatFxAttach()).catch(e => console.error('chatfx', e));
 }
 
 function chatWireListenersOnce() {
@@ -15015,6 +15047,7 @@ async function chatLoadRoom() {
     .is('recipient_id', null)
     .order('created_at', { ascending: false }).limit(50);
   chatRoomMsgs = (data || []).reverse();
+  await chatFxLoadFor(chatRoomMsgs.map(m => m.id));
 }
 
 async function chatLoadUnread() {
@@ -15031,6 +15064,7 @@ async function chatLoadThread(peerId) {
     .or(`and(sender_id.eq.${me.id},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${me.id})`)
     .order('created_at', { ascending: false }).limit(50);
   chatThreads[peerId] = (data || []).reverse();
+  await chatFxLoadFor(chatThreads[peerId].map(m => m.id));
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
@@ -15038,10 +15072,11 @@ async function chatLoadThread(peerId) {
 function chatMsgNode(m) {
   if (m.system) return el('div', { className: 'chat-sys' }, m.body);
   const mine = m.sender_id === me.id;
-  const node = el('div', { className: 'chat-msg' + (mine ? ' mine' : '') });
+  const node = el('div', { className: 'chat-msg' + (mine ? ' mine' : ''), 'data-mid': m.id });
   if (!mine) node.appendChild(el('div', { className: 'chat-msg-nick' }, m.sender_nick || '?'));
   node.appendChild(el('div', { className: 'chat-msg-bubble' }, m.body));
   node.appendChild(el('div', { className: 'chat-msg-time' }, chatFmtTime(m.created_at)));
+  chatFxDecorate(node, m);   // reactions + naklejki (tabs/chat-reactions.js)
   return node;
 }
 
@@ -15124,15 +15159,22 @@ async function chatMarkRead(peerId) {
 async function sendChatMessage() {
   const input = document.getElementById('chat-input');
   if (!input) return;
-  const body = input.value.trim();
+  await chatSendBody(input.value.trim(), true);
+}
+
+// Shared by the text input and the naklejki picker (a sticker is a message whose
+// body is ':st:<code>:'). fromInput: clear/restore the input around the send.
+async function chatSendBody(body, fromInput) {
+  const input = document.getElementById('chat-input');
   if (!body) return;
   if (body.length > CHAT_MAX_LEN) { showToast('❌ Wiadomość zbyt długa.'); return; }
-  if (Date.now() - chatLastSend < 1000) return;   // mirror server ≥1s throttle
+  if (Date.now() - chatLastSend < 1000) { if (!fromInput) showToast('⏳ Zwolnij trochę.'); return; }   // mirror server ≥1s throttle
   chatLastSend = Date.now();
 
   const recipient = chatView === 'thread' ? chatPeerId : null;
   const btn = document.getElementById('chat-send-btn');
-  input.value = ''; if (btn) btn.disabled = true;
+  if (fromInput && input) input.value = '';
+  if (btn) btn.disabled = true;
   try {
     const { data, error } = await sb.rpc('chat_send', { p_recipient: recipient, p_body: body });
     if (error) throw error;
@@ -15142,12 +15184,12 @@ async function sendChatMessage() {
       sender_nick: me.nick, body: data.body, created_at: data.created_at,
     });
   } catch (e) {
-    input.value = body;   // restore so nothing is lost
+    if (fromInput && input) input.value = body;   // restore so nothing is lost
     const msg = String(e?.message || e);
     showToast(msg.includes('too_fast') ? '⏳ Zwolnij trochę.' : '❌ Nie udało się wysłać.');
   } finally {
     if (btn) btn.disabled = false;
-    input.focus();
+    if (fromInput && input) input.focus();
   }
 }
 
@@ -15165,7 +15207,7 @@ function chatIngest(m) {
     if (!railVisible() && m.sender_id !== me.id) {
       chatRoomUnread++;
       chatRenderUnreadBadges();
-      chatToast('💬 ' + (m.sender_nick || 'Ktoś') + ': ' + m.body.slice(0, 40), 'msg');
+      chatToast('💬 ' + (m.sender_nick || 'Ktoś') + ': ' + chatFxPreview(m).slice(0, 40), 'msg');
       chatBeep();
     }
     return;
@@ -15184,7 +15226,7 @@ function chatIngest(m) {
     chatUnread[peer] = (chatUnread[peer] || 0) + 1;
     chatRenderUnreadBadges();
     chatRenderRoster();
-    chatToast('💬 ' + (m.sender_nick || chatPeerNick(peer)) + ': ' + m.body.slice(0, 40), 'msg');
+    chatToast('💬 ' + (m.sender_nick || chatPeerNick(peer)) + ': ' + chatFxPreview(m).slice(0, 40), 'msg');
     chatBeep();
   }
   if (viewingThisThread) {
@@ -15319,6 +15361,7 @@ function resetChatState() {
   if (people) people.replaceChildren();
   chatReady = false; chatView = 'room'; chatPeerId = null;
   chatRoster = []; chatOnline = new Set(); chatRoomMsgs = []; chatThreads = {}; chatUnread = {};
+  chatFxReset();
   const rail = chatRailEl();
   if (rail) hide(rail);
   const toasts = document.getElementById('chat-toasts'); if (toasts) toasts.replaceChildren();
