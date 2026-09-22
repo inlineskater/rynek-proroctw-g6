@@ -82,7 +82,7 @@ BEGIN
   IF p_game_type NOT IN (
     'whack_boss', 'bug_jumper', 'flappy_pants', 'snake',
     'invoice_horde', 'var_patrol', 'egg_catch', 'super_mariusz', 'popup_panic',
-    'tetris', 'healer_dungeon', 'bubble_breaker', 'saper'
+    'tetris', 'healer_dungeon', 'bubble_breaker', 'saper', 'arkanoid'
   ) THEN
     RAISE EXCEPTION 'invalid_game_type';
   END IF;
@@ -172,6 +172,10 @@ BEGIN
     -- client-reported, so this cap is the only guard on this path; it mirrors
     -- SP_MAX_SCORE in games/saper.js, which is where the seasonal path clamps.
     WHEN 'saper'          THEN 9999
+    -- „Arkanoid G6": 5-minute ceiling, three lives. scripts/arkanoid-balance.mjs
+    -- drives a never-wrong bot that tops out ~17 000; a good human reader of
+    -- the bounce lands 8-11 000. Mirrors AK_MAX_SCORE in games/arkanoid.js.
+    WHEN 'arkanoid'       THEN 40000
     ELSE NULL
   END;
   IF v_score_cap IS NULL THEN RAISE EXCEPTION 'invalid_game_type'; END IF;

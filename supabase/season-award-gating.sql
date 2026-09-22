@@ -44,14 +44,23 @@ AS $$
     -- score chase — the office classic the rotation never had.
     WHEN '2026-08-24' THEN 'saper'  -- „Saper Maraton" debut
     WHEN '2026-08-31' THEN 'flappy_pants'  -- encore
+    -- 2026-09-22: appending a 15th game („Arkanoid G6") turns the % 14 below
+    -- into % 15, which reshuffles every week the rotation derives. These three
+    -- are PINS, not choices: they hold the games those weeks already had (or,
+    -- for 09-21, is running right now) so the change cannot rewrite a played
+    -- week or move the Monday payout of the current one onto another game.
+    WHEN '2026-09-07' THEN 'flappy_pants'  -- pinned (was rotation slot 16 % 14)
+    WHEN '2026-09-14' THEN 'snake'  -- pinned (slot 17 % 14)
+    WHEN '2026-09-21' THEN 'invoice_horde'  -- pinned (slot 18 % 14) — in season when this shipped
+    WHEN '2026-09-28' THEN 'arkanoid'  -- „Arkanoid G6" debut
     -- SEASONAL_ROTATION from its 2026-05-18 Monday anchor.
     ELSE
       (ARRAY[
         'whack_boss','bug_jumper','flappy_pants','snake','invoice_horde',
         'var_patrol','egg_catch','super_mariusz','popup_panic','tetris','healer_dungeon','filler',
-        'bubble_breaker','saper'
+        'bubble_breaker','saper','arkanoid'
       ])[
-        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 14) + 1
+        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 15) + 1
       ]
   END;
 $$;
@@ -202,5 +211,16 @@ SELECT cron.schedule(
       THEN json_build_object('ok', true, 'skipped', 'not_midnight_warsaw')
       WHEN public.seasonal_game_for_week(public.saper_week_start(now() - interval '7 days')) = 'saper'
       THEN public.award_saper_week(public.saper_week_start(now() - interval '7 days'))
+      ELSE json_build_object('ok', true, 'skipped', 'not_in_season') END;$$
+);
+
+-- „Arkanoid G6" — debuts the week of 2026-09-28 (see supabase/arkanoid.sql).
+SELECT cron.schedule(
+  'arkanoid_weekly_awards',
+  '0 22,23 * * 0',
+  $$SELECT CASE WHEN EXTRACT(hour FROM (now() AT TIME ZONE 'Europe/Warsaw'))::integer <> 0
+      THEN json_build_object('ok', true, 'skipped', 'not_midnight_warsaw')
+      WHEN public.seasonal_game_for_week(public.arkanoid_week_start(now() - interval '7 days')) = 'arkanoid'
+      THEN public.award_arkanoid_week(public.arkanoid_week_start(now() - interval '7 days'))
       ELSE json_build_object('ok', true, 'skipped', 'not_in_season') END;$$
 );

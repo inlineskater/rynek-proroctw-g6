@@ -98,6 +98,7 @@ DECLARE
     'crash_spins:created_at',
     'wheel_spins:created_at',
     'hilo_spins:created_at',
+    'tower_spins:created_at',
     'poker_ledger:created_at',
     -- NOT game_transactions: it is a VIEW over exactly these spin tables plus
     -- poker_ledger, and a view cannot carry a row-level trigger. The relkind
@@ -117,6 +118,7 @@ DECLARE
     'filler_scores:submitted_at',
     'bubble_breaker_scores:submitted_at',
     'saper_scores:submitted_at',
+    'arkanoid_scores:submitted_at',
     'arcade_scores:created_at',
     -- 📊 Rynki / ⚽ Mundial / 🎨 Płótno
     'trades:created_at',

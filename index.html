@@ -8963,7 +8963,8 @@
         <button class="nav-tab" data-tab="mines">💣 Miny G6</button>
         <button class="nav-tab" data-tab="crash">🚀 Rakieta</button>
         <button class="nav-tab" data-tab="wheel">🦬 Koło Żubra</button>
-        <button class="nav-tab" data-tab="hilo">🃏 Drabina Kariery <span class="nav-new-badge">Nowość</span></button>
+        <button class="nav-tab" data-tab="hilo">🃏 Drabina Kariery</button>
+        <button class="nav-tab" data-tab="tower">🏗️ Wieżowiec G6 <span class="nav-new-badge">Nowość</span></button>
         <div class="nav-dropdown-label">Zręcznościowe</div>
         <button class="nav-tab" data-tab="whack-boss"><span class="seasonal-dot"></span> Gra Sezonowa</button>
         <button class="nav-tab" data-tab="all-games">🎮 Wszystkie Gry</button>
@@ -9626,6 +9627,25 @@
           <div class="loading-center"><div class="spinner"></div></div>
         </div>
         <div class="hl-feed" id="hilo-feed"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="tab-tower" class="hidden casino">
+    <main>
+      <div class="tw-wrap">
+        <div class="tw-hero">
+          <h2 class="tw-title"><span>🏗️</span><span>Wieżowiec G6</span></h2>
+          <p class="tw-sub">Każde piętro mnoży pulę. Szeroki blok trzyma się pewnie, wąski płaci podwójnie. Sprzedaj wieżowiec, zanim się zawali.</p>
+        </div>
+        <div class="tw-main">
+          <div class="tw-stage"><canvas id="tower-canvas"></canvas></div>
+          <div id="tower-controls" class="tw-main"><div class="loading-center"><div class="spinner"></div></div></div>
+        </div>
+        <div class="tw-side">
+          <div class="tw-card" id="tower-leaders"></div>
+          <div class="tw-card" id="tower-feed"></div>
+        </div>
       </div>
     </main>
   </div>
@@ -10794,6 +10814,62 @@
         </div>
       </div>
 
+      <!-- „Arkanoid G6" panel (Breakout; gameType arkanoid). Debuts 2026-09-28.
+           One node serves both modes, like „Saper Maraton". Its CSS is injected
+           by games/arkanoid.js — index.html is up against its payload budget. -->
+      <div id="seasonal-game-arkanoid" class="hidden">
+        <div class="bj-layout">
+          <section class="bj-game-panel">
+            <div class="bj-head">
+              <div>
+                <h2 class="page-title">„Arkanoid G6" 🏓</h2>
+                <p class="page-sub">Klawiatura zamiast paletki, piłka i sześć pięter biura do rozbicia — od Open Space po <strong>Sejf Prezesa</strong>. Trzy życia, a każde zaliczone piętro wraca szybsze.</p>
+              </div>
+              <div class="bj-prizes" aria-label="Nagrody tygodniowe">
+                <span class="bj-prize">🥇 1000 🪙</span>
+                <span class="bj-prize">🥈 500 🪙</span>
+                <span class="bj-prize">🥉 200 🪙</span>
+              </div>
+            </div>
+            <div class="bj-rules">
+              <div class="bj-rules-title">Jak grać</div>
+              <ul>
+                <li><strong>Myszka albo palec</strong> prowadzą klawiaturę, na klawiaturze <strong>← →</strong> (lub A/D). Kliknięcie, dotknięcie albo <strong>spacja</strong> wystrzeliwuje piłkę.</li>
+                <li><strong>Gdzie trafisz klawiaturą, tam poleci piłka</strong> — środek wybija ją stromo w górę, krawędzie posyłają ją w bok. Tak się celuje w ostatnie cegły.</li>
+                <li>Kolorowe cegły pękają od jednego uderzenia, 📁 segregatory od dwóch, 🔒 sejfy od trzech. Co któraś cegła wypuszcza kapsułkę: ⌨️ szersza klawiatura, ☕ wolniejsza piłka, ❤️ życie, ✨ trzy piłki.</li>
+                <li><strong>Punkty:</strong> 10–60 za cegłę (wyżej = więcej), 60 za segregator, 100 za sejf, 500 za piętro plus bonus za tempo (do 1000, maleje przez 2 minuty).</li>
+                <li>Runda kończy się, gdy stracisz ostatnią piłkę, najpóźniej po 5 minutach. Przedmioty specjalne z bonusem do wyniku dorzucają ×80 swojej wartości.</li>
+              </ul>
+            </div>
+            <div class="bj-stats">
+              <div class="bj-stat"><div class="bj-stat-label">Wynik</div><div class="bj-stat-value" id="ak-score">0</div></div>
+              <div class="bj-stat"><div class="bj-stat-label">Piętro</div><div class="bj-stat-value" id="ak-level">1</div></div>
+              <div class="bj-stat"><div class="bj-stat-label">Życia</div><div class="bj-stat-value" id="ak-lives">3</div></div>
+              <div class="bj-stat"><div class="bj-stat-label">Cegły</div><div class="bj-stat-value" id="ak-bricks">0</div></div>
+            </div>
+            <div class="ak-arena" id="ak-arena"><canvas id="ak-canvas"></canvas></div>
+            <div class="bj-actions">
+              <button class="btn-primary bj-start-btn" id="ak-start-btn">Start rundy</button>
+              <div class="bj-status" id="ak-status">Trzy życia, sześć pięter. Ile rozbijesz?</div>
+            </div>
+          </section>
+          <aside class="bj-board-panel">
+            <section>
+              <div class="bj-board-title"><span>Ten tydzień</span><span class="bj-board-sub" id="ak-week-label"></span></div>
+              <div id="ak-weekly-board"><div class="loading-center"><div class="spinner"></div></div></div>
+            </section>
+            <section>
+              <div class="bj-board-title"><span>All-time</span><span class="bj-board-sub">rekordy</span></div>
+              <div id="ak-alltime-board"><div class="loading-center"><div class="spinner"></div></div></div>
+            </section>
+            <section>
+              <div class="bj-board-title"><span>Ostatnie nagrody</span><span class="bj-board-sub" title="Top 3 z minionego tygodnia dostają nagrody w poniedziałek po zamknięciu tygodnia.">wypłata: po tygodniu</span></div>
+              <div class="bj-awards" id="ak-awards"></div>
+            </section>
+          </aside>
+        </div>
+      </div>
+
       <!-- Uzdrowiciel G6 panel (WoW Classic resto-druid healer; gameType healer_dungeon).
            PHASE 1: arcade-only. Unlike every other seasonal panel this one is a
            FIT-TO-VIEWPORT TAKEOVER (.hd-fit is position:fixed and covers the app
@@ -11292,12 +11368,24 @@
           </div>
           <div class="ag-card-scores" data-scores="bubble_breaker"></div>
         </div>
+        <div class="ag-card" role="button" tabindex="0" data-game="arkanoid">
+          <div class="ag-card-media"><span class="ag-card-emoji" aria-hidden="true">🏓</span></div>
+          <div class="ag-card-main">
+            <div class="ag-card-head">
+              <span class="ag-card-name">„Arkanoid G6”</span>
+              <span class="ag-card-tag">NOWOŚĆ · ZRĘCZNOŚĆ</span>
+            </div>
+            <div class="ag-card-desc">Klawiatura, piłka i sześć pięter biura do rozbicia — od Open Space po Sejf Prezesa. Celujesz krawędzią klawiatury, łapiesz kapsułki, pilnujesz trzech żyć.</div>
+            <div class="ag-card-cta">Za darmo — kliknij, aby zagrać</div>
+          </div>
+          <div class="ag-card-scores" data-scores="arkanoid"></div>
+        </div>
         <div class="ag-card" role="button" tabindex="0" data-game="saper">
           <div class="ag-card-media"><span class="ag-card-emoji" aria-hidden="true">💣</span></div>
           <div class="ag-card-main">
             <div class="ag-card-head">
               <span class="ag-card-name">„Saper Maraton”</span>
-              <span class="ag-card-tag">NOWOŚĆ · NA CZAS</span>
+              <span class="ag-card-tag">NA CZAS</span>
             </div>
             <div class="ag-card-desc">Ten Saper z Windowsa, tylko na stoperze. 90 sekund i nieskończony stos plansz — rozbrajasz jedną, dostajesz następną, trudniejszą. Pierwsze kliknięcie zawsze bezpieczne, mina kosztuje 5 sekund, ale rundy nie kończy. Liczy się, ile zdążysz.</div>
             <div class="ag-card-cta">Za darmo — kliknij, aby zagrać</div>
@@ -12214,6 +12302,7 @@ let fillerRuntime = null;
 // paths below reference it before that file has ever been fetched.
 let bubbleBreakerRuntime = null;
 let saperRuntime = null;
+let arkanoidRuntime = null;
 let allGamesMode = false;
 let allGamesSelectedGame = null;
 
@@ -12239,6 +12328,7 @@ const LAZY_GAME_SCRIPTS = {
   filler:        'games/filler.js',
   bubble_breaker:'games/bubble-breaker.js',
   saper:         'games/saper.js',
+  arkanoid:      'games/arkanoid.js',
 };
 // ── Lazy-loaded tab modules ────────────────────────────────────────────────
 // Same idea as ensureGameScript below, applied to whole tabs. A tab listed here
@@ -12267,6 +12357,7 @@ const TAB_MODULES = {
   bank:        'tabs/bank.js',    // Bank G6: Lokata, Skarbonka, Obligacje, Udziały
   poker:       'tabs/poker.js',
   hilo:        'tabs/hilo.js',   // Drabina Kariery (Hi-Lo)
+  tower:       'tabs/tower.js',  // Wieżowiec G6
   chatfx:      'tabs/chat-reactions.js', // not a tab: Czat G6 reactions + naklejki, fetched by initChat()
 };
 const _tabModulePromises = {};
@@ -12337,6 +12428,7 @@ function stopHealerDungeonRound() {}
 function stopFillerRound() {}
 function stopBubbleBreakerRound() {}
 function stopSaperRound() {}
+function stopArkanoidRound() {}
 
 // Same safety net for the lazy TAB modules (see TAB_MODULES above). doLogout()
 // and switchTab() tear down every tab unconditionally, whether or not its
@@ -12351,6 +12443,8 @@ function stopShopTimer() {}
 // Overwritten by tabs/hilo.js. switchTab() calls it unconditionally, so it has
 // to exist before the module is ever fetched.
 function stopHiloTimer() {}
+// Overwritten by tabs/tower.js, for the same reason.
+function stopTowerTimer() {}
 // Overwritten by tabs/chat-reactions.js. The chat renders plain text until it
 // arrives, and keeps working as plain text if it never does.
 function chatFxDecorate(node, m) {}
@@ -12375,7 +12469,7 @@ const HERO_ITEM_SLOTS = [
 const HERO_ITEM_SLOT_LABELS = Object.fromEntries(HERO_ITEM_SLOTS.map(s => [s.id, s.label]));
 // Masculine forms (przedmiot), unlike FARM_RARITY_PL's feminine forms (karta).
 const HERO_ITEM_RARITY_PL = { common: 'zwykły', rare: 'rzadki', epic: 'epicki', legendary: 'legendarny' };
-const SEASONAL_SCORE_GAMES = new Set(['whack_boss', 'bug_jumper', 'flappy_pants', 'snake', 'invoice_horde', 'var_patrol', 'egg_catch', 'popup_panic', 'tetris', 'bubble_breaker', 'saper']);
+const SEASONAL_SCORE_GAMES = new Set(['whack_boss', 'bug_jumper', 'flappy_pants', 'snake', 'invoice_horde', 'var_patrol', 'egg_catch', 'popup_panic', 'tetris', 'bubble_breaker', 'saper', 'arkanoid']);
 let heroItemDefs = [];
 let casinoLuckGlobalUntil = null; // shared „Amulet Bezwstydnego Fartu" buff end (casino_luck_status view)
 let casinoLuckStatusLoadedAt = 0;
@@ -12388,6 +12482,7 @@ const CASINO_LUCK_EFFECT_LABELS = {
   crash: { game: 'Rakieta', effect: 'wzmacnia udane wypłaty' },
   wheel: { game: 'Koło Żubra', effect: 'wzmacnia zwycięskie pola' },
   hilo: { game: 'Drabina Kariery', effect: 'podnosi zwrot z 95% na 98%' },
+  tower: { game: 'Wieżowiec G6', effect: 'podnosi zwrot z 95% na 98%' },
 };
 let myHeroInventory = [];
 let heroAuctionItemDefs = [];
@@ -12973,7 +13068,7 @@ async function doLogout() {
   await sb.auth.signOut();
   me = null; markets = []; tradesByMarket = {}; myPositionsByMarket = {}; marketsDirty = false;
   pokerState = null; pokerRealtimeReady = false; stopPokerClock();
-  stopPlinkoAnimation(); stopWheelAnimation(); stopBankTimer(); stopHiloTimer();
+  stopPlinkoAnimation(); stopWheelAnimation(); stopBankTimer(); stopHiloTimer(); stopTowerTimer();
   stopLotteryAnimation(); stopShopTimer();
   rouletteState = null; rouletteRealtimeReady = false; rouletteLastResultId = null; stopRouletteHeartbeat();
   rouletteLocalBets = null; if (rouletteFlushTimer) { clearTimeout(rouletteFlushTimer); rouletteFlushTimer = null; }
@@ -12987,6 +13082,7 @@ async function doLogout() {
   stopHealerDungeonRound();
   stopBubbleBreakerRound();
   stopSaperRound();
+  stopArkanoidRound();
   resetGardenState();
   resetHeroState();
   hide(screenApp);
@@ -13253,6 +13349,7 @@ const AG_PANEL_IDS = {
   filler:        'seasonal-game-filler',
   bubble_breaker:'seasonal-game-bubble-breaker',
   saper:         'seasonal-game-saper',
+  arkanoid:      'seasonal-game-arkanoid',
 };
 let agPanelHome = {};
 
@@ -13304,7 +13401,7 @@ function loadAllGamesTab() {
 
 function leaveAllGamesTab() {
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound();
   stopAgPreviews();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesMode = false;
@@ -13329,7 +13426,7 @@ function selectAllGame(gameType) {
   if (gameType === 'healer_dungeon') agRequestFullscreen();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound();
   stopAgPreviews();   // the picker's previews borrow the same canvas globals
 
   allGamesSelectedGame = gameType;
@@ -13357,6 +13454,7 @@ function selectAllGame(gameType) {
     if (gameType === 'tetris') requestAnimationFrame(() => { tetrisInitCanvas(); tetrisDraw(); });
     if (gameType === 'bubble_breaker') requestAnimationFrame(() => { bubbleBreakerInitCanvas(); bubbleBreakerDraw(); });
     if (gameType === 'saper') requestAnimationFrame(() => { saperInitCanvas(); saperSyncFlagBtn(); saperDraw(); });
+    if (gameType === 'arkanoid') requestAnimationFrame(() => { arkanoidInitCanvas(); arkanoidDraw(); });
     // Takeover game: build the idle party, then size the console to the viewport.
     if (gameType === 'healer_dungeon') requestAnimationFrame(() => {
       stopHealerDungeonRound();
@@ -13669,7 +13767,7 @@ document.querySelectorAll('.ag-card').forEach(card => {
 });
 document.getElementById('ag-back').addEventListener('click', () => {
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesSelectedGame = null;
   allGamesMode = false;
@@ -13684,7 +13782,7 @@ function switchTab(tab) {
   if (tab === 'invoice-horde-test' && !isAdmin()) tab = 'markets';
   if (tab === 'garden') tab = 'farm';
   const previousTab = activeTab;
-  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); if (typeof healerExitView === 'function') healerExitView(); }
+  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); if (typeof healerExitView === 'function') healerExitView(); }
   if (previousTab === 'all-games' && tab !== 'all-games') leaveAllGamesTab();
   if (previousTab === 'flappy-test' && tab !== 'flappy-test') { stopFlappyPantsRound(); restoreFlappyPanelHome(); }
   if (previousTab === 'bug-jumper-test' && tab !== 'bug-jumper-test') { stopBugJumperRound(); restoreBugJumperPanelHome(); }
@@ -13696,6 +13794,7 @@ function switchTab(tab) {
   if (previousTab === 'wheel' && tab !== 'wheel') stopWheelAnimation();
   if (previousTab === 'bank' && tab !== 'bank') stopBankTimer();
   if (previousTab === 'hilo' && tab !== 'hilo') stopHiloTimer();
+  if (previousTab === 'tower' && tab !== 'tower') stopTowerTimer();
   if (previousTab === 'lottery' && tab !== 'lottery') stopLotteryAnimation();
   if (previousTab === 'shop' && tab !== 'shop') stopShopTimer();
   activeTab = tab;
@@ -13729,6 +13828,7 @@ function switchTab(tab) {
   const tWl = document.getElementById('tab-wheel');
   const tBk = document.getElementById('tab-bank');
   const tHl = document.getElementById('tab-hilo');
+  const tTw = document.getElementById('tab-tower');
   hide(tAg);
   hide(tFp);
   hide(tBj);
@@ -13743,6 +13843,7 @@ function switchTab(tab) {
   hide(tWl);
   hide(tBk);
   hide(tHl);
+  hide(tTw);
   if (tab === 'markets') {
     show(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     if (markets.length === 0) loadMarkets();
@@ -13814,6 +13915,10 @@ function switchTab(tab) {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tHl);
     withTabModule('hilo', () => loadHilo(), 'hilo');
+  } else if (tab === 'tower') {
+    hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
+    show(tTw);
+    withTabModule('tower', () => loadTower(), 'tower');
   } else if (tab === 'canvas') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tCv);
@@ -14069,18 +14174,18 @@ function buildCardStats(marketId) {
 // ── Activity feed ─────────────────────────────────────────────────────────
 // Maps for the cross-source feed.
 const ACT_GAME_LABELS = {
-  roulette: '🎡 Ruletka', slots: '🎰 Sloty', plinko: '📌 Plinko G6', mines: '💣 Miny G6', crash: '🚀 Rakieta', wheel: '🦬 Koło Żubra', hilo: '🃏 Drabina Kariery', poker: '🃏 Poker',
+  roulette: '🎡 Ruletka', slots: '🎰 Sloty', plinko: '📌 Plinko G6', mines: '💣 Miny G6', crash: '🚀 Rakieta', wheel: '🦬 Koło Żubra', hilo: '🃏 Drabina Kariery', tower: '🏗️ Wieżowiec G6', poker: '🃏 Poker',
   whack_boss: '🔨 Nawal Szefa', snake: '🐍 Snake',
   flappy_pants: '👖 3 Pary Spodni', bug_jumper: '🐛 Bug Jumper',
   invoice_horde: '🎫 Najazd Ticketów', var_patrol: '📺 VAR Patrol',
   egg_catch: '🥚 Łap Jajka', super_mariusz: '🧢 Super Mariusz',
   popup_panic: '🖱️ Zamknij Popupy', tetris: '🧱 Tetris G6',
-  bubble_breaker: '🔵 Kulki G6', saper: '💣 Saper Maraton',
+  bubble_breaker: '🔵 Kulki G6', saper: '💣 Saper Maraton', arkanoid: '🏓 Arkanoid G6',
   arcade: '🕹️ Arkada',
 };
 // Casino games whose rapid plays are collapsed into one session row; an idle gap
 // longer than SESSION_GAP_MS closes a session (poker buy-ins/cashouts are not grouped).
-const CASINO_GROUP = new Set(['plinko', 'slots', 'roulette', 'mines', 'crash', 'wheel', 'hilo']);
+const CASINO_GROUP = new Set(['plinko', 'slots', 'roulette', 'mines', 'crash', 'wheel', 'hilo', 'tower']);
 const SESSION_GAP_MS = 8 * 60 * 1000;
 const ACT_COIN_REASONS = {
   garden_water:               '💧 podlał roślinę',
@@ -14158,7 +14263,7 @@ async function buildActivityFeed() {
   const [
     profRes, tradesRes, gameRes, footballRes, coinTxRes,
     whackRes, snakeRes, flappyRes, bugRes, invoiceRes, varPatrolRes, eggCatchRes,
-    superMariuszRes, popupPanicRes, tetrisRes, bubbleBreakerRes, saperRes, arcadeRes, nftRes,
+    superMariuszRes, popupPanicRes, tetrisRes, bubbleBreakerRes, saperRes, arkanoidRes, arcadeRes, nftRes,
   ] = await Promise.all([
     sb.from('profiles').select('id,nick'),
     ranged(sb.from('trades').select('nick_snapshot,side,amount,market_id,created_at'), 'created_at'),
@@ -14177,6 +14282,7 @@ async function buildActivityFeed() {
     ranged(sb.from('tetris_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('bubble_breaker_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('saper_scores').select(scoreSel), 'submitted_at'),
+    ranged(sb.from('arkanoid_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('arcade_scores').select('user_id,game_type,score,created_at'), 'created_at'),
     ranged(sb.from('farm_nft_transfers').select('from_owner,to_owner,species,serial_no,price,kind,created_at'), 'created_at'),
   ]);
@@ -14267,6 +14373,7 @@ async function buildActivityFeed() {
   pushScores(tetrisRes.data, 'tetris');
   pushScores(bubbleBreakerRes.data, 'bubble_breaker');
   pushScores(saperRes.data, 'saper');
+  pushScores(arkanoidRes.data, 'arkanoid');
   (superMariuszRes.data || []).forEach(s => {
     const tail = s.completed ? 'ukończył trasę w ' + smFormatTime(s.completion_ms) : 'DNF — ' + smProgressPct(s.score) + '% trasy';
     entries.push({ nick: nickOf(s), ts: s.submitted_at, cat: 'game',
@@ -14625,6 +14732,7 @@ const SEASONAL_STATE_LOADERS = {
   filler:         () => loadFillerState(false),
   bubble_breaker: () => loadBubbleBreakerState(false),
   saper:          () => loadSaperState(false),
+  arkanoid:       () => loadArkanoidState(false),
 };
 
 function subscribeSeasonalRealtime(ch) {
@@ -15558,6 +15666,7 @@ function startActivityLive() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tetris_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bubble_breaker_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'saper_scores' }, scheduleActivityRebuild)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'arkanoid_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'gardens' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_listings' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'farm_nft_transfers' }, scheduleActivityRebuild)
@@ -18083,6 +18192,7 @@ const SEASONAL_ROTATION = [
   { gameType: 'filler', displayName: 'Filler 🎨' },
   { gameType: 'bubble_breaker', displayName: '„Kulki G6" 🔵' },
   { gameType: 'saper', displayName: '„Saper Maraton" 💣' },
+  { gameType: 'arkanoid', displayName: '„Arkanoid G6" 🏓' },
 ];
 // ⚠️ Every entry here is mirrored in seasonal_game_for_week()
 // (supabase/season-award-gating.sql) — that SQL function gates the Monday
@@ -18119,6 +18229,15 @@ const SEASONAL_OVERRIDES = {
   // weeks and stays in the free arcade.
   '2026-08-24': { gameType: 'saper', displayName: '„Saper Maraton" 💣' },  // debut
   '2026-08-31': { gameType: 'flappy_pants', displayName: '„3 Pary Spodni" 👖' },  // encore — most replayed game in the free arcade
+  // 2026-09-22: appending „Arkanoid G6" turns % 14 into % 15, which reshuffles
+  // every derived week. These three are PINS, not choices — they hold what
+  // those weeks already had (09-21 is running as this ships), so the change
+  // cannot rewrite a played week or move this week's Monday payout. Mirrored
+  // in seasonal_game_for_week() (supabase/season-award-gating.sql).
+  '2026-09-07': { gameType: 'flappy_pants', displayName: '„3 Pary Spodni" 👖' },  // pinned
+  '2026-09-14': { gameType: 'snake', displayName: 'Snake 🐍' },  // pinned
+  '2026-09-21': { gameType: 'invoice_horde', displayName: 'Najazd Ticketów 🎫' },  // pinned (in season)
+  '2026-09-28': { gameType: 'arkanoid', displayName: '„Arkanoid G6" 🏓' },  // debut
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -18662,6 +18781,7 @@ function loadSeasonalTab(showSpinner = true) {
   const flPanel       = document.getElementById('seasonal-game-filler');
   const bbPanel       = document.getElementById('seasonal-game-bubble-breaker');
   const spPanel       = document.getElementById('seasonal-game-saper');
+  const akPanel       = document.getElementById('seasonal-game-arkanoid');
   const archiveBanner = document.getElementById('seasonal-archive-banner');
 
   const isWB = current.gameType === 'whack_boss';
@@ -18678,6 +18798,7 @@ function loadSeasonalTab(showSpinner = true) {
   const isFL = current.gameType === 'filler';
   const isBB = current.gameType === 'bubble_breaker';
   const isSP = current.gameType === 'saper';
+  const isAK = current.gameType === 'arkanoid';
   if (wbPanel) { if (isWB) show(wbPanel); else hide(wbPanel); }
   if (bjPanel) { if (isBJ) show(bjPanel); else hide(bjPanel); }
   if (fpPanel) { if (isFP) show(fpPanel); else hide(fpPanel); }
@@ -18692,6 +18813,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (flPanel) { if (isFL) show(flPanel); else hide(flPanel); }
   if (bbPanel) { if (isBB) show(bbPanel); else hide(bbPanel); }
   if (spPanel) { if (isSP) show(spPanel); else hide(spPanel); }
+  if (akPanel) { if (isAK) show(akPanel); else hide(akPanel); }
   if (archiveBanner) hide(archiveBanner);
   if (!isWB && whackBossRuntime?.playing) stopWhackBossRound();
   if (!isBJ && bugJumperRuntime?.playing) stopBugJumperRound();
@@ -18705,6 +18827,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (!isTT && tetrisRuntime?.playing) stopTetrisRound();
   if (!isBB && bubbleBreakerRuntime?.playing) stopBubbleBreakerRound();
   if (!isSP && saperRuntime?.playing) stopSaperRound();
+  if (!isAK && arkanoidRuntime?.playing) stopArkanoidRound();
   if (!isHD && healerRuntime?.playing) stopHealerDungeonRound();
   if (!isHD && typeof healerExitView === 'function') healerExitView();
   // Filler has no runtime-level archiveMode flag to reset (see below) — it
@@ -18723,6 +18846,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (tetrisRuntime) tetrisRuntime.archiveMode = false;
   if (bubbleBreakerRuntime) bubbleBreakerRuntime.archiveMode = false;
   if (saperRuntime) saperRuntime.archiveMode = false;
+  if (arkanoidRuntime) arkanoidRuntime.archiveMode = false;
   if (healerRuntime) healerRuntime.archiveMode = false;
   // Filler is server-authoritative (see docs/filler.md) — there is no
   // client-side round/runtime that carries an archiveMode flag across its
@@ -18743,6 +18867,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (isTT) ensureGameScript('tetris').then(() => loadTetrisState(showSpinner));
   if (isBB) ensureGameScript('bubble_breaker').then(() => loadBubbleBreakerState(showSpinner));
   if (isSP) ensureGameScript('saper').then(() => loadSaperState(showSpinner));
+  if (isAK) ensureGameScript('arkanoid').then(() => loadArkanoidState(showSpinner));
   if (isHD) ensureGameScript('healer_dungeon').then(() => {
     if (!healerRuntime) stopHealerDungeonRound();
     healerEnterView();

@@ -34,6 +34,9 @@ verify_jwt = true
 [functions.hilo-action]
 verify_jwt = true
 
+[functions.tower-action]
+verify_jwt = true
+
 [functions.crash-action]
 verify_jwt = true
 
@@ -59,6 +62,9 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.saper-action]
+verify_jwt = true
+
+[functions.arkanoid-action]
 verify_jwt = true
 
 [functions.garden-action]

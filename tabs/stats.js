@@ -2674,13 +2674,15 @@ function renderCoinRaceDetail(container) {
         el('td', {}, (r.mines_pl || 0) + ' 🪙'),
         el('td', {}, (r.crash_pl || 0) + ' 🪙'),
         el('td', {}, (r.wheel_pl || 0) + ' 🪙'),
+        el('td', {}, (r.hilo_pl || 0) + ' 🪙'),
+        el('td', {}, (r.tower_pl || 0) + ' 🪙'),
         el('td', {}, (r.poker_pl || 0) + ' 🪙'),
         el('td', { className: 'tx-pl ' + (pos ? 'tx-pl-profit' : 'tx-pl-loss') }, (pos ? '+' : '') + r.total_pl + ' 🪙')
       ));
       return el('div', { style: { marginBottom: '16px' } },
         el('div', { className: 'hazardista-col-title' }, ttl),
         el('table', { className: 'lb-table' },
-          el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Nick'), el('th', {}, 'Ruletka'), el('th', {}, 'Sloty'), el('th', {}, 'Plinko'), el('th', {}, 'Miny'), el('th', {}, 'Rakieta'), el('th', {}, 'Żubr'), el('th', {}, 'Poker'), el('th', {}, 'Suma'))),
+          el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Nick'), el('th', {}, 'Ruletka'), el('th', {}, 'Sloty'), el('th', {}, 'Plinko'), el('th', {}, 'Miny'), el('th', {}, 'Rakieta'), el('th', {}, 'Żubr'), el('th', {}, 'Drabina'), el('th', {}, 'Wieżowiec'), el('th', {}, 'Poker'), el('th', {}, 'Suma'))),
           el('tbody', {}, ...rows)
         )
       );

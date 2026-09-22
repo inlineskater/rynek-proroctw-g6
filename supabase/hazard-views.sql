@@ -1,5 +1,5 @@
 -- Hazard stats and game transactions views for the Ranking page.
--- Run after poker-ledger.sql, roulette.sql, slots.sql, plinko.sql, mines.sql, crash.sql, wheel.sql, and hilo.sql.
+-- Run after poker-ledger.sql, roulette.sql, slots.sql, plinko.sql, mines.sql, crash.sql, wheel.sql, hilo.sql, and tower.sql.
 
 DROP VIEW IF EXISTS public.game_transactions;
 DROP VIEW IF EXISTS public.hazard_stats;
@@ -16,8 +16,9 @@ SELECT
   COALESCE(cr.pl, 0)::integer AS crash_pl,
   COALESCE(wh.pl, 0)::integer AS wheel_pl,
   COALESCE(hl.pl, 0)::integer AS hilo_pl,
+  COALESCE(tw.pl, 0)::integer AS tower_pl,
   COALESCE(pk.pl, 0)::integer AS poker_pl,
-  (COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(hl.pl, 0) + COALESCE(pk.pl, 0))::integer AS total_pl,
+  (COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(hl.pl, 0) + COALESCE(tw.pl, 0) + COALESCE(pk.pl, 0))::integer AS total_pl,
   p.is_admin
 FROM public.profiles p
 LEFT JOIN (
@@ -49,11 +50,17 @@ LEFT JOIN (
   FROM public.hilo_spins GROUP BY user_id
 ) hl ON hl.user_id = p.id
 LEFT JOIN (
+  SELECT user_id, SUM(total_won - bet)::integer AS pl
+  FROM public.tower_spins GROUP BY user_id
+) tw ON tw.user_id = p.id
+LEFT JOIN (
   SELECT user_id,
     SUM(CASE WHEN type = 'cashout' THEN amount ELSE -amount END)::integer AS pl
   FROM public.poker_ledger GROUP BY user_id
 ) pk ON pk.user_id = p.id
-WHERE COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(pk.pl, 0) <> 0;
+-- ⚠️ Must list every term of total_pl. It used to omit hilo, so a player who
+-- only ever played Drabina Kariery never appeared in Hazardista at all.
+WHERE COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(hl.pl, 0) + COALESCE(tw.pl, 0) + COALESCE(pk.pl, 0) <> 0;
 
 -- Recent game transactions (roulette, slots, plinko, mines, crash, poker) for all players
 CREATE OR REPLACE VIEW public.game_transactions WITH (security_invoker = false) AS
@@ -98,6 +105,12 @@ SELECT
   hs.bet AS bet, hs.total_won AS won, hs.created_at, p.is_admin
 FROM public.hilo_spins hs
 JOIN public.profiles p ON p.id = hs.user_id
+UNION ALL
+SELECT
+  ts.id, ts.user_id, p.nick AS nick_snapshot, 'tower' AS game,
+  ts.bet AS bet, ts.total_won AS won, ts.created_at, p.is_admin
+FROM public.tower_spins ts
+JOIN public.profiles p ON p.id = ts.user_id
 UNION ALL
 SELECT
   pl.id, pl.user_id, pl.nick_snapshot, 'poker_' || pl.type AS game,

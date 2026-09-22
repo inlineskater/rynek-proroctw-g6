@@ -847,6 +847,42 @@ const AGP_BB_HOLD_MS = 1600;   // linger on a finished board before reshuffling
 const AGP_SP_MOVE_MS = 360;    // pause between clicks, so a viewer can follow
 const AGP_SP_HOLD_MS = 2600;   // how long the finished round is held on screen
 
+// „Arkanoid G6" — the real akTick driven by a bot that reads the bounce and
+// hits with a varied part of the paddle, so the ball wanders over the wall
+// instead of ping-ponging one column. Launches straight away, restarts when
+// the last ball is lost or a minute has gone by.
+function agpArkanoidReset(p) {
+  p.st = akInitState(agpRandSeed());
+  p.rt = { playing: true, sim: p.st, prev: null, lastTickAt: 0, particles: [], floats: [] };
+  p.aim = 0;
+  p.doneFor = 0;
+}
+
+function agpArkanoidLandX(st) {
+  const falling = st.balls.filter(b => !b.stuck && b.vy > 0);
+  const pool = falling.length ? falling : st.balls;
+  if (!pool.length) return AK_W / 2;
+  const b = pool.reduce((a, c) => (c.y > a.y ? c : a));
+  const cx = b.x / AK_FP + AK_BALL / 2;
+  if (b.vy <= 0) return cx;
+  let x = cx + b.vx / b.vy * (AK_PADDLE_Y - (b.y / AK_FP + AK_BALL));
+  x = ((x % (2 * AK_W)) + 2 * AK_W) % (2 * AK_W);
+  return x > AK_W ? 2 * AK_W - x : x;
+}
+
+function agpArkanoidStep(p) {
+  const st = p.st;
+  if (st.over || st.tick > 3000) {
+    p.doneFor += AK_TICK_MS;
+    if (p.doneFor > 1400) agpArkanoidReset(p);
+    return;
+  }
+  if (st.tick % 45 === 0) p.aim = (Math.random() - 0.5) * 22;
+  akInput(st, Math.max(0, Math.min(AK_W, Math.round(agpArkanoidLandX(st) + p.aim))));
+  if (st.balls.some(b => b.stuck) && st.stuckTicks > 20) akInput(st, -1);
+  akTick(st);
+}
+
 function agpSaperReset(p) {
   p.st = spInitState(agpRandSeed());
   p.rt = { playing: true, sim: p.st, freeze: null, floats: [], flagMode: false };
@@ -1206,6 +1242,27 @@ const AGP_DEFS = {
       const oc = bbCtx, ort = bubbleBreakerRuntime;
       bbCtx = p.ctx; bubbleBreakerRuntime = p.rt;
       try { bubbleBreakerDraw(performance.now()); } finally { bbCtx = oc; bubbleBreakerRuntime = ort; }
+    },
+  },
+
+  arkanoid: {
+    dep: 'arkanoid',
+    size: () => [AK_CS_W, AK_CS_H],
+    init(p) { agpArkanoidReset(p); },
+    step(p, dt) {
+      p.acc += dt;
+      let n = 0;
+      while (p.acc >= AK_TICK_MS && n < 6) {
+        p.acc -= AK_TICK_MS;
+        agpArkanoidStep(p);
+        n += 1;
+      }
+      if (p.acc > AK_TICK_MS * 6) p.acc = 0;
+    },
+    draw(p) {
+      const oc = akCtx, ort = arkanoidRuntime;
+      akCtx = p.ctx; arkanoidRuntime = p.rt;
+      try { arkanoidDraw(performance.now()); } finally { akCtx = oc; arkanoidRuntime = ort; }
     },
   },
 
