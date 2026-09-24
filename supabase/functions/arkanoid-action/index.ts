@@ -63,6 +63,18 @@ const AK_LIVES = 3;
 const AK_MAX_LIVES = 5;
 const AK_MAX_BALLS = 3;
 const AK_AUTO_LAUNCH_TICKS = 150;     // a held ball launches itself after 3 s
+// Anti-stall. The concrete walls can hold a ball in a periodic orbit that
+// never reaches the paddle or a breakable brick (measured: 166 s in the vault's
+// ceiling band), or in a paddle → wall → paddle loop that never finds the last
+// bricks tucked behind a shelf (measured: 180 s on floor 3). So a ball that
+// has touched neither paddle nor brick for AK_STALL_TICKS, or any floor where
+// no brick has been hit for AK_DROUGHT_TICKS, gets a random table direction at
+// its next wall/ceiling bounce — never at the paddle, where the player aims —
+// and again every AK_STALL_RETRY ticks until a brick is hit. Seeded, so replays
+// agree.
+const AK_STALL_TICKS = 250;           // 5 s
+const AK_DROUGHT_TICKS = 750;         // 15 s
+const AK_STALL_RETRY = 50;            // 1 s
 
 // Capsules: 1 in AK_CAPSULE_ODDS destroyed bricks drops one.
 const AK_CAPSULE_ODDS = 6;
@@ -93,53 +105,67 @@ const AK_DIRS = [
   [16, -62], [31, -56], [45, -45], [56, -31],
 ];
 
-// Six office floors, 14 columns each. '.' empty, '1'..'6' a colour brick of
-// that band (1 hit), 'H' a segregator (2 hits), 'S' a safe (3 hits).
+// Six office floors, 14 columns × up to 12 rows. '.' empty, '1'..'6' a colour
+// brick of that band (1 hit), 'H' a segregator (2 hits), 'S' a safe (3 hits),
+// 'X' a load-bearing concrete wall: it never breaks, scores nothing and does
+// not count towards clearing the floor — it is there to make the ball ricochet
+// and to hide bricks behind it. Every breakable brick must stay reachable
+// around the walls, and no wall pocket may hold a ball away from the paddle
+// for long; scripts/arkanoid-balance.mjs asserts both.
 const AK_LEVELS = [
-  [ // Open Space
+  [ // Open Space — rows of desks, an aisle, two pillars
     '66666666666666',
     '55555555555555',
-    '44444444444444',
-    '33333333333333',
-  ],
-  [ // Piramida korporacyjna
-    '......66......',
-    '.....5555.....',
-    '....444444....',
-    '...33333333...',
-    '..2222222222..',
-    '.111111111111.',
-    'HHHH......HHHH',
-  ],
-  [ // Ściana segregatorów
-    'H6H6H6H6H6H6H6',
-    'H5H5H5H5H5H5H5',
-    'H4H4H4H4H4H4H4',
     '..............',
-    '33333333333333',
+    '444.444444.444',
+    '333.3HHHH3.333',
+    '..............',
+    '.X.22222222.X.',
   ],
-  [ // Boksy
-    '66666..6666666',
-    '6....5..5....6',
-    '6.44.5..5.44.6',
-    '6.44.5..5.44.6',
-    '6....5..5....6',
-    '33333HHHH33333',
+  [ // Piramida korporacyjna — concrete flanks, a safe at the apex
+    '......SS......',
+    '.....6666.....',
+    '....555555....',
+    '...X444444X...',
+    '..X33333333X..',
+    '.X2222222222X.',
+    '..............',
+    'HH....11....HH',
   ],
-  [ // Szachownica biurek
-    '6.5.4.3.2.1.6.',
-    '.6.5.4.3.2.1.6',
-    '6.5.4.3.2.1.6.',
-    '.6.5.4.3.2.1.6',
-    'HH..HH..HH..HH',
-    '1.2.3.4.5.6.1.',
-    '.1.2.3.4.5.6.1',
+  [ // Ściana segregatorów — shelves you have to get around
+    'H6H6H6H6H6H6H6',
+    '55555555555555',
+    '.....XXXX.....',
+    '..............',
+    '44H44H44H44H44',
+    '..............',
+    'XX...XXXX...XX',
+    '..33......33..',
   ],
-  [ // Sejf Prezesa
-    '..SSSSSSSSSS..',
-    '..6666666666..',
-    '..55HHSSHH55..',
-    '..4444444444..',
+  [ // Boksy — four cubicles, open only from below
+    '55555555555555',
+    'X44X44XX44X44X',
+    'X44X44XX44X44X',
+    'X33X33XX33X33X',
+    'XHHX..XX..XHHX',
+    '..............',
+    '.2222.22.2222.',
+  ],
+  [ // Szachownica biurek — a checkerboard with concrete in it
+    '6.6.6.6.6.6.6.',
+    '.5.5.5.5.5.5.5',
+    '4.X.4.X.4.X.4.',
+    '.3.3.3.3.3.3.3',
+    'H.H.X.H.H.X.H.',
+    '.2.2.2.2.2.2.2',
+    '1.1.1.1.1.1.1.',
+  ],
+  [ // Sejf Prezesa — a concrete vault: a door of bricks below, a slot on top
+    '..............',
+    '.XXX......XXX.',
+    '.XSS666666SSX.',
+    '.X5555555555X.',
+    '.X44HHSSHH44X.',
     '..3333333333..',
   ],
 ];
@@ -152,6 +178,7 @@ function akRng(st) {
 function akBrickHp(ch) {
   if (ch === 'H') return 2;
   if (ch === 'S') return 3;
+  if (ch === 'X') return -1;           // wall: never breaks
   if (ch >= '1' && ch <= '6') return 1;
   return 0;
 }
@@ -167,12 +194,13 @@ function akLoadLevel(st) {
       const hp = akBrickHp(ch);
       const i = r * AK_COLS + c;
       st.hp[i] = hp;
-      st.kind[i] = hp > 0 ? ch : '.';
+      st.kind[i] = hp !== 0 ? ch : '.';
       if (hp > 0) st.left += 1;
     }
   }
   st.levelTicks = 0;
   st.levelHits = 0;
+  st.drought = 0;
   st.capsules = [];
   st.wide = 0;
   st.slow = 0;
@@ -191,7 +219,7 @@ function akClampPaddle(st) {
 
 // One ball, held on the paddle until launched.
 function akServe(st) {
-  st.balls = [{ x: 0, y: (AK_PADDLE_Y - AK_BALL) * AK_FP, vx: 0, vy: 0, stuck: true }];
+  st.balls = [{ x: 0, y: (AK_PADDLE_Y - AK_BALL) * AK_FP, vx: 0, vy: 0, stuck: true, idle: 0 }];
   st.stuckTicks = 0;
   akStickBall(st);
 }
@@ -221,7 +249,7 @@ function akInitState(seed) {
     livesLost: 0,
     paddleHits: 0,
     hp: null, kind: null, left: 0,
-    levelTicks: 0, levelHits: 0,
+    levelTicks: 0, levelHits: 0, drought: 0,
     balls: [], capsules: [], wide: 0, slow: 0, stuckTicks: 0,
   };
   akLoadLevel(st);
@@ -253,7 +281,7 @@ function akLaunch(st) {
   return any;
 }
 
-// The first live brick the ball's box overlaps, row-major, or -1.
+// The first live brick or wall the ball's box overlaps, row-major, or -1.
 function akBrickAt(st, b) {
   const x0 = Math.floor(b.x / AK_FP);
   const x1 = Math.floor((b.x + AK_BALL * AK_FP - 1) / AK_FP);
@@ -271,16 +299,19 @@ function akBrickAt(st, b) {
   for (let r = r0; r <= r1; r += 1) {
     for (let c = c0; c <= c1; c += 1) {
       const i = r * AK_COLS + c;
-      if (st.hp[i] > 0) return i;
+      if (st.hp[i] !== 0) return i;
     }
   }
   return -1;
 }
 
+// Returns false for a wall, which only bounces the ball.
 function akHitBrick(st, i) {
+  if (st.hp[i] < 0) return false;
   st.hp[i] -= 1;
   st.levelHits += 1;
-  if (st.hp[i] > 0) { st.score += AK_PTS_CHIP; return; }
+  st.drought = 0;
+  if (st.hp[i] > 0) { st.score += AK_PTS_CHIP; return true; }
   const k = st.kind[i];
   st.score += k === 'S' ? AK_PTS_SAFE : k === 'H' ? AK_PTS_HARD : AK_PTS_BAND * (k.charCodeAt(0) - 48);
   st.left -= 1;
@@ -294,6 +325,22 @@ function akHitBrick(st, i) {
       kind: akRng(st) % 4,
     });
   }
+  return true;
+}
+
+// A stalled ball (see AK_STALL_TICKS) leaves its bounce in a random table
+// direction, keeping the sign the bounce just gave each axis so it never turns
+// back into what it hit.
+function akUnstall(st, b) {
+  if (b.idle < AK_STALL_TICKS && st.drought < AK_DROUGHT_TICKS) return;
+  const d = AK_DIRS[akRng(st) & 7];
+  const spd = akSpeed(st);
+  const vx = Math.abs(Math.trunc(d[0] * spd / 64));
+  const vy = Math.abs(Math.trunc(d[1] * spd / 64));
+  b.vx = b.vx < 0 ? -vx : vx;
+  b.vy = b.vy < 0 ? -vy : vy;
+  if (b.idle >= AK_STALL_TICKS) b.idle = AK_STALL_TICKS - AK_STALL_RETRY;
+  if (st.drought >= AK_DROUGHT_TICKS) st.drought = AK_DROUGHT_TICKS - AK_STALL_RETRY;
 }
 
 // One sub-step of one ball, axis by axis: move X, resolve; move Y, resolve.
@@ -304,18 +351,25 @@ function akStepBall(st, b) {
 
   const ox = b.x;
   b.x += b.vx;
-  if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx); }
-  else if (b.x + BF > WF) { b.x = WF - BF; b.vx = -Math.abs(b.vx); }
+  if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx); akUnstall(st, b); }
+  else if (b.x + BF > WF) { b.x = WF - BF; b.vx = -Math.abs(b.vx); akUnstall(st, b); }
   else {
     const i = akBrickAt(st, b);
-    if (i >= 0) { b.x = ox; b.vx = -b.vx; akHitBrick(st, i); }
+    if (i >= 0) {
+      b.x = ox; b.vx = -b.vx;
+      if (akHitBrick(st, i)) b.idle = 0; else akUnstall(st, b);
+    }
   }
 
   const oy = b.y;
   b.y += b.vy;
-  if (b.y < 0) { b.y = 0; b.vy = Math.abs(b.vy); return true; }
+  if (b.y < 0) { b.y = 0; b.vy = Math.abs(b.vy); akUnstall(st, b); return true; }
   const i = akBrickAt(st, b);
-  if (i >= 0) { b.y = oy; b.vy = -b.vy; akHitBrick(st, i); return true; }
+  if (i >= 0) {
+    b.y = oy; b.vy = -b.vy;
+    if (akHitBrick(st, i)) b.idle = 0; else akUnstall(st, b);
+    return true;
+  }
 
   const pw = akPaddleW(st) * AK_FP;
   const pl = st.pc - (pw >> 1);
@@ -327,6 +381,7 @@ function akStepBall(st, b) {
     if (zone < 0) zone = 0;
     if (zone > 7) zone = 7;
     akAim(b, zone, akSpeed(st));
+    b.idle = 0;
     st.paddleHits += 1;
     return true;
   }
@@ -344,7 +399,7 @@ function akCatch(st, kind) {
     if (!free) return;
     const spd = akSpeed(st);
     while (st.balls.length < AK_MAX_BALLS) {
-      const nb = { x: free.x, y: free.y, vx: 0, vy: 0, stuck: false };
+      const nb = { x: free.x, y: free.y, vx: 0, vy: 0, stuck: false, idle: 0 };
       akAim(nb, st.balls.length === 1 ? 1 : 6, spd);
       st.balls.push(nb);
     }
@@ -376,10 +431,12 @@ function akTick(st) {
   st.launchQueued = false;
 
   // Balls.
+  if (st.balls.some(b => !b.stuck)) st.drought += 1;
   const kept = [];
   for (const b of st.balls) {
     let alive = true;
     if (!b.stuck) {
+      b.idle += 1;
       for (let s = 0; s < AK_SUBSTEPS && alive; s += 1) {
         alive = akStepBall(st, b);
         if (st.left === 0) break;
