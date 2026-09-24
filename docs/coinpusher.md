@@ -171,6 +171,13 @@ up by roughly (1 − front share) × 0.3. Knobs, if the house edge on centred
 play (~1 %) is too thin: `gutterStartZ` (open the side edges earlier),
 `gutterWidth`, `halfWidth`.
 
+**Re-measured after the coins grew to r 1.65 cm (2026-09-24, stake 100, 250
+warm-up + 500 counted drops):** uniform **95.8 %** (93.0 % of exits over the
+front, pile 110), centre **97.9 %** (93.2 %, pile 86), edges **90.9 %** (85.2 %,
+pile 105). Bigger coins make fewer, fatter columns, which the side gutters
+catch less often. The equilibrium pile is ~90–110, so the 140-coin pre-fill
+overflows at first: that overflow is the house's pre-fill gift.
+
 The drop position is the only skill and the only strategy. Every strategy
 stays below 100 %.
 

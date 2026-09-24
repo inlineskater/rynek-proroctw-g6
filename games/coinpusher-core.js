@@ -54,8 +54,8 @@
     drop: {
       y: 17,
       z: -11,
-      minX: -13.2,
-      maxX: 13.2,
+      minX: -12.9,
+      maxX: 12.9,
       tiltJitter: 0.14,       // rad of random tilt on release
       spinJitter: 3,          // rad/s
       downSpeed: 140,         // cm/s the coin leaves the slot with — fired in, so spammed coins land fast
@@ -94,8 +94,8 @@
     // Coins differ only in how they look (see cpLookFor). The jackpot token is
     // the one deliberately different object: big, heavy, and slow to push.
     shapes: {
-      coin:    { r: 1.3, h: 0.3, border: 0.05 },
-      jackpot: { r: 1.9, h: 0.5, border: 0.08 },
+      coin:    { r: 1.65, h: 0.36, border: 0.06 },   // ~33 mm: a big, chunky arcade token
+      jackpot: { r: 2.3, h: 0.55, border: 0.09 },
     },
   };
 

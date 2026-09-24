@@ -52,7 +52,7 @@ const CP_TEXT = {
   rain: '🌧️ Deszcz monet!',
   jackpot: 'JACKPOT',
   bigWin: 'DUŻA WYGRANA',
-  help: 'Przesuń kursor (lub palec) nad automatem, żeby ustawić zrzut, i wciśnij WRZUĆ (spacja). ←/→ przesuwają zrzut. Moneta spada naprawdę — gdzie wyląduje, decyduje fizyka. Spychacz przesuwa stos; monety spadające z przedniej krawędzi wygrywasz, te z bocznych rynien zabiera automat (to jego przewaga — część z nich wraca do automatu jako złote monety, żetony jackpot i deszcz monet). Silnik staje po minucie bez wrzutu i rusza przy następnej monecie.',
+  help: 'Kliknij (albo dotknij) w dowolnym miejscu automatu — moneta spadnie dokładnie tam. Możesz klikać ile chcesz. Działa też WRZUĆ i spacja. ←/→ przesuwają zrzut. Moneta spada naprawdę — gdzie wyląduje, decyduje fizyka. Spychacz przesuwa stos; monety spadające z przedniej krawędzi wygrywasz, te z bocznych rynien zabiera automat (to jego przewaga — część z nich wraca do automatu jako złote monety, żetony jackpot i deszcz monet). Silnik staje po minucie bez wrzutu i rusza przy następnej monecie.',
 };
 
 const CP_STATES = ['LOADING', 'READY', 'DROPPING', 'PLAYING', 'BONUS', 'BIG_WIN', 'PAUSED', 'CONNECTION_LOST', 'ERROR'];
@@ -601,7 +601,13 @@ function cpOnPointer(ev) {
   const px = ev.clientX - rect.left;
   const t = (px - a.x) / Math.max(1, b.x - a.x);
   cpDropTarget = D.minX + Math.max(0, Math.min(1, t)) * (D.maxX - D.minX);
-  if (ev.type === 'pointerdown') { cpAudioUnlock(); try { cpUi.stage.focus({ preventScroll: true }); } catch (_) {} }
+  if (ev.type === 'pointerdown') {
+    // Click / tap anywhere on the machine = drop a coin right there.
+    cpAudioUnlock();
+    try { cpUi.stage.focus({ preventScroll: true }); } catch (_) {}
+    cpDropX = cpDropTarget;
+    cpDropPressed();
+  }
 }
 
 function cpOnKey(ev) {
@@ -907,10 +913,10 @@ function cpEnvScene(T) {
     p.position.set(x, y, z); p.rotation.set(rx || 0, ry || 0, 0);
     env.add(p);
   };
-  panel(22, 8, 0xfff0d8, 7, 0, 14.5, 0, Math.PI / 2, 0);        // warm softbox overhead
-  panel(3, 14, 0xffc27a, 3.2, -19, 6, 0, 0, Math.PI / 2);       // amber side strips
-  panel(3, 14, 0xffc27a, 3.2, 19, 6, 0, 0, -Math.PI / 2);
-  panel(26, 4, 0xbfd4ff, 1.4, 0, 4, 19.5, 0, Math.PI);           // cool front fill
+  panel(26, 12, 0xfff0d8, 13, 0, 14.5, 0, Math.PI / 2, 0);      // warm softbox overhead (what polished coins mirror)
+  panel(5, 14, 0xffc27a, 5, -19, 6, 0, 0, Math.PI / 2);         // amber side strips
+  panel(5, 14, 0xffc27a, 5, 19, 6, 0, 0, -Math.PI / 2);
+  panel(30, 8, 0xfff4e6, 4, 0, 6, 19.5, 0, Math.PI);            // front fill
   panel(26, 3, 0xffd9a0, 1.8, 0, 2, -19.5, 0, 0);
   return env;
 }
@@ -1011,7 +1017,7 @@ function cpFaceTextures(look, size) {
   c.globalAlpha = 0.55; text(c, st.hi); c.globalAlpha = 1;
   // Roughness: mostly smooth with fine scratches and worn edges.
   const rC = cpCanvas(size, size), r = rC.getContext('2d');
-  const base = Math.round(st.rough * 255);
+  const base = Math.round(st.rough * 0.8 * 255);
   r.fillStyle = `rgb(${base},${base},${base})`; r.fillRect(0, 0, size, size);
   r.strokeStyle = `rgba(255,255,255,0.18)`; r.lineWidth = 1;
   for (let i = 0; i < 70; i++) {
@@ -1045,10 +1051,12 @@ function cpBuildCoinMeshes() {
     const geo = new T.CylinderGeometry(shape.r, shape.r, shape.h, look === 'jackpot' ? 48 : 36, 1, false);
     const st = CP_LOOK_STYLE[look];
     const tex = cpFaceTextures(look, Q.tex);
-    const face = new T.MeshStandardMaterial({ color: 0xffffff, metalness: st.metal, roughness: 1, ...tex, envMapIntensity: 1.15 });
+    // Polished: low roughness and strong reflections (the roughness map still
+    // adds the scratches and worn rim).
+    const face = new T.MeshStandardMaterial({ color: 0xffffff, metalness: st.metal, roughness: 1, ...tex, envMapIntensity: 2.3 });
     face.normalScale.set(1.1, 1.1);
     const side = new T.MeshStandardMaterial({ color: new T.Color(st.base).lerp(new T.Color(st.hi), 0.35), metalness: st.metal,
-      roughness: st.rough + 0.08, normalMap: edge, envMapIntensity: 1.1 });
+      roughness: Math.max(0.12, st.rough - 0.06), normalMap: edge, envMapIntensity: 2.3 });
     if (st.glow) { face.emissive = new T.Color(st.glow); face.emissiveIntensity = 0.55; side.emissive = new T.Color(st.glow); side.emissiveIntensity = 0.4; }
     const mesh = new T.InstancedMesh(geo, [side, face, face], cap);
     mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
@@ -1175,7 +1183,8 @@ function cpBuildCabinet() {
   const slot = new T.Mesh(new T.BoxGeometry(2.8, 0.2, 0.5), hole);
   slot.position.y = cpSim.cfg.drop.y + 1.35;
   const ghostMat = new T.MeshStandardMaterial({ color: 0xffe39a, metalness: 1, roughness: 0.3, transparent: true, opacity: 0.55 });
-  const ghost = new T.Mesh(new T.CylinderGeometry(1.3, 1.3, 0.3, 32), ghostMat);
+  const gs = cpSim.cfg.shapes.coin;
+  const ghost = new T.Mesh(new T.CylinderGeometry(gs.r, gs.r, gs.h, 32), ghostMat);
   ghost.rotation.x = Math.PI / 2; ghost.position.y = cpSim.cfg.drop.y + 0.2;
   const beamMat = new T.MeshBasicMaterial({ color: 0xffd56b, transparent: true, opacity: 0.08, depthWrite: false });
   const beam = new T.Mesh(new T.CylinderGeometry(0.05, 0.9, cpSim.cfg.drop.y - P.height, 16, 1, true), beamMat);
