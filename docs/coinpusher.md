@@ -90,9 +90,12 @@ day at 0: a machine can hold coins across days.
 Units are cm (gravity −981). +z points at the player.
 
 - **Tier 1** is the top of the pusher block. Coins drop onto it from the slot.
-  A fixed **wiper** hangs 0.5 mm above it with a *rounded* lower edge (a
-  capsule). A square edge pinches a tilted coin against the moving block and
-  fires it off.
+  A fixed **wiper** hangs 0.5 mm above it with a **square** lower edge. ⚠️ A
+  rounded (capsule) edge was shipped briefly and is wrong: it presses each coin
+  *down* onto the moving block, friction locks the coin to the block, and
+  tier 1 stops feeding tier 2. Measured: the upper tier hoarded ~200 coins and
+  only ~35 % of exits went over the front, against ~86 % with the square
+  edge.
 - **Tier 2** is the bed. As the block retracts, the wiper holds tier-1 coins,
   so they migrate to the block's front edge and fall; the block's front face
   then shoves the bed pile toward the prize edge.
@@ -118,6 +121,7 @@ Units are cm (gravity −981). +z points at the player.
 | `dt` | 1/120 | At 1/60 a pile of 3 mm coins leaning on each other never stops rocking: mean angular speed after 8 s was 0.035 rad/s at 60 Hz against 0.008 at 120 Hz. With 4 solver iterations it is also **cheaper** per simulated second, because contacts converge. |
 | `lengthUnit` | 5 | Rapier's tolerances and sleep thresholds scale with it. In cm the default (1) treats a settled coin twitching at 0.002 cm/s as moving, so nothing ever sleeps. |
 | `wiperGap` | 0.05 | At 0.12 the wiper and the moving block squeezed a coin 0.15 cm into the block until it slipped under. |
+| wiper edge | square | A rounded edge pins coins to the block (see above): the machine stops paying. |
 | clinks | velocity change | Contact-force events fire every step for every resting coin: a coin carries its own weight, ~14 000 dyn. Audio uses per-step Δv > 35 cm/s instead, throttled to 2 per frame. |
 | turbo | UI only | Turbo speeds up auto-drop and count-ups, never the pusher: the machine's return must not depend on a UI toggle. |
 

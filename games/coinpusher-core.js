@@ -248,23 +248,15 @@
     fixedBox('catch', outerHalf + 2, 1, 30, 0, -32, 0, 0.5);
 
     // Wiper: a fixed plate hanging just above the pusher top, so tier-1 coins
-    // are held back as the block slides out from under them. Its lower edge is
-    // ROUNDED (a capsule along x): a square edge pinches a tilted coin against
-    // the moving block and fires it off; a round one rolls it back onto the pile.
+    // are held back as the block slides out from under them.
+    // ⚠️ Keep its lower edge SQUARE. A rounded (capsule) edge was tried: it
+    // presses every coin it touches DOWN onto the moving block, friction then
+    // locks the coin to the block, and tier 1 stops feeding tier 2 — measured,
+    // the upper tier hoarded ~200 coins and only ~35% of exits went over the
+    // front (vs ~86% with this edge).
     const pTop = P.height;
-    const wr = 0.5;
-    const wiperCy = pTop + P.wiperGap + wr;
-    fixedBox('wiper', M.halfWidth, M.wallHeight / 2, wr,
-      0, wiperCy + M.wallHeight / 2, P.wiperZ - wr, PH.wallFriction);
-    {
-      const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed()
-        .setTranslation(0, wiperCy, P.wiperZ - wr)
-        .setRotation({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 }));
-      world.createCollider(RAPIER.ColliderDesc.capsule(M.halfWidth - wr, wr)
-        .setFriction(PH.wallFriction).setRestitution(PH.bedRestitution), body);
-      sim.statics.push({ name: 'wiperEdge', capsule: true, r: wr, half: M.halfWidth,
-        x: 0, y: wiperCy, z: P.wiperZ - wr });
-    }
+    fixedBox('wiper', M.halfWidth, M.wallHeight / 2, 0.5,
+      0, pTop + P.wiperGap + M.wallHeight / 2, P.wiperZ - 0.5, PH.wallFriction);
 
     // The pusher block — kinematic, driven by position only.
     const pusherHz = P.depth / 2;

@@ -1089,11 +1089,6 @@ function cpBuildCabinet() {
   // never disagree with what the coins actually hit.
   for (const s of cpSim.statics) {
     if (s.name === 'catch') continue;
-    if (s.capsule) {
-      const cap = new T.Mesh(new T.CapsuleGeometry(s.r, s.half * 2 - 2 * s.r, 6, 16), gold);
-      cap.rotation.z = Math.PI / 2; cap.position.set(s.x, s.y, s.z); scene.add(cap);
-      continue;
-    }
     const mat = s.name === 'bed' ? steel : s.glass ? glass : s.name.startsWith('sep') ? gold : s.name === 'wiper' ? lacquer : darkSteel;
     box(s.hx * 2, s.hy * 2, s.hz * 2, mat, s.x, s.y, s.z, !s.glass);
   }
