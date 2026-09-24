@@ -25,6 +25,58 @@ const CHAT_FX_MAX_PER_MSG = 3;
 const CHAT_FX_MIN_GAP_MS = 320;   // server throttle is 300ms per user
 const CHAT_FX_STICKER_RE = /^:st:([a-z_]+):$/;
 
+// ── Admin announcements ──────────────────────────────────────────────────────
+// A message whose body is exactly ':ann:<code>:' renders as an announcement
+// card (title, text, screenshots, a button to the feature) — but ONLY when its
+// sender is an admin. From anyone else it stays plain text, so nobody can fake
+// one. No SQL: it is an ordinary chat_send(), like a sticker. To post, an admin
+// types the code into the chat. Images live in tabs/assets/ (Pages copies tabs/).
+const CHAT_ANN_RE = /^:ann:([a-z0-9-]+):$/;
+const CHAT_ANNOUNCEMENTS = {
+  'automat-monet': {
+    title: '🪙 Nowa gra w Kasynie: Automat Monet G6',
+    text: 'Prawdziwy automat ze spychaczem — każda moneta to fizyczna bryła, nic nie jest udawane. Klikaj w automat, żeby wrzucać monety po 100 🪙. Co spadnie z przodu, jest Twoje; rzadko wpadają monety 1000 🪙 i żetony JACKPOT (do 10 000 🪙). Na start każdy dostaje pełny automat — 140 monet od kasyna.',
+    images: ['tabs/assets/automat-monet-desktop.jpg', 'tabs/assets/automat-monet-telefon.jpg'],
+    tab: 'coinpusher',
+    cta: '🎰 Zagraj teraz',
+  },
+};
+let chatFxAdminIds = null;          // Set of admin profile ids, fetched once
+let chatFxAdminLoading = null;
+
+function chatFxLoadAdmins() {
+  if (chatFxAdminIds || chatFxAdminLoading) return;
+  chatFxAdminLoading = sb.from('profiles').select('id').eq('is_admin', true).then(({ data }) => {
+    chatFxAdminIds = new Set((data || []).map(r => r.id));
+    chatFxAdminLoading = null;
+    if (typeof chatRenderRoom === 'function' && chatReady) { chatRenderRoom(); if (chatView === 'thread') chatRenderThread(); }
+  }, () => { chatFxAdminLoading = null; });
+}
+
+function chatFxAnnCode(m) {
+  const x = CHAT_ANN_RE.exec(String(m?.body || ''));
+  if (!x || !CHAT_ANNOUNCEMENTS[x[1]]) return null;
+  if (!chatFxAdminIds) { chatFxLoadAdmins(); return null; }
+  return chatFxAdminIds.has(m.sender_id) ? x[1] : null;
+}
+
+function chatFxAnnCard(code) {
+  const a = CHAT_ANNOUNCEMENTS[code];
+  const imgs = el('div', { className: 'cfx-ann-imgs' });
+  for (const src of a.images) {
+    const img = el('img', { src, alt: a.title, loading: 'lazy' });
+    img.addEventListener('click', () => window.open(src, '_blank', 'noopener'));
+    imgs.appendChild(img);
+  }
+  const btn = el('button', { className: 'cfx-ann-btn', type: 'button' }, a.cta);
+  btn.addEventListener('click', () => { if (typeof switchTab === 'function') switchTab(a.tab); });
+  return el('div', { className: 'cfx-ann' },
+    el('div', { className: 'cfx-ann-tag' }, '📣 Ogłoszenie'),
+    el('div', { className: 'cfx-ann-title' }, a.title),
+    el('div', { className: 'cfx-ann-text' }, a.text),
+    imgs, btn);
+}
+
 const CHAT_FX_EMOJI = [
   { code: 'laugh',  e: '😂', label: 'Haha' },
   { code: 'fire',   e: '🔥', label: 'Ogień' },
@@ -337,6 +389,15 @@ function chatFxInjectCss() {
   /* Messages */
   .chat-msg { position: relative; }
   .cfx-sticker-msg { line-height: 0; padding: 2px 0; }
+  .chat-msg.is-ann { max-width: 100%; }
+  .cfx-ann { border: 1px solid var(--c-accent); border-radius: 10px; padding: 10px; background: var(--c-solid); display: flex; flex-direction: column; gap: 6px; }
+  .cfx-ann-tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--c-accent); font-weight: 700; }
+  .cfx-ann-title { font-weight: 800; font-size: 14px; }
+  .cfx-ann-text { font-size: 12.5px; line-height: 1.45; }
+  .cfx-ann-imgs { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
+  .cfx-ann-imgs img { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; cursor: zoom-in; display: block; }
+  .cfx-ann-btn { align-self: flex-start; border: 0; border-radius: 8px; padding: 7px 12px; font-weight: 700; cursor: pointer;
+    background: linear-gradient(180deg, #ffe39a, #e0a73b); color: #1c1406; }
   .cfx-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
   .cfx-reacts:empty { display: none; }
   .chat-msg.mine .cfx-reacts { justify-content: flex-end; }
@@ -515,6 +576,11 @@ function chatFxRefresh(mid) {
 
 function chatFxDecorate(node, m) {
   if (!m || m.id == null || !me) return;
+  const ann = chatFxAnnCode(m);
+  if (ann) {
+    const bubble = node.querySelector('.chat-msg-bubble');
+    if (bubble) { bubble.replaceWith(chatFxAnnCard(ann)); node.classList.add('is-ann'); }
+  }
   const code = chatFxStickerCode(m.body);
   if (code) {
     const bubble = node.querySelector('.chat-msg-bubble');
@@ -699,11 +765,14 @@ async function chatFxAttach() {
 }
 
 function chatFxPreview(m) {
+  const ann = chatFxAnnCode(m);
+  if (ann) return '📣 ' + CHAT_ANNOUNCEMENTS[ann].title;
   const code = chatFxStickerCode(m?.body);
   return code ? '🎭 ' + CHAT_FX_BY_CODE.get(code).label : String(m?.body || '');
 }
 
 function chatFxReset() {
   chatFxClosePicker();
+  chatFxAdminIds = null;
   chatFxMap = new Map();
 }
