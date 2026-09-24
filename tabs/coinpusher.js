@@ -73,7 +73,7 @@ const CP_CAMERAS = {
 
 const CP_LOOKS = ['house', 'coin5', 'coin10', 'coin25', 'coin50', 'coin100', 'gold', 'jackpot'];
 const CP_AUTO_COUNTS = [10, 25, 50, 100];
-const CP_CLIENT_COOLDOWN_MS = 250;
+const CP_CLIENT_COOLDOWN_MS = 110;   // spam-friendly; server allows 8/s, burst 6
 const CP_AUTO_MS = 480;
 const CP_AUTO_TURBO_MS = 300;
 const CP_FLUSH_MS = 450;
@@ -465,7 +465,8 @@ function cpBuildDom() {
   const autoBtn = el('button', { className: 'cp-btn cp-auto', onclick: () => cpToggleAuto() }, CP_TEXT.auto);
   const autoWrap = el('div', { className: 'cp-bet cp-auto' }, autoBtn, autoSel);
   const turbo = el('button', { className: 'cp-btn', 'aria-pressed': 'false', onclick: () => cpToggleTurbo() }, '⚡ ' + CP_TEXT.turbo);
-  const hudBot = el('div', { className: 'cp-hud-bot' }, bet, drop, autoWrap, turbo);
+  // One button: throw. No auto, no turbo — spam it.
+  const hudBot = el('div', { className: 'cp-hud-bot' }, bet, drop);
 
   const tool = (label, title, fn) => el('button', { className: 'cp-btn', title, 'aria-label': title, onclick: fn }, label);
   const sound = tool('🔊', 'Dźwięk', () => cpToggleSound());
@@ -608,7 +609,7 @@ function cpOnKey(ev) {
   const D = cpSim.cfg.drop;
   if (ev.key === 'ArrowLeft') { cpDropTarget = Math.max(D.minX, cpDropTarget - 1.2); ev.preventDefault(); }
   else if (ev.key === 'ArrowRight') { cpDropTarget = Math.min(D.maxX, cpDropTarget + 1.2); ev.preventDefault(); }
-  else if (ev.key === ' ' || ev.key === 'Enter') { if (!ev.repeat) cpDropPressed(); ev.preventDefault(); }
+  else if (ev.key === ' ' || ev.key === 'Enter') { cpDropPressed(); ev.preventDefault(); }
   else if (ev.key === 'ArrowUp') { cpChangeStake(1); ev.preventDefault(); }
   else if (ev.key === 'ArrowDown') { cpChangeStake(-1); ev.preventDefault(); }
 }
@@ -624,7 +625,7 @@ async function cpDropPressed(fromAuto) {
   cpAudioUnlock();
   if (!cpSim || !cpServer || !cpPlayable()) return false;
   const now = performance.now();
-  if (now - cpLastDropAt < CP_CLIENT_COOLDOWN_MS || cpInflight >= 2) return false;
+  if (now - cpLastDropAt < CP_CLIENT_COOLDOWN_MS || cpInflight >= 4) return false;
   if (me && Number(me.coins) < cpStake) { toast(CP_TEXT.noFunds); cpStopAuto(); return false; }
   cpLastDropAt = now;
   const x = cpDropX;

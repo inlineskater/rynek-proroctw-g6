@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.coinpusher_machines (
   -- so two tabs can't run two diverging simulations of the same coins.
   lease           text,
   -- Token bucket for drops (DROP_RATE_PER_S / DROP_BURST in the function).
-  drop_tokens     real NOT NULL DEFAULT 3,
+  drop_tokens     real NOT NULL DEFAULT 6,
   last_drop_at    timestamptz,
   session_id      uuid,
   drops           bigint NOT NULL DEFAULT 0,

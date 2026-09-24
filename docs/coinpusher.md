@@ -54,7 +54,7 @@ the instant it exists, so the per-machine closed loop *is* the safety argument.
 - **Idempotent drops.** `unique(user_id, request_id)` makes a retried drop
   return its original coin. The duplicate check runs *before* the rate limit,
   or a retried success would be refused and its coin never spawned.
-- **Token bucket, not a fixed gap**: 4/s with a burst of 3, because network
+- **Token bucket, not a fixed gap**: 8/s with a burst of 6, because network
   jitter compresses honest 250 ms drops.
 - **Prizes only while the motor could be running.** The client starts with the
   pusher parked and parks it 60 s after the last drop. The server accepts
@@ -63,7 +63,7 @@ the instant it exists, so the per-machine closed loop *is* the safety argument.
   means **reloading can never shake coins loose for free**.
 - **`lost` is booked exactly like `gutter`**, so it is never a free choice of a
   better return.
-- **`BANK_CAP` = 3 000**: the bank is float, not a vault; overflow is burned.
+- **`BANK_CAP` = 20 000**: the bank is float, not a vault; overflow is burned.
 
 ## Stats: one row per session, booked at settlement
 
@@ -90,10 +90,11 @@ day at 0: a machine can hold coins across days.
 Every coin a player throws is a 100 🪙 coin: the server's stake list is just
 `[100]`, and the stake picker becomes a fixed "100 🪙 / moneta" label. Coins
 from the earlier 1–50 🪙 stakes still in a machine keep their value (and
-their own design) until they fall out. At this stake, `BANK_CAP` 3 000 lets a
-gold coin (+400 from the bank) through freely. It holds a jackpot token to
-10–15 × the stake (half the bank, never more than 1 500) and coin rain to 12–15
-coins. Raise `BANK_CAP` if jackpots should reach the 50 × ceiling.
+their own design) until they fall out. `BANK_CAP` is 20 000, so a jackpot token
+(half the bank, `JACKPOT_MAX_MULT` 100 × stake) tops out at **10 000 🪙**. It is
+still paid only from that machine's own gutter losses, so it mints nothing.
+The only control is WRZUĆ (no auto, no turbo): spamming it is the game,
+allowed at 8/s with a burst of 6.
 
 (The RTP table below was measured at stake 10. The physics doesn't care:
 every ordinary coin is the same body, so what goes over the front is the same

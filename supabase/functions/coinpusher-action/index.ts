@@ -53,8 +53,8 @@ const REFILL_MAX = 60;
 const MAX_IN_MACHINE = 320;         // a physical machine only holds so much
 // Token bucket, not a fixed gap: network jitter can land two honest 250 ms
 // drops 150 ms apart at the server.
-const DROP_RATE_PER_S = 4;
-const DROP_BURST = 3;
+const DROP_RATE_PER_S = 8;         // spamming the button is the game
+const DROP_BURST = 6;
 // Prizes are only accepted while the motor is running. The client parks the
 // pusher MOTOR_IDLE_S after the last drop (and starts parked), so a reload can
 // never shake coins loose for free; the extra grace covers coins still sliding.
@@ -74,7 +74,7 @@ const RECYCLE = 0.40;
 const CASINO_LUCK_RECYCLE = 0.70;
 // The bank is float, not a vault: past this the overflow is burned. Keeps the
 // gap between "booked as burned" and "actually gone" small.
-const BANK_CAP = 3000;
+const BANK_CAP = 20_000;          // half of it = the 10 000 jackpot ceiling
 
 // Specials — rolled per drop in TEN-THOUSANDTHS, and only issued when the
 // bank can pay for the part above the stake.
@@ -82,7 +82,7 @@ const GOLD_P = 400;                 // 4%    🟡 gold coin worth 5 × stake
 const GOLD_MULT = 5;
 const JACKPOT_P = 50;               // 0.5%  💎 jackpot token
 const JACKPOT_MIN_MULT = 10;        //        only if half the bank ≥ 10 × stake
-const JACKPOT_MAX_MULT = 50;
+const JACKPOT_MAX_MULT = 100;       // 100 × 100 🪙 = 10 000 max
 const MAX_PAYOUT = 150_000;
 // 🌧️ Coin rain: once the bank has grown, a drop can shake loose a shower of
 // stake-valued coins bought from it.
