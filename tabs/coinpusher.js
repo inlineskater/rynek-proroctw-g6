@@ -117,6 +117,7 @@ let cpPusherPrev = 0;
 let cpShake = 0;
 let cpWinHold = 0;
 let cpLayoutSig = '';
+let cpPageMode = true;     // full-page while playing; ✕ / Esc returns to the normal tab layout
 
 function cpEmit(type, detail) {
   // Integration hook for the host page / analytics. Never carries personal data.
@@ -147,6 +148,13 @@ function cpStore(key, value) {
       border-radius: 16px; overflow: hidden; background: radial-gradient(120% 90% at 50% 18%, #2a2116 0%, #120e0a 45%, #050507 100%);
       box-shadow: 0 20px 60px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,210,130,.12); touch-action: none; user-select: none; }
     .cp-stage.is-full { max-height: none; height: 100vh; aspect-ratio: auto; border-radius: 0; }
+    /* Full-page mode (the default while playing): the machine fills the whole
+       browser window, over the header, nav and chat rail (≤ 61) but under
+       modals (100) and toasts (300), so errors and wins still show. */
+    .cp-stage.is-page { position: fixed; inset: 0; z-index: 90; width: auto; height: 100vh; height: 100dvh;
+      max-height: none; min-height: 0; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
+    .cp-stage.is-page .cp-hud-bot { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+    html.cp-page-lock, html.cp-page-lock body { overflow: hidden; }
     @media (max-width: 640px) { .cp-stage { aspect-ratio: 3 / 4; max-height: calc(100vh - 150px); min-height: 380px; border-radius: 12px; } }
     .cp-stage canvas { display: block; width: 100%; height: 100%; outline: none; }
     .cp-hud-top { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; gap: 8px; justify-content: space-between; pointer-events: none; flex-wrap: wrap; }
@@ -316,6 +324,7 @@ async function loadCoinPusher() {
   }
   const token = ++cpLoadToken;
   cpBuildDom();
+  cpApplyPageMode(cpPageMode);
   cpSetState('LOADING');
   cpOverlay('loading', CP_TEXT.loadingLibs, 0.05);
   try {
@@ -388,6 +397,7 @@ async function cpBuildMachine(state, token) {
 }
 
 function cpResume() {
+  cpApplyPageMode(cpPageMode);
   if (!cpSim || !cpView) return;
   cpLastFrame = performance.now();
   cpAcc = 0;
@@ -403,6 +413,8 @@ function cpResume() {
 // Tab switch (dispose=false) or logout (dispose=true).
 function stopCoinPusher(dispose) {
   cancelAnimationFrame(cpRaf); cpRaf = 0;
+  document.documentElement.classList.remove('cp-page-lock');
+  if (cpUi) cpUi.stage.classList.remove('is-page');
   cpStopAuto();
   for (const k of Object.keys(cpTimers)) { clearInterval(cpTimers[k]); clearTimeout(cpTimers[k]); }
   cpTimers = {};
@@ -458,9 +470,10 @@ function cpBuildDom() {
   const sound = tool('🔊', 'Dźwięk', () => cpToggleSound());
   const cam = tool('🎥', 'Kamera', () => cpCycleCamera());
   const quality = tool('HQ', 'Jakość grafiki', () => cpCycleQuality());
+  const page = tool('✕', 'Wyjdź z trybu pełnej strony (Esc)', () => cpSetPageMode(!cpPageMode));
   const full = tool('⛶', 'Pełny ekran', () => cpToggleFullscreen());
   const help = tool('?', 'Pomoc i ustawienia', () => cpToggleHelp());
-  const tools = el('div', { className: 'cp-tools' }, sound, cam, quality, full, help);
+  const tools = el('div', { className: 'cp-tools' }, page, sound, cam, quality, full, help);
 
   const banner = el('div', { className: 'cp-banner', 'aria-live': 'assertive' });
   const overlay = el('div', { className: 'cp-overlay' });
@@ -480,12 +493,13 @@ function cpBuildDom() {
   root.replaceChildren(wrap);
 
   cpUi = { root: wrap, stage, overlay, status, balance, lastWin, totalWin, betLabel, betMinus, betPlus, drop, autoBtn, autoSel,
-    turbo, sound, cam, quality, full, help, banner, leaders, feed, helpBox: null, floats: [], sessionNote: null };
+    turbo, page, sound, cam, quality, full, help, banner, leaders, feed, helpBox: null, floats: [], sessionNote: null };
 
   stage.addEventListener('pointermove', cpOnPointer);
   stage.addEventListener('pointerdown', cpOnPointer);
   stage.addEventListener('keydown', cpOnKey);
   document.addEventListener('fullscreenchange', cpResize);
+  document.addEventListener('keydown', cpOnPageKey);
   document.addEventListener('visibilitychange', cpOnVisibility);
 }
 
@@ -858,7 +872,7 @@ function cpInitView(quality) {
   const camera = new T.PerspectiveCamera(36, 1, 1, 400);
   const pmrem = new T.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(cpEnvScene(T), 0.035).texture;
-  scene.fog = new T.Fog(0x050507, 90, 180);
+  scene.fog = new T.Fog(0x050507, 150, 280);   // past the farthest (portrait) camera
 
   cpView = { T, renderer, scene, camera, canvas, pmrem, Q, meshes: {}, looks: {}, tmp: {
     m: new T.Matrix4(), p: new T.Vector3(), q: new T.Quaternion(), q2: new T.Quaternion(), s: new T.Vector3(1, 1, 1), v: new T.Vector3(),
@@ -1419,6 +1433,30 @@ function cpRebuildView(quality) {
   cpRenderUi();
 }
 
+// Full-page mode: the stage becomes a fixed layer over the whole window. Page
+// scrolling is locked while it is up, and released whenever the tab is left.
+function cpSetPageMode(on) {
+  cpPageMode = !!on;
+  cpApplyPageMode(cpPageMode);
+  cpSound('click');
+}
+
+function cpApplyPageMode(on) {
+  if (!cpUi) return;
+  cpUi.stage.classList.toggle('is-page', !!on);
+  document.documentElement.classList.toggle('cp-page-lock', !!on);
+  cpUi.page.textContent = on ? '✕' : '⤢';
+  cpUi.page.title = on ? 'Wyjdź z trybu pełnej strony (Esc)' : 'Graj na całej stronie';
+  cpUi.page.setAttribute('aria-label', cpUi.page.title);
+  requestAnimationFrame(cpResize);
+}
+
+function cpOnPageKey(ev) {
+  if (ev.key !== 'Escape' || activeTab !== 'coinpusher' || !cpPageMode || document.fullscreenElement) return;
+  if (cpUi && cpUi.helpBox) return;             // Esc closes nothing else here
+  cpSetPageMode(false);
+}
+
 function cpToggleFullscreen() {
   const st = cpUi.stage;
   if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); return; }
@@ -1459,7 +1497,7 @@ function cpUpdateCamera(dt) {
   const { camera } = cpView;
   const c = CP_CAMERAS[cpCameraMode];
   const aspect = camera.aspect || 1;
-  const fit = aspect < 1.2 ? Math.min(1.9, 1.2 / aspect) : 1;
+  const fit = aspect < 1.2 ? Math.min(2.5, 1.25 / aspect) : 1;
   if (!cpView.camPlaced) {
     // First frame: start where the shot is, not flying in from the origin.
     cpView.camPlaced = true;
@@ -1477,7 +1515,7 @@ function cpUpdateCamera(dt) {
   let sx = 0, sy = 0;
   if (cpShake > 0.001) { sx = (Math.random() - 0.5) * cpShake; sy = (Math.random() - 0.5) * cpShake; cpShake *= Math.pow(0.02, dt); }
   // Portrait: aim a little lower so the prize edge clears the touch controls.
-  const lift = aspect < 1 ? -5 * Math.min(1, (1 - aspect) * 2) : 0;
+  const lift = aspect < 1 ? -2.5 * Math.min(1, (1 - aspect) * 2) : 0;
   camera.lookAt(c.look[0] + sx, c.look[1] + lift + sy, c.look[2]);
 }
 
