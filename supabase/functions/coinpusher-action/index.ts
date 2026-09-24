@@ -47,10 +47,13 @@ const db = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 4, 
 // coins already in a machine keep their value until they fall out.)
 const STAKES = [100];
 const DEFAULT_STAKE = 100;
-// No free starter pile any more: a new machine starts empty and the player's
-// first throws build it, so this game mints NOTHING (paid ≤ staked, exactly).
-// Machines granted the old 140 × 1 🪙 pile keep those coins until they fall.
-const STARTER_COINS = 0;
+// The house pre-fills every machine ONCE with 140 × 100 🪙, like an operator
+// filling a real cabinet. This is the game's one deliberate mint: at most
+// 14 000 per player, ever (owner's decision, 2026-09-24). Granted by the
+// presence of any kind='house' value=100 row, so machines that got the old
+// 140 × 1 🪙 pile get this one too — once. Checked under the machine lock.
+const STARTER_COINS = 140;
+const STARTER_VALUE = 100;
 const COIN_VALUE = 100;              // every coin the machine adds by itself is a 100 🪙 coin
 const REFILL_TARGET = 120;          // top a thin pile up to this on load, 100 🪙 a coin from the bank
 const REFILL_MAX = 60;
@@ -218,8 +221,12 @@ async function handleState(user) {
 
     // The ONE starter pile a machine ever gets (guarded by the row lock, so
     // two tabs opening the machine for the first time can't both grant it).
-    if (!machine.starter_granted && STARTER_COINS > 0) {
-      await insertCoins(tx, user.id, "house", 1, STARTER_COINS);
+    const hadStarter = await tx`
+      select 1 from public.coinpusher_coins
+       where user_id = ${user.id} and kind = 'house' and value = ${STARTER_VALUE} limit 1
+    `;
+    if (!hadStarter.length && STARTER_COINS > 0) {
+      await insertCoins(tx, user.id, "house", STARTER_VALUE, STARTER_COINS);
     }
 
     // Refill a thin pile from the bank — 100 🪙 coins, each one paid for.

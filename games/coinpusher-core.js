@@ -102,7 +102,8 @@
   // How a server coin row is simulated (shape) and drawn (look).
   function cpShapeFor(kind) { return kind === 'jackpot' ? 'jackpot' : 'coin'; }
   function cpLookFor(kind, value) {
-    if (kind === 'gold' || kind === 'jackpot' || kind === 'house') return kind;
+    if (kind === 'gold' || kind === 'jackpot') return kind;
+    if (kind === 'house' && value < 100) return 'house';
     if (value >= 100) return 'coin100';
     if (value >= 50) return 'coin50';
     if (value >= 25) return 'coin25';
