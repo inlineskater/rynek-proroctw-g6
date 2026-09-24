@@ -132,7 +132,22 @@ and reads the policy constants out of the Edge Function source. RTP is
 `paid / (staked − Δfloat)`, where float is the coin value still sitting in the
 machine or its bank at the end of the run.
 
-RTP_TABLE
+Measured 2026-09-24 at 120 Hz with the square wiper: stake 10, `RECYCLE` 0.40,
+300 warm-up + 600 counted drops, one every 0.6 s.
+
+| Drop strategy | Over the front | RTP | Equilibrium pile |
+|---|---|---|---|
+| uniform across the rail | 81.6 % | **88.1 %** | 172 |
+| centre (±3 cm) | 95.9 % | **98.9 %** | 156 |
+| edges (9–13 cm out) | 71.8 % | **80.4 %** | 144 |
+| hugging the left wall | 74.6 % | **81.6 %** | 147 |
+
+Aiming at the centre keeps coins away from the gutters, and it is the only
+skill in the game. It cannot go above 100 %: the loop is closed, so coins out
+≤ coins in (plus the starter pile). The amulet (RECYCLE 0.70) moves every row
+up by roughly (1 − front share) × 0.3. Knobs, if the house edge on centred
+play (~1 %) is too thin: `gutterStartZ` (open the side edges earlier),
+`gutterWidth`, `halfWidth`.
 
 The drop position is the only skill and the only strategy. Every strategy
 stays below 100 %.
