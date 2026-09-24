@@ -6,7 +6,7 @@
   <title>Rynek Proroctw G6</title>
   <meta name="description" content="Firmowy rynek predykcji z wirtualnymi coinami.">
   <meta name="theme-color" content="#f8fafc">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://rjovhmepanwbdgdkvylr.supabase.co wss://rjovhmepanwbdgdkvylr.supabase.co https://challenges.cloudflare.com https://api.open-meteo.com; frame-src https://challenges.cloudflare.com; base-uri 'none'; object-src 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://rjovhmepanwbdgdkvylr.supabase.co wss://rjovhmepanwbdgdkvylr.supabase.co https://challenges.cloudflare.com https://api.open-meteo.com; frame-src https://challenges.cloudflare.com; base-uri 'none'; object-src 'none'; form-action 'self'">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='8' width='48' height='48' rx='10' fill='%236366f1'/%3E%3Ccircle cx='22' cy='22' r='5' fill='white'/%3E%3Ccircle cx='32' cy='32' r='5' fill='white'/%3E%3Ccircle cx='42' cy='42' r='5' fill='white'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -8964,7 +8964,8 @@
         <button class="nav-tab" data-tab="crash">🚀 Rakieta</button>
         <button class="nav-tab" data-tab="wheel">🦬 Koło Żubra</button>
         <button class="nav-tab" data-tab="hilo">🃏 Drabina Kariery</button>
-        <button class="nav-tab" data-tab="tower">🏗️ Wieżowiec G6 <span class="nav-new-badge">Nowość</span></button>
+        <button class="nav-tab" data-tab="tower">🏗️ Wieżowiec G6</button>
+        <button class="nav-tab" data-tab="coinpusher">🪙 Automat Monet <span class="nav-new-badge">Nowość</span></button>
         <div class="nav-dropdown-label">Zręcznościowe</div>
         <button class="nav-tab" data-tab="whack-boss"><span class="seasonal-dot"></span> Gra Sezonowa</button>
         <button class="nav-tab" data-tab="all-games">🎮 Wszystkie Gry</button>
@@ -9649,6 +9650,8 @@
       </div>
     </main>
   </div>
+
+  <div id="tab-coinpusher" class="hidden casino"><main><div id="cp-root"><div class="loading-center"><div class="spinner"></div></div></div></main></div>
 
   <div id="tab-mines" class="hidden casino">
     <main>
@@ -12358,6 +12361,7 @@ const TAB_MODULES = {
   poker:       'tabs/poker.js',
   hilo:        'tabs/hilo.js',   // Drabina Kariery (Hi-Lo)
   tower:       'tabs/tower.js',  // Wieżowiec G6
+  coinpusher:  'tabs/coinpusher.js', // Automat Monet G6 (imports three + Rapier itself)
   chatfx:      'tabs/chat-reactions.js', // not a tab: Czat G6 reactions + naklejki, fetched by initChat()
 };
 const _tabModulePromises = {};
@@ -12445,6 +12449,8 @@ function stopShopTimer() {}
 function stopHiloTimer() {}
 // Overwritten by tabs/tower.js, for the same reason.
 function stopTowerTimer() {}
+// Overwritten by tabs/coinpusher.js; `dispose` (logout) also drops the machine.
+function stopCoinPusher(dispose) {}
 // Overwritten by tabs/chat-reactions.js. The chat renders plain text until it
 // arrives, and keeps working as plain text if it never does.
 function chatFxDecorate(node, m) {}
@@ -12483,6 +12489,7 @@ const CASINO_LUCK_EFFECT_LABELS = {
   wheel: { game: 'Koło Żubra', effect: 'wzmacnia zwycięskie pola' },
   hilo: { game: 'Drabina Kariery', effect: 'podnosi zwrot z 95% na 98%' },
   tower: { game: 'Wieżowiec G6', effect: 'podnosi zwrot z 95% na 98%' },
+  coinpusher: { game: 'Automat Monet G6', effect: 'z rynien wraca do automatu 70% zamiast 40%' },
 };
 let myHeroInventory = [];
 let heroAuctionItemDefs = [];
@@ -13068,7 +13075,7 @@ async function doLogout() {
   await sb.auth.signOut();
   me = null; markets = []; tradesByMarket = {}; myPositionsByMarket = {}; marketsDirty = false;
   pokerState = null; pokerRealtimeReady = false; stopPokerClock();
-  stopPlinkoAnimation(); stopWheelAnimation(); stopBankTimer(); stopHiloTimer(); stopTowerTimer();
+  stopPlinkoAnimation(); stopWheelAnimation(); stopBankTimer(); stopHiloTimer(); stopTowerTimer(); stopCoinPusher(true);
   stopLotteryAnimation(); stopShopTimer();
   rouletteState = null; rouletteRealtimeReady = false; rouletteLastResultId = null; stopRouletteHeartbeat();
   rouletteLocalBets = null; if (rouletteFlushTimer) { clearTimeout(rouletteFlushTimer); rouletteFlushTimer = null; }
@@ -13795,6 +13802,7 @@ function switchTab(tab) {
   if (previousTab === 'bank' && tab !== 'bank') stopBankTimer();
   if (previousTab === 'hilo' && tab !== 'hilo') stopHiloTimer();
   if (previousTab === 'tower' && tab !== 'tower') stopTowerTimer();
+  if (previousTab === 'coinpusher' && tab !== 'coinpusher') stopCoinPusher(false);
   if (previousTab === 'lottery' && tab !== 'lottery') stopLotteryAnimation();
   if (previousTab === 'shop' && tab !== 'shop') stopShopTimer();
   activeTab = tab;
@@ -13829,6 +13837,7 @@ function switchTab(tab) {
   const tBk = document.getElementById('tab-bank');
   const tHl = document.getElementById('tab-hilo');
   const tTw = document.getElementById('tab-tower');
+  const tCp = document.getElementById('tab-coinpusher');
   hide(tAg);
   hide(tFp);
   hide(tBj);
@@ -13844,6 +13853,7 @@ function switchTab(tab) {
   hide(tBk);
   hide(tHl);
   hide(tTw);
+  hide(tCp);
   if (tab === 'markets') {
     show(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     if (markets.length === 0) loadMarkets();
@@ -13919,6 +13929,10 @@ function switchTab(tab) {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tTw);
     withTabModule('tower', () => loadTower(), 'tower');
+  } else if (tab === 'coinpusher') {
+    hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
+    show(tCp);
+    withTabModule('coinpusher', () => loadCoinPusher(), 'coinpusher');
   } else if (tab === 'canvas') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tCv);
@@ -14174,7 +14188,7 @@ function buildCardStats(marketId) {
 // ── Activity feed ─────────────────────────────────────────────────────────
 // Maps for the cross-source feed.
 const ACT_GAME_LABELS = {
-  roulette: '🎡 Ruletka', slots: '🎰 Sloty', plinko: '📌 Plinko G6', mines: '💣 Miny G6', crash: '🚀 Rakieta', wheel: '🦬 Koło Żubra', hilo: '🃏 Drabina Kariery', tower: '🏗️ Wieżowiec G6', poker: '🃏 Poker',
+  roulette: '🎡 Ruletka', slots: '🎰 Sloty', plinko: '📌 Plinko G6', mines: '💣 Miny G6', crash: '🚀 Rakieta', wheel: '🦬 Koło Żubra', hilo: '🃏 Drabina Kariery', tower: '🏗️ Wieżowiec G6', coinpusher: '🪙 Automat Monet', poker: '🃏 Poker',
   whack_boss: '🔨 Nawal Szefa', snake: '🐍 Snake',
   flappy_pants: '👖 3 Pary Spodni', bug_jumper: '🐛 Bug Jumper',
   invoice_horde: '🎫 Najazd Ticketów', var_patrol: '📺 VAR Patrol',
@@ -14185,7 +14199,7 @@ const ACT_GAME_LABELS = {
 };
 // Casino games whose rapid plays are collapsed into one session row; an idle gap
 // longer than SESSION_GAP_MS closes a session (poker buy-ins/cashouts are not grouped).
-const CASINO_GROUP = new Set(['plinko', 'slots', 'roulette', 'mines', 'crash', 'wheel', 'hilo', 'tower']);
+const CASINO_GROUP = new Set(['plinko', 'slots', 'roulette', 'mines', 'crash', 'wheel', 'hilo', 'tower', 'coinpusher']);
 const SESSION_GAP_MS = 8 * 60 * 1000;
 const ACT_COIN_REASONS = {
   garden_water:               '💧 podlał roślinę',

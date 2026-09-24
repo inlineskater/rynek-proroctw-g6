@@ -99,6 +99,9 @@ DECLARE
     'wheel_spins:created_at',
     'hilo_spins:created_at',
     'tower_spins:created_at',
+    -- Automat Monet: its spins table holds UPDATEd session rows, so stamp on
+    -- the coin rows instead — every drop INSERTs one.
+    'coinpusher_coins:created_at',
     'poker_ledger:created_at',
     -- NOT game_transactions: it is a VIEW over exactly these spin tables plus
     -- poker_ledger, and a view cannot carry a row-level trigger. The relkind

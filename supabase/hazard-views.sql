@@ -1,5 +1,5 @@
 -- Hazard stats and game transactions views for the Ranking page.
--- Run after poker-ledger.sql, roulette.sql, slots.sql, plinko.sql, mines.sql, crash.sql, wheel.sql, hilo.sql, and tower.sql.
+-- Run after poker-ledger.sql, roulette.sql, slots.sql, plinko.sql, mines.sql, crash.sql, wheel.sql, hilo.sql, tower.sql, and coinpusher.sql.
 
 DROP VIEW IF EXISTS public.game_transactions;
 DROP VIEW IF EXISTS public.hazard_stats;
@@ -17,8 +17,9 @@ SELECT
   COALESCE(wh.pl, 0)::integer AS wheel_pl,
   COALESCE(hl.pl, 0)::integer AS hilo_pl,
   COALESCE(tw.pl, 0)::integer AS tower_pl,
+  COALESCE(cpu.pl, 0)::integer AS coinpusher_pl,
   COALESCE(pk.pl, 0)::integer AS poker_pl,
-  (COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(hl.pl, 0) + COALESCE(tw.pl, 0) + COALESCE(pk.pl, 0))::integer AS total_pl,
+  (COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(hl.pl, 0) + COALESCE(tw.pl, 0) + COALESCE(cpu.pl, 0) + COALESCE(pk.pl, 0))::integer AS total_pl,
   p.is_admin
 FROM public.profiles p
 LEFT JOIN (
@@ -54,13 +55,19 @@ LEFT JOIN (
   FROM public.tower_spins GROUP BY user_id
 ) tw ON tw.user_id = p.id
 LEFT JOIN (
+  -- Session rows booked at settlement (see coinpusher.sql): bet = what the
+  -- resolved coins cost, so coins still in the machine are not a loss yet.
+  SELECT user_id, SUM(total_won - bet)::integer AS pl
+  FROM public.coinpusher_spins GROUP BY user_id
+) cpu ON cpu.user_id = p.id
+LEFT JOIN (
   SELECT user_id,
     SUM(CASE WHEN type = 'cashout' THEN amount ELSE -amount END)::integer AS pl
   FROM public.poker_ledger GROUP BY user_id
 ) pk ON pk.user_id = p.id
 -- ⚠️ Must list every term of total_pl. It used to omit hilo, so a player who
 -- only ever played Drabina Kariery never appeared in Hazardista at all.
-WHERE COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(hl.pl, 0) + COALESCE(tw.pl, 0) + COALESCE(pk.pl, 0) <> 0;
+WHERE COALESCE(r.pl, 0) + COALESCE(s.pl, 0) + COALESCE(pln.pl, 0) + COALESCE(mn.pl, 0) + COALESCE(cr.pl, 0) + COALESCE(wh.pl, 0) + COALESCE(hl.pl, 0) + COALESCE(tw.pl, 0) + COALESCE(cpu.pl, 0) + COALESCE(pk.pl, 0) <> 0;
 
 -- Recent game transactions (roulette, slots, plinko, mines, crash, poker) for all players
 CREATE OR REPLACE VIEW public.game_transactions WITH (security_invoker = false) AS
@@ -111,6 +118,14 @@ SELECT
   ts.bet AS bet, ts.total_won AS won, ts.created_at, p.is_admin
 FROM public.tower_spins ts
 JOIN public.profiles p ON p.id = ts.user_id
+UNION ALL
+-- One row per play SESSION, updated as coins resolve: its time is the last
+-- settlement (updated_at), which is also what the economy's day buckets need.
+SELECT
+  cs.id, cs.user_id, p.nick AS nick_snapshot, 'coinpusher' AS game,
+  cs.bet AS bet, cs.total_won AS won, cs.updated_at AS created_at, p.is_admin
+FROM public.coinpusher_spins cs
+JOIN public.profiles p ON p.id = cs.user_id
 UNION ALL
 SELECT
   pl.id, pl.user_id, pl.nick_snapshot, 'poker_' || pl.type AS game,

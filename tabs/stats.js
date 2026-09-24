@@ -1184,6 +1184,9 @@ function buildHazardHistoryRows(gameTransactions) {
     mines: { icon: '💣', title: 'Miny G6', sideLabel: 'Runda' },
     crash: { icon: '🚀', title: 'Rakieta', sideLabel: 'Lot' },
     wheel: { icon: '🦬', title: 'Koło Żubra G6', sideLabel: 'Spin' },
+    hilo: { icon: '🃏', title: 'Drabina Kariery', sideLabel: 'Drabina' },
+    tower: { icon: '🏗️', title: 'Wieżowiec G6', sideLabel: 'Wieża' },
+    coinpusher: { icon: '🪙', title: 'Automat Monet G6', sideLabel: 'Sesja' },
     poker_buy_in: { icon: '🃏', title: 'Poker', sideLabel: 'Buy-in' },
     poker_cashout: { icon: '🃏', title: 'Poker', sideLabel: 'Cashout' },
   };
@@ -1600,7 +1603,7 @@ function drawCoinChart(canvas, points) {
 // `allMarketTrades` holds every trade (any user) for the resolved markets this user won,
 // needed for the pro-rata payout math.
 function buildBalancePoints({ userId, coins, createdAt, trades = [], games = [], coinTxs = [], awards = [], allMarketTrades = [], footballBets = [] }) {
-  const GAME_NAMES = { roulette: '🎰 Ruletka', slots: '🎰 Sloty', plinko: '📌 Plinko G6', mines: '💣 Miny G6', crash: '🚀 Rakieta', wheel: '🦬 Koło Żubra', poker_buy_in: '🃏 Poker buy-in', poker_cashout: '🃏 Poker cashout' };
+  const GAME_NAMES = { roulette: '🎰 Ruletka', slots: '🎰 Sloty', plinko: '📌 Plinko G6', mines: '💣 Miny G6', crash: '🚀 Rakieta', wheel: '🦬 Koło Żubra', hilo: '🃏 Drabina Kariery', tower: '🏗️ Wieżowiec G6', coinpusher: '🪙 Automat Monet', poker_buy_in: '🃏 Poker buy-in', poker_cashout: '🃏 Poker cashout' };
   const resolvedWinningMarketIds = [...new Set(
     trades.filter(t => t.markets?.resolved && t.side === t.markets?.resolution).map(t => t.market_id)
   )];
@@ -2676,13 +2679,14 @@ function renderCoinRaceDetail(container) {
         el('td', {}, (r.wheel_pl || 0) + ' 🪙'),
         el('td', {}, (r.hilo_pl || 0) + ' 🪙'),
         el('td', {}, (r.tower_pl || 0) + ' 🪙'),
+        el('td', {}, (r.coinpusher_pl || 0) + ' 🪙'),
         el('td', {}, (r.poker_pl || 0) + ' 🪙'),
         el('td', { className: 'tx-pl ' + (pos ? 'tx-pl-profit' : 'tx-pl-loss') }, (pos ? '+' : '') + r.total_pl + ' 🪙')
       ));
       return el('div', { style: { marginBottom: '16px' } },
         el('div', { className: 'hazardista-col-title' }, ttl),
         el('table', { className: 'lb-table' },
-          el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Nick'), el('th', {}, 'Ruletka'), el('th', {}, 'Sloty'), el('th', {}, 'Plinko'), el('th', {}, 'Miny'), el('th', {}, 'Rakieta'), el('th', {}, 'Żubr'), el('th', {}, 'Drabina'), el('th', {}, 'Wieżowiec'), el('th', {}, 'Poker'), el('th', {}, 'Suma'))),
+          el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Nick'), el('th', {}, 'Ruletka'), el('th', {}, 'Sloty'), el('th', {}, 'Plinko'), el('th', {}, 'Miny'), el('th', {}, 'Rakieta'), el('th', {}, 'Żubr'), el('th', {}, 'Drabina'), el('th', {}, 'Wieżowiec'), el('th', {}, 'Automat'), el('th', {}, 'Poker'), el('th', {}, 'Suma'))),
           el('tbody', {}, ...rows)
         )
       );
@@ -2737,7 +2741,7 @@ function renderCoinRaceDetail(container) {
   function renderFullHazardHistory(container) {
     const fSearch = el('input', { className: 'history-filter-input', type: 'search', placeholder: 'Gracz lub gra' });
     const fGame = el('select', { className: 'history-filter-select' });
-    fGame.innerHTML = '<option value="">Gra: wszystkie</option><option value="roulette">Ruletka</option><option value="slots">Sloty</option><option value="plinko">Plinko G6</option><option value="mines">Miny G6</option><option value="crash">Rakieta</option><option value="wheel">Koło Żubra</option><option value="poker">Poker</option>';
+    fGame.innerHTML = '<option value="">Gra: wszystkie</option><option value="roulette">Ruletka</option><option value="slots">Sloty</option><option value="plinko">Plinko G6</option><option value="mines">Miny G6</option><option value="crash">Rakieta</option><option value="wheel">Koło Żubra</option><option value="hilo">Drabina Kariery</option><option value="tower">Wieżowiec G6</option><option value="coinpusher">Automat Monet</option><option value="poker">Poker</option>';
     const fClear = el('button', { className: 'btn-ghost history-clear', type: 'button' }, 'Wyczyść');
     const filters = el('div', { className: 'history-filters', style: { gridTemplateColumns: '1fr 160px auto' } }, fSearch, fGame, fClear);
     const tableWrap = el('div', { className: 'history-wrap' });

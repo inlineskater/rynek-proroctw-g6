@@ -163,6 +163,10 @@ AS $$
       FROM public.tower_spins
       WHERE total_won > 0
       UNION ALL
+      SELECT user_id, total_won AS amount, updated_at AS created_at
+      FROM public.coinpusher_spins
+      WHERE total_won > 0
+      UNION ALL
       SELECT user_id, total_won AS amount, created_at
       FROM public.crash_spins
       WHERE total_won > 0
