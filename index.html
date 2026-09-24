@@ -12373,7 +12373,9 @@ function ensureTabModule(tab) {
   if (_tabModulePromises[tab]) return _tabModulePromises[tab];
   _tabModulePromises[tab] = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = src;
+    // Versioned per deploy: Pages lets browsers cache a module for 10 min, and
+    // an un-versioned URL kept serving the old chat module after a deploy.
+    s.src = IS_DEPLOYED_BUILD ? src + '?v=' + BUILD_ID : src;
     s.onload = () => resolve();
     s.onerror = () => { delete _tabModulePromises[tab]; reject(new Error('Nie udało się wczytać ' + src)); };
     document.body.appendChild(s);
