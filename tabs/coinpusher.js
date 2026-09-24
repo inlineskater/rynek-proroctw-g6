@@ -71,7 +71,7 @@ const CP_CAMERAS = {
   CINEMATIC: { pos: [0, 24, 40], look: [0, -1, -1], fov: 34 },
 };
 
-const CP_LOOKS = ['house', 'coin5', 'coin10', 'coin25', 'coin50', 'gold', 'jackpot'];
+const CP_LOOKS = ['house', 'coin5', 'coin10', 'coin25', 'coin50', 'coin100', 'gold', 'jackpot'];
 const CP_AUTO_COUNTS = [10, 25, 50, 100];
 const CP_CLIENT_COOLDOWN_MS = 250;
 const CP_AUTO_MS = 480;
@@ -180,7 +180,8 @@ function cpStore(key, value) {
     .cp-drop:disabled { filter: grayscale(.6); }
     .cp-bet { display: inline-flex; align-items: center; gap: 4px; background: rgba(24,18,12,.8); border: 1px solid rgba(255,214,140,.35); border-radius: 10px; padding: 2px; }
     .cp-bet .cp-btn { min-height: 36px; min-width: 36px; padding: 0; justify-content: center; border: 0; }
-    .cp-bet span { min-width: 56px; text-align: center; color: #ffe39a; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cp-btn[hidden] { display: none; }
+    .cp-bet span { padding: 0 8px; min-width: 56px; text-align: center; color: #ffe39a; font-weight: 700; font-variant-numeric: tabular-nums; }
     .cp-auto select { background: transparent; color: inherit; border: 0; font: inherit; }
     .cp-tools { position: absolute; right: 10px; top: 58px; display: flex; flex-direction: column; gap: 6px; }
     .cp-tools .cp-btn { min-height: 34px; min-width: 34px; padding: 0 8px; justify-content: center; font-size: 14px; }
@@ -555,10 +556,14 @@ async function cpReconnect() {
 
 function cpRenderUi() {
   if (!cpUi || !cpServer) return;
-  cpUi.betLabel.textContent = cpStake + ' 🪙';
+  const single = cpServer.stakes.length === 1;
+  cpUi.betLabel.textContent = cpStake + ' 🪙' + (single ? ' / moneta' : '');
   const i = cpServer.stakes.indexOf(cpStake);
   cpUi.betMinus.disabled = i <= 0;
   cpUi.betPlus.disabled = i >= cpServer.stakes.length - 1;
+  // One denomination: nothing to choose, so no −/+ at all.
+  cpUi.betMinus.hidden = single;
+  cpUi.betPlus.hidden = single;
   cpUi.sound.textContent = cpAudioMuted() ? '🔇' : '🔊';
   cpUi.quality.textContent = { LOW: 'LQ', MEDIUM: 'MQ', HIGH: 'HQ', ULTRA: 'UQ' }[cpQualityName] || 'HQ';
   cpUi.turbo.classList.toggle('is-on', cpTurbo);
@@ -966,6 +971,8 @@ const CP_LOOK_STYLE = {
   coin10:  { base: '#c89a3e', hi: '#f3d587', label: '10',  metal: 1, rough: 0.3,  sub: 'G6' },
   coin25:  { base: '#aeb4bd', hi: '#f0d27a', label: '25',  metal: 1, rough: 0.28, sub: 'G6', core: '#d2a347' },
   coin50:  { base: '#9a5f33', hi: '#e8b37e', label: '50',  metal: 1, rough: 0.28, sub: 'G6', core: '#c98a3d' },
+  // The one coin players throw today: a gold core in a silver ring.
+  coin100: { base: '#c3c8cf', hi: '#f4f6f8', label: '100', metal: 1, rough: 0.24, sub: 'G6', core: '#e0b04a' },
   gold:    { base: '#e2a92c', hi: '#fff0a8', label: '★',   metal: 1, rough: 0.18, sub: '×5', glow: 0x6b4a00 },
   jackpot: { base: '#5b3fbf', hi: '#b9a6ff', label: 'JP',  metal: 0.85, rough: 0.2, sub: 'JACKPOT', glow: 0x2a1470 },
 };

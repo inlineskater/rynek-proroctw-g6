@@ -103,6 +103,7 @@
   function cpShapeFor(kind) { return kind === 'jackpot' ? 'jackpot' : 'coin'; }
   function cpLookFor(kind, value) {
     if (kind === 'gold' || kind === 'jackpot' || kind === 'house') return kind;
+    if (value >= 100) return 'coin100';
     if (value >= 50) return 'coin50';
     if (value >= 25) return 'coin25';
     if (value >= 10) return 'coin10';

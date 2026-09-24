@@ -43,8 +43,10 @@ function corsHeaders(req) {
 const db = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 4, idle_timeout: 20 });
 
 // ── Machine policy ──────────────────────────────────────────────────────────
-const STAKES = [1, 5, 10, 25, 50];
-const DEFAULT_STAKE = 10;
+// One denomination: every coin thrown in is a 100 🪙 coin. (Older 1–50 🪙
+// coins already in a machine keep their value until they fall out.)
+const STAKES = [100];
+const DEFAULT_STAKE = 100;
 const STARTER_COINS = 140;          // one-time, 1 🪙 each — the only coins ever minted
 const REFILL_TARGET = 120;          // top a thin pile up to this on load, bank permitting
 const REFILL_MAX = 60;

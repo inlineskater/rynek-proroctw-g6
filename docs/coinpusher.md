@@ -85,6 +85,20 @@ farm NPC budget (docs/anti-inflation.md). A session closes after 8 min of quiet
 It is deliberately not in `bank.sql`'s casino-share basis, which floors each
 day at 0: a machine can hold coins across days.
 
+## One denomination: 100 🪙
+
+Every coin a player throws is a 100 🪙 coin: the server's stake list is just
+`[100]`, and the stake picker becomes a fixed "100 🪙 / moneta" label. Coins
+from the earlier 1–50 🪙 stakes still in a machine keep their value (and
+their own design) until they fall out. At this stake, `BANK_CAP` 3 000 lets a
+gold coin (+400 from the bank) through freely. It holds a jackpot token to
+10–15 × the stake (half the bank, never more than 1 500) and coin rain to 12–15
+coins. Raise `BANK_CAP` if jackpots should reach the 50 × ceiling.
+
+(The RTP table below was measured at stake 10. The physics doesn't care:
+every ordinary coin is the same body, so what goes over the front is the same
+share at any stake. Only how often the bank can afford a special shifts.)
+
 ## The machine
 
 Units are cm (gravity −981). +z points at the player.
