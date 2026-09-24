@@ -47,8 +47,12 @@ const db = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 4, 
 // coins already in a machine keep their value until they fall out.)
 const STAKES = [100];
 const DEFAULT_STAKE = 100;
-const STARTER_COINS = 140;          // one-time, 1 🪙 each — the only coins ever minted
-const REFILL_TARGET = 120;          // top a thin pile up to this on load, bank permitting
+// No free starter pile any more: a new machine starts empty and the player's
+// first throws build it, so this game mints NOTHING (paid ≤ staked, exactly).
+// Machines granted the old 140 × 1 🪙 pile keep those coins until they fall.
+const STARTER_COINS = 0;
+const COIN_VALUE = 100;              // every coin the machine adds by itself is a 100 🪙 coin
+const REFILL_TARGET = 120;          // top a thin pile up to this on load, 100 🪙 a coin from the bank
 const REFILL_MAX = 60;
 const MAX_IN_MACHINE = 320;         // a physical machine only holds so much
 // Token bucket, not a fixed gap: network jitter can land two honest 250 ms
@@ -78,8 +82,8 @@ const BANK_CAP = 20_000;          // half of it = the 10 000 jackpot ceiling
 
 // Specials — rolled per drop in TEN-THOUSANDTHS, and only issued when the
 // bank can pay for the part above the stake.
-const GOLD_P = 400;                 // 4%    🟡 gold coin worth 5 × stake
-const GOLD_MULT = 5;
+const GOLD_P = 300;                 // 3%    🟡 the 1 000 🪙 coin (10 × the 100 stake)
+const GOLD_MULT = 10;
 const JACKPOT_P = 50;               // 0.5%  💎 jackpot token
 const JACKPOT_MIN_MULT = 10;        //        only if half the bank ≥ 10 × stake
 const JACKPOT_MAX_MULT = 100;       // 100 × 100 🪙 = 10 000 max
@@ -214,16 +218,16 @@ async function handleState(user) {
 
     // The ONE starter pile a machine ever gets (guarded by the row lock, so
     // two tabs opening the machine for the first time can't both grant it).
-    if (!machine.starter_granted) {
+    if (!machine.starter_granted && STARTER_COINS > 0) {
       await insertCoins(tx, user.id, "house", 1, STARTER_COINS);
     }
 
-    // Refill a thin pile from the bank — 1 🪙 house coins, each paid for.
+    // Refill a thin pile from the bank — 100 🪙 coins, each one paid for.
     const count = await inMachineCount(tx, user.id);
-    const refill = Math.max(0, Math.min(REFILL_TARGET - count, REFILL_MAX, bank));
+    const refill = Math.max(0, Math.min(REFILL_TARGET - count, REFILL_MAX, Math.floor(bank / COIN_VALUE)));
     if (refill > 0) {
-      await insertCoins(tx, user.id, "house", 1, refill);
-      bank -= refill;
+      await insertCoins(tx, user.id, "rain", COIN_VALUE, refill);
+      bank -= refill * COIN_VALUE;
     }
 
     const lease = crypto.randomUUID();

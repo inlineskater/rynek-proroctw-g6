@@ -36,7 +36,7 @@ server-issued id and value:
 
 Over a machine's whole life, therefore:
 
-    paid out  ≤  stakes dropped in  +  one starter pile (140 × 1 🪙)
+    paid out  ≤  stakes dropped in  +  (for machines opened before 2026-09-24 only) one starter pile of 140 × 1 🪙; new machines start empty and mint nothing
 
 A modified client that claims every coin as a prize gets exactly its own
 stakes back. It never loses to the gutters, so its bank stays empty and it
@@ -86,6 +86,13 @@ It is deliberately not in `bank.sql`'s casino-share basis, which floors each
 day at 0: a machine can hold coins across days.
 
 ## One denomination: 100 🪙
+
+Coins now fall into the machine fast (`drop.downSpeed` 140 cm/s), so spammed
+coins land quickly. The 🟡 special is a **1 000 🪙 coin** (`GOLD_MULT` 10,
+3 % of throws, with the 900 premium paid from the bank). Every coin the
+machine adds by itself (refills, rain) is a 100 🪙 coin bought from the bank.
+New machines start empty: there is no free starter pile any more.
+
 
 Every coin a player throws is a 100 🪙 coin: the server's stake list is just
 `[100]`, and the stake picker becomes a fixed "100 🪙 / moneta" label. Coins

@@ -47,7 +47,7 @@ const CP_TEXT = {
   retry: 'Połącz ponownie',
   error: 'Automat nie działa.',
   noFunds: 'Za mało monet na tę stawkę.',
-  gold: '🟡 Złota moneta w automacie!',
+  gold: '🟡 Moneta 1000 wpadła do automatu!',
   jackpotIn: '💎 Żeton JACKPOT wpadł do automatu!',
   rain: '🌧️ Deszcz monet!',
   jackpot: 'JACKPOT',
@@ -485,7 +485,7 @@ function cpBuildDom() {
   const feed = el('div', { className: 'cp-card' }, el('h4', {}, '🪙 Ostatnie sesje'));
   const rules = el('div', { className: 'cp-card' },
     el('h4', {}, 'ℹ️ Jak to działa'),
-    el('div', { className: 'cp-note' }, 'Każda moneta ma w banku automatu swój numer. Wygrana to moneta, która naprawdę spadła z przedniej krawędzi — serwer wypłaca ją raz. Monety z bocznych rynien zabiera automat; część ich wartości wraca do Twojego automatu jako złote monety (×5), żetony jackpot i deszcz monet.'),
+    el('div', { className: 'cp-note' }, 'Każda moneta ma w banku automatu swój numer. Wygrana to moneta, która naprawdę spadła z przedniej krawędzi — serwer wypłaca ją raz. Monety z bocznych rynien zabiera automat; część ich wartości wraca do Twojego automatu jako monety 1000, żetony jackpot i deszcz monet.'),
     el('div', { className: 'cp-note', id: 'cp-luck-note' }, ''));
   const side = el('div', { className: 'cp-side' }, leaders, feed, rules);
   const hero = el('div', { className: 'cp-hero' },
@@ -974,7 +974,7 @@ const CP_LOOK_STYLE = {
   coin50:  { base: '#9a5f33', hi: '#e8b37e', label: '50',  metal: 1, rough: 0.28, sub: 'G6', core: '#c98a3d' },
   // The one coin players throw today: a gold core in a silver ring.
   coin100: { base: '#c3c8cf', hi: '#f4f6f8', label: '100', metal: 1, rough: 0.24, sub: 'G6', core: '#e0b04a' },
-  gold:    { base: '#e2a92c', hi: '#fff0a8', label: '★',   metal: 1, rough: 0.18, sub: '×5', glow: 0x6b4a00 },
+  gold:    { base: '#e2a92c', hi: '#fff0a8', label: '1000', metal: 1, rough: 0.18, sub: '★ G6 ★', glow: 0x6b4a00 },
   jackpot: { base: '#5b3fbf', hi: '#b9a6ff', label: 'JP',  metal: 0.85, rough: 0.2, sub: 'JACKPOT', glow: 0x2a1470 },
 };
 

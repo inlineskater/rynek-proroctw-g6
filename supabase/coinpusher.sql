@@ -22,7 +22,7 @@
 --  the UPDATE) and only if it is in the caller's machine. So over a machine's
 --  whole life:
 --
---      paid out  ≤  stakes dropped in  +  one starter pile (140 × 1 🪙)
+--      paid out  ≤  stakes dropped in  +  (for machines opened before 2026-09-24 only) one starter pile of 140 × 1 🪙; new machines start empty and mint nothing
 --
 --  and everything that is not a stake — refill coins, gold coins, jackpot
 --  tokens, coin rain — is paid for out of `house_bank`, which is filled ONLY by

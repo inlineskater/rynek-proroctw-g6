@@ -58,7 +58,7 @@
       maxX: 13.2,
       tiltJitter: 0.14,       // rad of random tilt on release
       spinJitter: 3,          // rad/s
-      downSpeed: 25,          // cm/s the coin leaves the slot with
+      downSpeed: 140,         // cm/s the coin leaves the slot with — fired in, so spammed coins land fast
     },
     physics: {
       // 120 Hz, not 60: a coin is 3 mm thick, and at 1/60 s a pile of tilted
