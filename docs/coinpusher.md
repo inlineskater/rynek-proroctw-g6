@@ -85,6 +85,43 @@ farm NPC budget (docs/anti-inflation.md). A session closes after 8 min of quiet
 It is deliberately not in `bank.sql`'s casino-share basis, which floors each
 day at 0: a machine can hold coins across days.
 
+## The big cabinet (2026-09-25)
+
+The playfield is 48 cm wide (`halfWidth` 24), with four physical features, all
+built from colliders in `games/coinpusher-core.js`:
+
+- **Pin board.** Every thrown coin falls through a 0.8 cm slot between two
+  panes and bounces through 5 rows of pins.
+  - ⚠️ The gap that matters is **diagonal**, from a pin to its neighbours in the
+    next row. 4.6 × 2.8 spacing left 3.06 cm there, less than the 3.3 cm coin,
+    and 243 of 250 test coins jammed. 5.0 × 3.7 leaves ≥ 3.9 cm.
+  - Pins also stay ≥ 4.4 cm from the side walls: every remaining jam was
+    against a wall.
+- **Pockets** under the last row: 🌧 rain (8 × 100), ★ a 1 000 coin, and
+  🗼 the tower's mouth. The host only reports a pass; `coinpusher-action`'s
+  `pocket` action pays from the bank. It only counts a coin the player paid
+  for, dropped within 20 s, once (`pocketed_at`).
+- **Moving parts:** a turntable in the bed, and two side gates that rise out of
+  the bed for 45 % of a 7 s cycle.
+- **Jackpot tower:** a kinematic bucket hinged at its front-bottom edge. At 6
+  coins inside it tips and pours; the server adds an 18 × 100 shower from the
+  bank (20 s cooldown, `last_tower_at`).
+- **Cabinet:** a marquee on top, chase lights, and a live JACKPOT display
+  (½ bank, capped at 10 000, the same rule the server uses).
+
+Measured with the harness (stake 100, 250 warm-up + 500 counted drops):
+
+| Aim | RTP | Exits over the front |
+|---|---|---|
+| uniform | **98.8 %** | 98.0 % |
+| centre | **99.8 %** | 99.6 % |
+| edges | **98.2 %** | 97.2 % |
+
+Pocket and tower bonuses are bank-funded, so they're neutral here. The gates
+keep nearly everything out of the gutters. That is the knob if the house edge
+should grow: `gates.upFraction`, or `machine.gutterStartZ`. Still ≤ 100 % by
+construction.
+
 ## One denomination: 100 🪙
 
 Coins now fall into the machine fast (`drop.downSpeed` 140 cm/s), so spammed

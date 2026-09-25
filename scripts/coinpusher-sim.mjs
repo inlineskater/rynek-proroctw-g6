@@ -133,11 +133,13 @@ if (flag('rtp')) {
   };
   const drops = opt('drops', 1200), warm = opt('warmup', 400), interval = opt('interval', 0.6);
   const stake = opt('stake', 10);
+  // Aim strategies scale with the machine's drop rail.
+  const W = Core.CP_CONFIG.drop.maxX;
   const strategies = {
-    uniform: rnd => (rnd() - 0.5) * 26.4,
-    centre:  rnd => (rnd() - 0.5) * 6,
-    edges:   rnd => (rnd() < 0.5 ? -1 : 1) * (9 + rnd() * 4.2),
-    left:    rnd => -13.2 + rnd() * 4,
+    uniform: rnd => (rnd() - 0.5) * 2 * W,
+    centre:  rnd => (rnd() - 0.5) * W * 0.25,
+    edges:   rnd => (rnd() < 0.5 ? -1 : 1) * (W * 0.7 + rnd() * W * 0.3),
+    left:    rnd => -W + rnd() * W * 0.3,
   };
   const only = args.includes('--strategy') ? args[args.indexOf('--strategy') + 1] : null;
   const recycle = flag('luck') ? POL.LUCK : POL.RECYCLE;

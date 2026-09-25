@@ -97,6 +97,9 @@ ALTER TABLE public.coinpusher_machines ADD COLUMN IF NOT EXISTS lease text;
 ALTER TABLE public.coinpusher_machines ADD COLUMN IF NOT EXISTS drop_tokens real NOT NULL DEFAULT 3;
 ALTER TABLE public.coinpusher_machines ADD COLUMN IF NOT EXISTS session_id uuid;
 ALTER TABLE public.coinpusher_coins    ADD COLUMN IF NOT EXISTS funded bigint NOT NULL DEFAULT 0;
+-- Pin-board pockets and the jackpot tower (2026-09-25): a coin triggers a pocket once.
+ALTER TABLE public.coinpusher_coins    ADD COLUMN IF NOT EXISTS pocketed_at timestamptz;
+ALTER TABLE public.coinpusher_machines ADD COLUMN IF NOT EXISTS last_tower_at timestamptz;
 
 CREATE UNIQUE INDEX IF NOT EXISTS coinpusher_coins_request_idx
   ON public.coinpusher_coins (user_id, request_id) WHERE request_id IS NOT NULL;

@@ -65,10 +65,10 @@ const CP_QUALITY = {
 };
 
 const CP_CAMERAS = {
-  STANDARD:  { pos: [0, 30, 44], look: [0, -1, -3], fov: 36 },
-  CLOSE:     { pos: [0, 17, 31], look: [0, -1, 3], fov: 38 },
-  TOP:       { pos: [0, 56, 8], look: [0, 0, -3], fov: 36 },
-  CINEMATIC: { pos: [0, 24, 40], look: [0, -1, -1], fov: 34 },
+  STANDARD:  { pos: [0, 34, 94], look: [0, 14, -4], fov: 36 },
+  CLOSE:     { pos: [0, 16, 52], look: [0, 3, 2], fov: 38 },
+  TOP:       { pos: [0, 96, 22], look: [0, 2, -3], fov: 36 },
+  CINEMATIC: { pos: [0, 30, 88], look: [0, 13, -2], fov: 34 },
 };
 
 const CP_LOOKS = ['house', 'coin5', 'coin10', 'coin25', 'coin50', 'coin100', 'gold', 'jackpot'];
@@ -360,6 +360,8 @@ async function cpBuildMachine(state, token) {
   cpSim.motorOn = false;                        // parked until the first coin
   cpSim.onCollect = cpOnCollect;
   cpSim.onImpact = cpOnImpact;
+  cpSim.onPocket = cpOnPocket;
+  cpSim.onTowerTip = cpOnTowerTip;
 
   // Rebuild the pile: from the saved shape where it matches the server's
   // coins, otherwise a fresh starting arrangement. Settled hidden, with
@@ -656,6 +658,7 @@ async function cpDropPressed(fromAuto) {
   if (!cpSim || !res) return false;
   cpEmit('drop_authorized', { stake, duplicate: !!res.duplicate });
   cpSetBalance(res.balance);
+  if (cpServer && res.bank != null) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
   if (!res.duplicate) cpSession.staked += stake;
   // Only now — after the server took the stake and issued the coin — does a
   // physical coin exist.
@@ -774,7 +777,7 @@ async function cpFlush() {
     cpPending = cpPending.slice(batch.length);
     if (res.paid > 0) cpPresentWin(res.paid, batch, res);
     cpSetBalance(res.balance);
-    if (cpServer) cpServer.bank = res.bank;
+    if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
   } catch (err) {
     if (err.code === 'lease') { cpPending = []; cpDropFailed(err); }
     else if (err.code === 'network') cpDropFailed(err);       // keep the queue: collect is idempotent
@@ -782,6 +785,49 @@ async function cpFlush() {
   } finally {
     cpFlushing = false;
   }
+}
+
+// A coin passed a pin-board pocket. The server decides what it's worth (paid
+// from the bank); only coins the player threw count, and only once.
+async function cpOnPocket(coin, name) {
+  const pm = cpView && cpView.pocketMats && cpView.pocketMats[name];
+  if (pm) pm.flash = 1;
+  cpSound('click');
+  if (name === 'tower' || !cpServer) return;          // the tower pays when it tips
+  if (coin.kind === 'rain' || coin.kind === 'house') return;
+  try {
+    const res = await cpInvoke('pocket', { pocket: name, coinId: coin.id, lease: cpServer.lease });
+    if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
+    if (!res.coins || !res.coins.length || !cpSim) return;
+    cpEmit('bonus_triggered', { type: 'pocket_' + name, coins: res.coins.length });
+    if (name === 'rain') cpRain(res.coins);
+    else {
+      cpToast('★ Kieszeń 1000! Moneta 1000 🪙 spada do automatu.');
+      cpSound('bonus'); cpLed(1.2);
+      for (const c of res.coins) cpSim.dropCoin(c, coin.body.translation().x);
+    }
+  } catch (err) { if (err.code === 'lease' || err.code === 'network') cpDropFailed(err); }
+}
+
+// The jackpot tower tipped: its coins pour out physically, and the server adds
+// a bank-funded shower that tumbles out of the tower's mouth with them.
+async function cpOnTowerTip(count) {
+  cpToast('🗼 Wieża się przechyla!');
+  cpSound('jackpot'); cpLed(2); cpShakeCam(0.3);
+  if (!cpServer) return;
+  try {
+    const res = await cpInvoke('pocket', { pocket: 'tower', lease: cpServer.lease });
+    if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
+    if (!res.coins || !res.coins.length || !cpSim) return;
+    cpEmit('bonus_triggered', { type: 'tower', coins: res.coins.length });
+    const T = cpSim.tower, TW = cpSim.cfg.tower;
+    res.coins.forEach((c, i) => setTimeout(() => {
+      if (!cpSim) return;
+      cpSim.spawnCoin({ ...c, x: (Math.random() - 0.5) * (TW.w - 1.2), y: TW.floorY + TW.h + 1.5 + (i % 3) * 0.5,
+        z: T.hingeZ + 1.8, v: { x: (Math.random() - 0.5) * 20, y: 10, z: 40 }, falling: true,
+        q: cpCore.cpQuatXZ(Math.random() * 3, Math.random() * 3) });
+    }, 500 + i * 70));
+  } catch (err) { if (err.code === 'lease' || err.code === 'network') cpDropFailed(err); }
 }
 
 function cpPresentWin(paid, batch, res) {
@@ -881,10 +927,10 @@ function cpInitView(quality) {
   renderer.shadowMap.type = T.PCFSoftShadowMap;
 
   const scene = new T.Scene();
-  const camera = new T.PerspectiveCamera(36, 1, 1, 400);
+  const camera = new T.PerspectiveCamera(36, 1, 1, 800);
   const pmrem = new T.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(cpEnvScene(T), 0.035).texture;
-  scene.fog = new T.Fog(0x050507, 150, 280);   // past the farthest (portrait) camera
+  scene.fog = new T.Fog(0x050507, 260, 560);   // past the farthest (portrait) camera
 
   cpView = { T, renderer, scene, camera, canvas, pmrem, Q, meshes: {}, looks: {}, tmp: {
     m: new T.Matrix4(), p: new T.Vector3(), q: new T.Quaternion(), q2: new T.Quaternion(), s: new T.Vector3(1, 1, 1), v: new T.Vector3(),
@@ -924,15 +970,15 @@ function cpEnvScene(T) {
 function cpBuildLights() {
   const { T, scene, Q } = cpView;
   scene.add(new T.HemisphereLight(0xffe8c8, 0x120c06, 0.35));
-  const key = new T.SpotLight(0xfff1dc, 2600, 140, 0.62, 0.55, 2);
-  key.position.set(4, 52, 26);
+  const key = new T.SpotLight(0xfff1dc, 8200, 280, 0.5, 0.55, 2);
+  key.position.set(6, 88, 58);
   key.target.position.set(0, 0, 0);
   key.castShadow = Q.shadows;
   if (Q.shadows) {
     key.shadow.mapSize.set(Q.shadowSize, Q.shadowSize);
     key.shadow.bias = -0.00025;
     key.shadow.normalBias = 0.02;
-    key.shadow.camera.near = 20; key.shadow.camera.far = 110;
+    key.shadow.camera.near = 50; key.shadow.camera.far = 230;
   }
   scene.add(key, key.target);
   const rim = new T.DirectionalLight(0xffb866, 0.5);
@@ -1117,16 +1163,19 @@ function cpBuildCabinet() {
   };
   // Collider-backed parts, drawn from the physics statics so the picture can
   // never disagree with what the coins actually hit.
+  const board = new T.MeshStandardMaterial({ map: cpPinBoardTexture(), roughness: 0.55, metalness: 0.2 });
   for (const s of cpSim.statics) {
     if (s.name === 'catch') continue;
-    const mat = s.name === 'bed' ? steel : s.glass ? glass : s.name.startsWith('sep') ? gold : s.name === 'wiper' ? lacquer : darkSteel;
+    const mat = s.name === 'pinBack' ? board : s.name === 'bed' ? steel : s.glass ? glass : s.name.startsWith('sep') ? gold : s.name === 'wiper' ? lacquer : darkSteel;
     box(s.hx * 2, s.hy * 2, s.hz * 2, mat, s.x, s.y, s.z, !s.glass);
   }
-  // Wiper face: the lit marquee.
-  const marquee = new T.Mesh(new T.PlaneGeometry(M.halfWidth * 2 - 0.4, 4.6),
+  cpBuildFeatures(gold, lacquer);
+  // The lit marquee, crowning the cabinet above the pin board.
+  const D = cpSim.cfg.drop;
+  const marquee = new T.Mesh(new T.PlaneGeometry(M.halfWidth * 2 + 6, 8),
     new T.MeshStandardMaterial({ map: cpMarquee('AUTOMAT MONET G6'), emissive: 0xffffff, emissiveMap: null, emissiveIntensity: 0.0, roughness: 0.4 }));
   marquee.material.emissiveMap = marquee.material.map; marquee.material.emissiveIntensity = 0.9;
-  marquee.position.set(0, P.height + 5.2, P.wiperZ + 0.02);
+  marquee.position.set(0, D.y + 11, D.z - 0.6);
   scene.add(marquee);
   cpView.marquee = marquee;
 
@@ -1174,6 +1223,7 @@ function cpBuildCabinet() {
   box((M.halfWidth + M.gutterWidth + 3.4) * 2, 0.3, 0.3, gold, 0, -1.1, M.bedFrontZ + M.chuteDepth + 6.65, false);
   // Roof canopy with the drop rail.
   box((M.halfWidth + M.gutterWidth + 3.4) * 2, 2, 12, lacquer, 0, cpSim.cfg.drop.y + 5, cpSim.cfg.drop.z - 1);
+  cpBuildJackpotDisplay(cpSim.cfg.drop.y + 7.3, cpSim.cfg.drop.z - 0.55);
   const rail = box(M.halfWidth * 2, 0.35, 0.6, gold, 0, cpSim.cfg.drop.y + 3.2, cpSim.cfg.drop.z, false);
   rail.castShadow = false;
   // The coin carriage that rides the rail, with a ghost coin under it.
@@ -1187,8 +1237,8 @@ function cpBuildCabinet() {
   const ghost = new T.Mesh(new T.CylinderGeometry(gs.r, gs.r, gs.h, 32), ghostMat);
   ghost.rotation.x = Math.PI / 2; ghost.position.y = cpSim.cfg.drop.y + 0.2;
   const beamMat = new T.MeshBasicMaterial({ color: 0xffd56b, transparent: true, opacity: 0.08, depthWrite: false });
-  const beam = new T.Mesh(new T.CylinderGeometry(0.05, 0.9, cpSim.cfg.drop.y - P.height, 16, 1, true), beamMat);
-  beam.position.y = (cpSim.cfg.drop.y + P.height) / 2;
+  const beam = new T.Mesh(new T.CylinderGeometry(0.05, 0.9, 4, 16, 1, true), beamMat);
+  beam.position.y = cpSim.cfg.drop.y - 2;
   carriage.add(cb, slot, ghost, beam);
   carriage.position.z = cpSim.cfg.drop.z;
   scene.add(carriage);
@@ -1197,6 +1247,169 @@ function cpBuildCabinet() {
   const floor = new T.Mesh(new T.PlaneGeometry(200, 200), new T.ShadowMaterial({ opacity: 0.35 }));
   floor.rotation.x = -Math.PI / 2; floor.position.y = -15; floor.receiveShadow = Q.shadows;
   scene.add(floor);
+}
+
+// ── Cabinet features: pins, pockets, moving parts, tower, lights, jackpot ─
+function cpPinBoardTexture() {
+  const c = cpCanvas(1024, 512), x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 512);
+  g.addColorStop(0, '#2b0d10'); g.addColorStop(1, '#12060a');
+  x.fillStyle = g; x.fillRect(0, 0, 1024, 512);
+  x.globalAlpha = 0.18; x.fillStyle = '#ffcf6b';
+  for (let i = 0; i < 90; i++) {
+    const px = (i * 97) % 1024, py = (i * 53) % 512, r = 2 + (i % 4);
+    x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
+  }
+  x.globalAlpha = 0.12; x.font = '900 180px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('G6', 512, 256);
+  x.globalAlpha = 1;
+  const t = new cpThree.CanvasTexture(c); t.colorSpace = cpThree.SRGBColorSpace;
+  return t;
+}
+
+function cpLabelTexture(text, color) {
+  const c = cpCanvas(256, 96), x = c.getContext('2d');
+  x.fillStyle = '#140a02'; x.fillRect(0, 0, 256, 96);
+  x.strokeStyle = color; x.lineWidth = 6; x.strokeRect(4, 4, 248, 88);
+  x.font = '900 44px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.shadowColor = color; x.shadowBlur = 14; x.fillStyle = '#fff4d6'; x.fillText(text, 128, 50);
+  const t = new cpThree.CanvasTexture(c); t.colorSpace = cpThree.SRGBColorSpace;
+  return t;
+}
+
+function cpBuildFeatures(gold, lacquer) {
+  const { T, scene, Q } = cpView;
+  const cfg = cpSim.cfg, PN = cfg.pins;
+  // Pins: one instanced chrome mesh.
+  if (cpSim.pins && cpSim.pins.length) {
+    const chrome = new T.MeshStandardMaterial({ color: 0xe8e8ea, metalness: 1, roughness: 0.12, envMapIntensity: 2 });
+    const pinGeo = new T.CylinderGeometry(PN.radius, PN.radius, PN.slot + 0.3, 12);
+    pinGeo.rotateX(Math.PI / 2);
+    const pins = new T.InstancedMesh(pinGeo, chrome, cpSim.pins.length);
+    const m = new T.Matrix4();
+    cpSim.pins.forEach((p, i) => { m.makeTranslation(p.x, p.y, p.z); pins.setMatrixAt(i, m); });
+    pins.castShadow = Q.shadows;
+    scene.add(pins);
+    // Pocket plates on the front glass, lit when a coin passes.
+    cpView.pocketMats = {};
+    const labels = { rain: ['🌧 DESZCZ', '#6bd1ff'], gold: ['★ 1000', '#ffd36b'], tower: ['🗼 WIEŻA', '#ff8a5b'] };
+    for (const pk of PN.pockets) {
+      const [txt, col] = labels[pk.name] || [pk.name, '#ffd36b'];
+      const mat = new T.MeshStandardMaterial({ map: cpLabelTexture(txt, col), emissive: 0xffffff, roughness: 0.4, transparent: true });
+      mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.5;
+      const plate = new T.Mesh(new T.PlaneGeometry(pk.w + 1.6, 1.4), mat);
+      plate.position.set(pk.x, PN.pocketTop + 1.05, PN.z + PN.slot / 2 + 0.25);
+      scene.add(plate);
+      cpView.pocketMats[pk.name] = { mat, flash: 0 };
+    }
+  }
+  // Moving parts: a mesh group per kinematic body, re-posed every frame.
+  cpView.movers = [];
+  const discMat = new T.MeshStandardMaterial({ map: cpTurntableTexture(), metalness: 0.6, roughness: 0.3 });
+  const gateMat = new T.MeshStandardMaterial({ color: 0xd6a142, metalness: 1, roughness: 0.25, emissive: 0x3a2400, emissiveIntensity: 0.4 });
+  const towerMat = new T.MeshStandardMaterial({ color: 0xffd36b, metalness: 0.9, roughness: 0.18, emissive: 0x4a2a00, emissiveIntensity: 0.5 });
+  for (const mv of cpSim.movers) {
+    const g = new T.Group();
+    for (const p of mv.parts) {
+      let mesh;
+      if (p.cyl) {
+        mesh = new T.Mesh(new T.CylinderGeometry(p.r, p.r, p.hh * 2, 48), [gateMat, discMat, discMat]);
+      } else {
+        mesh = new T.Mesh(new T.BoxGeometry(p.hx * 2, p.hy * 2, p.hz * 2), mv.name === 'tower' ? towerMat : gateMat);
+      }
+      mesh.position.set(p.x, p.y, p.z);
+      mesh.castShadow = Q.shadows; mesh.receiveShadow = Q.shadows;
+      g.add(mesh);
+    }
+    scene.add(g);
+    cpView.movers.push({ mv, g });
+  }
+  // Chase lights: bulbs up both pillars and along the canopy.
+  const M = cfg.machine, D = cfg.drop;
+  const spots = [];
+  const px = M.halfWidth + M.gutterWidth + 1.2, pz = M.bedFrontZ + M.chuteDepth - 0.3;
+  for (let i = 0; i < 18; i++) { const y = -4 + i * 2.4; spots.push([-px, y, pz], [px, y, pz]); }
+  for (let i = 0; i <= 26; i++) spots.push([-px + (2 * px) * i / 26, D.y + 6.2, D.z + 5.2]);
+  const bulbs = new T.InstancedMesh(new T.SphereGeometry(0.32, 10, 8), new T.MeshBasicMaterial({ color: 0xffffff }), spots.length);
+  const m = new T.Matrix4();
+  spots.forEach((p, i) => { m.makeTranslation(p[0], p[1], p[2]); bulbs.setMatrixAt(i, m); bulbs.setColorAt(i, new T.Color(0x553300)); });
+  scene.add(bulbs);
+  cpView.bulbs = { mesh: bulbs, n: spots.length, tick: 0, acc: 0, color: new T.Color() };
+}
+
+function cpTurntableTexture() {
+  const c = cpCanvas(512, 512), x = c.getContext('2d');
+  const n = 12;
+  for (let i = 0; i < n; i++) {
+    x.beginPath(); x.moveTo(256, 256);
+    x.arc(256, 256, 256, i / n * Math.PI * 2, (i + 1) / n * Math.PI * 2);
+    x.fillStyle = i % 2 ? '#7a1a1f' : '#d6a142'; x.fill();
+  }
+  x.fillStyle = '#140a02'; x.beginPath(); x.arc(256, 256, 70, 0, Math.PI * 2); x.fill();
+  x.font = '900 64px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#ffd36b';
+  x.fillText('G6', 256, 260);
+  const t = new cpThree.CanvasTexture(c); t.colorSpace = cpThree.SRGBColorSpace;
+  return t;
+}
+
+function cpBuildJackpotDisplay(y, z) {
+  const { T, scene } = cpView;
+  const c = cpCanvas(1024, 96);
+  const tex = new T.CanvasTexture(c); tex.colorSpace = T.SRGBColorSpace;
+  const mat = new T.MeshStandardMaterial({ map: tex, emissive: 0xffffff, roughness: 0.5 });
+  mat.emissiveMap = tex; mat.emissiveIntensity = 1;
+  const plane = new T.Mesh(new T.PlaneGeometry(26, 1.9), mat);
+  plane.position.set(0, y, z);
+  scene.add(plane);
+  cpView.jackpot = { c, tex, shown: null };
+  cpUpdateJackpotDisplay();
+}
+
+// The biggest jackpot token the machine's bank could pay right now (half the
+// bank, capped) — the same rule the server uses.
+function cpUpdateJackpotDisplay() {
+  if (!cpView || !cpView.jackpot || !cpServer) return;
+  const val = Math.min(Math.floor((Number(cpServer.bank) || 0) / 2), 10000);
+  if (cpView.jackpot.shown === val) return;
+  cpView.jackpot.shown = val;
+  const x = cpView.jackpot.c.getContext('2d');
+  x.fillStyle = '#0a0602'; x.fillRect(0, 0, 1024, 96);
+  x.font = '900 60px system-ui, sans-serif'; x.textBaseline = 'middle';
+  x.fillStyle = '#ff5a3c'; x.textAlign = 'left'; x.fillText('JACKPOT', 24, 50);
+  x.fillStyle = '#ffe39a'; x.textAlign = 'right'; x.shadowColor = '#ffae2e'; x.shadowBlur = 16;
+  x.fillText(fmtCoins(val) + ' 🪙', 1000, 50); x.shadowBlur = 0;
+  cpView.jackpot.tex.needsUpdate = true;
+}
+
+function cpSyncFeatures(dt) {
+  if (cpView.movers) {
+    for (const { mv, g } of cpView.movers) {
+      const t = mv.body.translation(), q = mv.body.rotation();
+      g.position.set(t.x, t.y, t.z); g.quaternion.set(q.x, q.y, q.z, q.w);
+    }
+  }
+  if (cpView.pocketMats) {
+    for (const k in cpView.pocketMats) {
+      const p = cpView.pocketMats[k];
+      p.flash = Math.max(0, p.flash - dt * 1.5);
+      p.mat.emissiveIntensity = 0.5 + p.flash * 2.5;
+    }
+  }
+  const b = cpView.bulbs;
+  if (b) {
+    b.acc += dt;
+    const every = cpView.ledLevel > 0.3 ? 0.05 : 0.14;
+    if (b.acc >= every) {
+      b.acc = 0; b.tick++;
+      const hot = cpSim.motorOn ? 1 : 0.35;
+      for (let i = 0; i < b.n; i++) {
+        const on = (i + b.tick) % 4 === 0;
+        b.color.setHex(on ? 0xffd36b : 0x3a2200).multiplyScalar(on ? 1.2 * hot + cpView.ledLevel : 1);
+        b.mesh.setColorAt(i, b.color);
+      }
+      b.mesh.instanceColor.needsUpdate = true;
+    }
+  }
 }
 
 // ── Effects: sparks, confetti, floating numbers ───────────────────────────
@@ -1625,6 +1838,7 @@ function cpSyncScene(alpha, dt) {
   for (const m of cpView.leds) m.emissiveIntensity = (m.userData.base ?? (m.userData.base = m.emissiveIntensity)) * level;
   cpView.chuteLight.intensity = 60 * level;
   if (cpView.marquee) cpView.marquee.material.emissiveIntensity = 0.75 + cpView.ledLevel * 0.5;
+  cpSyncFeatures(dt);
   if (cpFx) {
     cpStepParticles(cpFx.sparks, dt, -60, 0.96);
     cpStepParticles(cpFx.confetti, dt, -9, 0.99);
@@ -1695,6 +1909,7 @@ function cpDebugApply(over) {
   cpSim.dispose();
   cpSim = cpCore.cpCreateSim(cpRapier, { config: over });
   cpSim.onCollect = cpOnCollect; cpSim.onImpact = cpOnImpact;
+  cpSim.onPocket = cpOnPocket; cpSim.onTowerTip = cpOnTowerTip;
   cpSim.restore(layout, coins, 3);
   cpSim.settle(1);
   cpSim.motorOn = motor;

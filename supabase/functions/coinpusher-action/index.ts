@@ -98,6 +98,18 @@ const RAIN_MIN = 12;
 const RAIN_MAX = 24;
 const RAIN_BANK_SHARE = 0.5;
 
+// ── Pin-board pockets and the jackpot tower (see games/coinpusher-core.js) ──
+// The host only REPORTS that a coin passed a pocket / that the tower tipped;
+// what that is worth is decided here and paid out of the machine's bank, so a
+// forged report can at most spend the bank faster — never mint. A pocket needs
+// a coin the player actually paid for (funded > 0), dropped moments ago, and
+// counts once per coin (pocketed_at).
+const POCKET_MAX_AGE_S = 20;
+const POCKET_RAIN_COINS = 8;        // 🌧️ pocket: up to 8 × 100, bank permitting (min 4)
+const POCKET_GOLD_VALUE = 1000;     // 🟡 pocket: one 1 000 coin, if the bank covers it
+const TOWER_SHOWER_COINS = 18;      // 🗼 tower tip: up to 18 × 100 (min 6)
+const TOWER_MIN_GAP_S = 20;         // the bucket can't physically refill faster
+
 function gameError(message, code) {
   return Object.assign(new Error(message), { isGame: true, code });
 }
@@ -470,6 +482,49 @@ async function handleCollect(user, payload) {
 // ── save_layout ─────────────────────────────────────────────────────────────
 // Purely cosmetic (the pile's shape between visits). Size-capped and
 // throttled; never read by anything that moves coins.
+// ── pocket ──────────────────────────────────────────────────────────────────
+async function handlePocket(user, payload) {
+  const kind = String(payload?.pocket ?? "");
+  if (!["rain", "gold", "tower"].includes(kind)) throw gameError("Nieznana kieszeń.");
+  return await db.begin(async tx => {
+    const machine = await lockLeasedMachine(tx, user.id, payload?.lease);
+    let bank = Number(machine.house_bank);
+    const lastDrop = machine.last_drop_at ? new Date(machine.last_drop_at).getTime() : 0;
+    if (Date.now() - lastDrop > CLAIM_WINDOW_S * 1000) return { ok: true, coins: [], bank, reason: "idle" };
+
+    let coins = [];
+    if (kind === "tower") {
+      const last = machine.last_tower_at ? new Date(machine.last_tower_at).getTime() : 0;
+      if (Date.now() - last < TOWER_MIN_GAP_S * 1000) return { ok: true, coins: [], bank, reason: "cooldown" };
+      const n = Math.min(TOWER_SHOWER_COINS, Math.floor(bank / 100));
+      if (n >= 6) { coins = await insertCoins(tx, user.id, "rain", 100, n); bank -= n * 100; }
+      await tx`update public.coinpusher_machines set last_tower_at = now() where user_id = ${user.id}`;
+    } else {
+      const id = String(payload?.coinId ?? "");
+      if (!/^\d{1,18}$/.test(id)) throw gameError("Nieprawidłowa moneta.");
+      const hit = await tx`
+        update public.coinpusher_coins set pocketed_at = now()
+         where id = ${id}::bigint and user_id = ${user.id} and status = 'in_machine'
+           and funded > 0 and pocketed_at is null
+           and created_at > now() - make_interval(secs => ${POCKET_MAX_AGE_S}::double precision)
+        returning id
+      `;
+      if (!hit.length) return { ok: true, coins: [], bank, reason: "not_eligible" };
+      if (kind === "rain") {
+        const n = Math.min(POCKET_RAIN_COINS, Math.floor(bank / 100));
+        if (n >= 4) { coins = await insertCoins(tx, user.id, "rain", 100, n); bank -= n * 100; }
+      } else if (bank >= POCKET_GOLD_VALUE) {
+        coins = await insertCoins(tx, user.id, "gold", POCKET_GOLD_VALUE, 1);
+        bank -= POCKET_GOLD_VALUE;
+      }
+    }
+    if (coins.length) {
+      await tx`update public.coinpusher_machines set house_bank = ${bank}, updated_at = now() where user_id = ${user.id}`;
+    }
+    return { ok: true, pocket: kind, coins: coins.map(coinOut), bank };
+  });
+}
+
 async function handleSaveLayout(user, payload) {
   const layout = payload?.layout;
   if (!layout || layout.v !== 1 || !Array.isArray(layout.coins)) throw gameError("Zły układ.");
@@ -497,6 +552,7 @@ Deno.serve(async req => {
       case "drop":        return json(req, await handleDrop(user, payload));
       case "collect":     return json(req, await handleCollect(user, payload));
       case "save_layout": return json(req, await handleSaveLayout(user, payload));
+      case "pocket":      return json(req, await handlePocket(user, payload));
       default:            return json(req, { ok: false, error: "Nieznana akcja." }, 400);
     }
   } catch (err) {

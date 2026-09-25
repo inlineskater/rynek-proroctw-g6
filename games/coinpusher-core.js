@@ -26,11 +26,11 @@
   // edits a copy of this object; nothing below hard-codes a dimension.
   const CP_CONFIG = {
     machine: {
-      halfWidth: 15,          // playfield is 30 cm wide (≈11 coins across)
+      halfWidth: 24,          // playfield is 48 cm wide: a big, casino-floor cabinet
       bedBackZ: -26,          // lower bed runs under the pusher to here
       bedFrontZ: 12,          // the prize edge
       bedThickness: 1.5,
-      wallHeight: 32,
+      wallHeight: 44,
       gutterStartZ: 1,        // side walls stop here; beyond it the bed edge is open
       gutterWidth: 3.2,       // lane between the open bed edge and the cabinet wall
       chuteDepth: 4,          // front chute, from bedFrontZ to the glass
@@ -52,12 +52,13 @@
       speed: 1,               // turbo multiplies this, never the physics dt
     },
     drop: {
-      y: 17,
-      z: -11,
-      minX: -12.9,
-      maxX: 12.9,
-      tiltJitter: 0.14,       // rad of random tilt on release
-      spinJitter: 3,          // rad/s
+      y: 31.5,                // above the top row of pins
+      z: -11,                 // = pins.z: the coin falls inside the pin board's slot
+      zJitter: 0.06,          // the slot is only 0.8 cm deep
+      minX: -21.6,
+      maxX: 21.6,
+      tiltJitter: 0.1,        // rad of random tilt on release
+      spinJitter: 3,          // rad/s, in the board's plane
       downSpeed: 140,         // cm/s the coin leaves the slot with — fired in, so spammed coins land fast
     },
     physics: {
@@ -97,6 +98,45 @@
       coin:    { r: 1.65, h: 0.36, border: 0.06 },   // ~33 mm: a big, chunky arcade token
       jackpot: { r: 2.3, h: 0.55, border: 0.09 },
     },
+    // ── Cabinet features (all physical: static or kinematic colliders) ──────
+    // Pachinko-style pin board: every thrown coin falls through a 0.8 cm slot
+    // between two panes, bouncing off staggered pins, before it lands on tier 1.
+    // ⚠️ The gap that matters is DIAGONAL (a pin to its neighbours in the next
+    // row), not the same-row one: a coin deflected by a pin must pass between it
+    // and the pin diagonally above. 4.6 × 2.8 spacing left 3.06 cm there — less
+    // than the 3.3 cm coin — and 243 of 250 test coins jammed. 5.0 × 3.7 leaves
+    // ≥ 3.9 cm everywhere.
+    pins: {
+      enabled: true,
+      z: -11,
+      slot: 0.8,
+      yTop: 29,
+      rows: 5,
+      rowGap: 3.7,
+      spacingX: 5.0,
+      radius: 0.28,
+      // Pockets: a coin whose centre passes this band below the last row, inside
+      // a pocket's x-range, triggers it once. Rewards are issued by the SERVER
+      // from the machine's bank; the host only reports the pass.
+      pocketTop: 12.4,
+      pocketBottom: 10.0,
+      pockets: [
+        { name: 'rain', x: -15, w: 3.4 },
+        { name: 'gold', x: 15, w: 3.4 },
+        { name: 'tower', x: 0, w: 4.4 },   // the jackpot tower's mouth
+      ],
+    },
+    // A slowly turning disc set into the bed: coins riding it are carried round
+    // and shoved into their neighbours.
+    turntable: { enabled: true, x: 0, z: 6.8, r: 4.8, speed: 0.45, friction: 0.45 },
+    // Guard gates along the open side edges: they rise out of the bed for part
+    // of every cycle and hold the pile back from the gutters.
+    gates: { enabled: true, z0: 3.5, z1: 10.5, thick: 0.5, height: 2.2, period: 7, upFraction: 0.45 },
+    // Jackpot tower: a bucket under the centre pocket. It catches coins; when it
+    // holds `capacity` of them it tips forward and pours them onto tier 1, and
+    // the server adds a bank-funded shower on top.
+    tower: { enabled: true, floorY: 6.0, w: 4.6, d: 3.2, h: 3.0, wall: 0.25,
+             capacity: 6, tipAngle: 1.95, tipTime: 1.1, holdTime: 0.9, returnTime: 1.2 },
   };
 
   // How a server coin row is simulated (shape) and drawn (look).
@@ -207,6 +247,11 @@
       pusherOffset: 0,
       onCollect: null,      // (coin, where) → void
       onImpact: null,       // (coin, dv cm/s) → void — for audio/sparks only
+      onPocket: null,       // (coin, pocketName) → void — a coin passed a pin-board pocket
+      onTowerTip: null,     // (coinsInside) → void — the jackpot tower just started tipping
+      movers: [],           // kinematic features for the renderer: {name, body, parts}
+      mtime: 0,             // mechanism time (turntable/gates/tower) — frozen with the motor
+      tower: null,
       collecting: true,     // false while settling: nothing may be claimed then
       motorOn: true,        // false = finish the stroke, then park at the back
       stats: { prize: 0, gutter: 0, lost: 0, stepMs: 0, contacts: 0 },
@@ -274,6 +319,88 @@
     sim.pusherHandle = pCol.handle;
     sim.pusherShape = { hx: M.halfWidth - 0.02, hy: P.height / 2, hz: pusherHz, z0: pusherZ0 };
 
+    // ── Pin board ──────────────────────────────────────────────────────────
+    const PN = cfg.pins;
+    if (PN.enabled) {
+      const paneTop = cfg.drop.y + 3, paneBottom = PN.pocketTop + 0.5;
+      const paneH = paneTop - paneBottom;
+      for (const s of [-1, 1]) {
+        fixedBox(s < 0 ? 'pinBack' : 'pinGlass', M.halfWidth, paneH / 2, 0.1,
+          0, paneBottom + paneH / 2, PN.z + s * (PN.slot / 2 + 0.1), PH.wallFriction, s > 0);
+      }
+      const rot = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };   // cylinder axis Y → Z
+      const pinBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+      sim.pins = [];
+      for (let r = 0; r < PN.rows; r++) {
+        const y = PN.yTop - r * PN.rowGap;
+        const off = (r % 2) * PN.spacingX / 2;
+        // Keep ≥ 4 cm between the outermost pin and the wall, or a coin wedges
+        // there (it did: every jam in the first test sat against a wall).
+        for (let x = -M.halfWidth + PN.spacingX / 2 + off; x < M.halfWidth - 1; x += PN.spacingX) {
+          if (Math.abs(x) > M.halfWidth - 4.4) continue;
+          world.createCollider(RAPIER.ColliderDesc.cylinder(PN.slot / 2 + 0.1, PN.radius)
+            .setTranslation(x, y, PN.z).setRotation(rot)
+            .setFriction(0.2).setRestitution(0.35), pinBody);
+          sim.pins.push({ x, y, z: PN.z });
+        }
+      }
+    }
+
+    // ── Turntable ──────────────────────────────────────────────────────────
+    const TT = cfg.turntable;
+    if (TT.enabled) {
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased()
+        .setTranslation(TT.x, 0.02, TT.z));
+      world.createCollider(RAPIER.ColliderDesc.cylinder(0.1, TT.r).setTranslation(0, -0.08, 0)
+        .setFriction(TT.friction).setRestitution(PH.bedRestitution), body);
+      sim.movers.push({ name: 'turntable', body, parts: [{ cyl: true, r: TT.r, hh: 0.1, x: 0, y: -0.08, z: 0 }] });
+    }
+
+    // ── Side gates ─────────────────────────────────────────────────────────
+    const GT = cfg.gates;
+    if (GT.enabled) {
+      const hz = (GT.z1 - GT.z0) / 2;
+      for (const s of [-1, 1]) {
+        const x = s * (M.halfWidth - GT.thick / 2 - 0.05);
+        const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased()
+          .setTranslation(x, -GT.height / 2 - 0.3, GT.z0 + hz));
+        world.createCollider(RAPIER.ColliderDesc.cuboid(GT.thick / 2, GT.height / 2, hz)
+          .setFriction(PH.wallFriction).setRestitution(PH.bedRestitution), body);
+        sim.movers.push({ name: 'gate', body, x, zc: GT.z0 + hz,
+          parts: [{ hx: GT.thick / 2, hy: GT.height / 2, hz, x: 0, y: 0, z: 0 }] });
+      }
+    }
+
+    // ── Jackpot tower (a tipping bucket, hinged at its front-bottom edge) ───
+    const TW = cfg.tower;
+    if (TW.enabled && PN.enabled) {
+      const hingeZ = PN.z + TW.d / 2, hingeY = TW.floorY;
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased()
+        .setTranslation(0, hingeY, hingeZ));
+      const w = TW.wall, parts = [
+        { hx: TW.w / 2, hy: w / 2, hz: TW.d / 2, x: 0, y: -w / 2, z: -TW.d / 2 },              // floor
+        { hx: TW.w / 2, hy: TW.h / 2, hz: w / 2, x: 0, y: TW.h / 2, z: -TW.d + w / 2 },       // back
+        { hx: TW.w / 2, hy: TW.h * 0.35, hz: w / 2, x: 0, y: TW.h * 0.35, z: -w / 2 },        // low front lip
+        { hx: w / 2, hy: TW.h / 2, hz: TW.d / 2, x: -TW.w / 2 + w / 2, y: TW.h / 2, z: -TW.d / 2 },
+        { hx: w / 2, hy: TW.h / 2, hz: TW.d / 2, x: TW.w / 2 - w / 2, y: TW.h / 2, z: -TW.d / 2 },
+      ];
+      for (const p of parts) {
+        world.createCollider(RAPIER.ColliderDesc.cuboid(p.hx, p.hy, p.hz).setTranslation(p.x, p.y, p.z)
+          .setFriction(0.3).setRestitution(PH.bedRestitution), body);
+      }
+      sim.movers.push({ name: 'tower', body, parts });
+      sim.tower = { body, hingeY, hingeZ, phase: 'idle', t: 0, angle: 0, count: 0, checkIn: 0 };
+    }
+
+    // Is (x, y, z) inside the space the tower occupies (for spawn placement)?
+    function inTowerZone(x, y, z, margin) {
+      if (!sim.tower) return false;
+      const m = margin || 0;
+      return Math.abs(x) < TW.w / 2 + m && y > TW.floorY - m - 0.3 && y < TW.floorY + TW.h + m &&
+             z > sim.tower.hingeZ - TW.d - m && z < sim.tower.hingeZ + m;
+    }
+    sim.inTowerZone = inTowerZone;
+
     // ── Coins ───────────────────────────────────────────────────────────────
     function makeBody(shape) {
       const k = cfg.shapes[shape] || cfg.shapes.coin;
@@ -308,6 +435,7 @@
       coin.kind = c.kind;
       coin.look = cpLookFor(c.kind, coin.value);
       coin.collected = false;
+      coin.pocketed = !!c.falling ? false : true;   // only freshly dropped coins can hit a pocket
       coin.spawnTick = sim.ticks;
       coin.ccd = false;
       const b = coin.body;
@@ -347,12 +475,14 @@
       const D = cfg.drop;
       const cx = Math.max(D.minX, Math.min(D.maxX, x));
       const tilt = (r() - 0.5) * 2 * D.tiltJitter;
-      const q = cpQuatYXZ((r() - 0.5) * 2 * D.tiltJitter, Math.PI / 2 + tilt, (r() - 0.5) * 2 * D.tiltJitter);
+      const q = cpQuatYXZ((r() - 0.5) * 0.04, Math.PI / 2 + tilt * 0.3, (r() - 0.5) * 2 * D.tiltJitter);
       return spawnCoin({
         ...c,
-        x: cx + (r() - 0.5) * 0.3, y: D.y, z: D.z + (r() - 0.5) * 0.6, q,
-        v: { x: (r() - 0.5) * 4, y: -D.downSpeed, z: (r() - 0.5) * 6 },
-        w: { x: (r() - 0.5) * D.spinJitter, y: (r() - 0.5) * D.spinJitter, z: (r() - 0.5) * D.spinJitter },
+        x: cx + (r() - 0.5) * 0.3, y: D.y, z: D.z + (r() - 0.5) * 2 * (D.zJitter || 0), q,
+        v: { x: (r() - 0.5) * 4, y: -D.downSpeed, z: 0 },
+        // Spin mostly in the board's plane: out-of-plane spin would just grind
+        // the coin against the panes.
+        w: { x: (r() - 0.5) * 0.3, y: (r() - 0.5) * 0.3, z: (r() - 0.5) * D.spinJitter },
         falling: true,
       });
     }
@@ -385,6 +515,8 @@
         _pusherT.x = 0; _pusherT.y = P.height / 2; _pusherT.z = pusherZ0 + sim.pusherOffset;
         pBody.setNextKinematicTranslation(_pusherT);
       }
+
+      driveMechanisms();
 
       // Remember where every awake coin was, for render interpolation.
       for (const coin of sim.coins.values()) {
@@ -421,10 +553,21 @@
         if (coin.ccd && coin.spawnTick + 20 < sim.ticks && s2 < PH.ccdSpeed * PH.ccdSpeed) {
           b.enableCcd(false); coin.ccd = false;
         }
+        if (!coin.pocketed && PN.enabled && t.y < PN.pocketTop && t.y > PN.pocketBottom &&
+            Math.abs(t.z - PN.z) < 1.2) {
+          for (const pk of PN.pockets) {
+            if (Math.abs(t.x - pk.x) < pk.w / 2) {
+              coin.pocketed = true;
+              if (sim.collecting && sim.onPocket) sim.onPocket(coin, pk.name);
+              break;
+            }
+          }
+        }
         const where = classify(t, coin.R);
         if (where) done.push([coin, where]);
       }
       sim.stats.awake = awake;
+      if (sim.tower) towerTick();
       for (const [coin, where] of done) {
         if (coin.collected) continue;
         if (!sim.collecting) { repile(coin); continue; }
@@ -435,14 +578,74 @@
       }
     }
 
+    // Mechanisms run on their own clock, which (like the pusher's) only advances
+    // while the motor runs, so a parked machine is perfectly still.
+    const _q = { x: 0, y: 0, z: 0, w: 1 }, _t = { x: 0, y: 0, z: 0 };
+    function driveMechanisms() {
+      const moving = sim.motorOn && P.speed > 0;
+      if (moving) sim.mtime += PH.dt * P.speed;
+      const t = sim.mtime;
+      for (const m of sim.movers) {
+        if (m.name === 'turntable') {
+          if (!moving) continue;
+          const a = t * TT.speed;
+          _q.x = 0; _q.y = Math.sin(a / 2); _q.z = 0; _q.w = Math.cos(a / 2);
+          m.body.setNextKinematicRotation(_q);
+        } else if (m.name === 'gate') {
+          if (!moving) continue;
+          // Smooth up/down: up for `upFraction` of the period, eased in and out.
+          const u = (t % GT.period) / GT.period;
+          const up = u < GT.upFraction ? Math.sin(Math.PI * u / GT.upFraction) : 0;
+          const lo = -GT.height / 2 - 0.3, hi = GT.height / 2 - 0.35;
+          _t.x = m.x; _t.y = lo + (hi - lo) * Math.min(1, up * 1.6); _t.z = m.zc;
+          m.body.setNextKinematicTranslation(_t);
+        }
+      }
+    }
+
+    // Tower: count the coins sitting in the bucket; tip when full.
+    function towerTick() {
+      const T = sim.tower;
+      if (T.phase === 'idle') {
+        if (--T.checkIn > 0) return;
+        T.checkIn = 30;
+        let n = 0;
+        for (const coin of sim.coins.values()) {
+          const p = coin.body.translation();
+          if (Math.abs(p.x) < TW.w / 2 && p.y > TW.floorY && p.y < TW.floorY + TW.h &&
+              p.z > T.hingeZ - TW.d && p.z < T.hingeZ) n++;
+        }
+        T.count = n;
+        if (n >= TW.capacity && sim.motorOn) {
+          T.phase = 'tip'; T.t = 0;
+          if (sim.collecting && sim.onTowerTip) sim.onTowerTip(n);
+        }
+        return;
+      }
+      T.t += PH.dt;
+      if (T.phase === 'tip') {
+        T.angle = TW.tipAngle * Math.min(1, T.t / TW.tipTime) ** 2;
+        if (T.t >= TW.tipTime) { T.phase = 'hold'; T.t = 0; }
+      } else if (T.phase === 'hold') {
+        if (T.t >= TW.holdTime) { T.phase = 'back'; T.t = 0; }
+      } else if (T.phase === 'back') {
+        const k = Math.min(1, T.t / TW.returnTime);
+        T.angle = TW.tipAngle * (1 - k * k * (3 - 2 * k));
+        if (k >= 1) { T.phase = 'idle'; T.angle = 0; T.checkIn = 60; T.count = 0; }
+      }
+      _q.x = Math.sin(T.angle / 2); _q.y = 0; _q.z = 0; _q.w = Math.cos(T.angle / 2);
+      T.body.setNextKinematicRotation(_q);
+    }
+
     // While settling (hidden, before the machine is shown) nothing may be
     // claimed: a coin that would leave goes back onto the top of tier 1. This
     // is the only place a coin is ever moved by hand, and it never happens
     // while anyone is watching — it exists so reloading can't shake coins out.
     function repile(coin) {
       const b = coin.body;
-      b.setTranslation({ x: (Math.random() - 0.5) * 2 * (M.halfWidth - 2), y: P.height + 4,
-        z: P.wiperZ + 2 + Math.random() * 3 }, true);
+      let x;
+      do { x = (Math.random() - 0.5) * 2 * (M.halfWidth - 2); } while (Math.abs(x) < 4);
+      b.setTranslation({ x, y: P.height + 4, z: P.wiperZ + 2 + Math.random() * 3 }, true);
       b.setLinvel({ x: 0, y: 0, z: 0 }, true);
       b.setAngvel({ x: 0, y: 0, z: 0 }, true);
       sim.stats.repiled = (sim.stats.repiled || 0) + 1;
@@ -476,8 +679,8 @@
           for (let tries = 0; tries < 900; tries++) {
             const x = (rnd() * 2 - 1) * t.x;
             const z = t.z0 + rnd() * (t.z1 - t.z0);
-            let ok = true;
-            for (const p of pts) { const dx = p.x - x, dz = p.z - z; if (dx * dx + dz * dz < minD * minD) { ok = false; break; } }
+            let ok = !inTowerZone(x, t.y + L * layerGap, z, 1.8);
+            for (const p of pts) { if (!ok) break; const dx = p.x - x, dz = p.z - z; if (dx * dx + dz * dz < minD * minD) { ok = false; break; } }
             if (ok) pts.push({ x, z, y: t.y + L * layerGap });
           }
           layers.push(pts);
@@ -586,8 +789,10 @@
           const onTop = i % 3 === 0;
           const z = onTop ? P.wiperZ + 1.5 + rnd() * (P.backZ - P.wiperZ - 3)
                           : P.backZ + P.travel + 1.5 + rnd() * (M.bedFrontZ - P.backZ - P.travel - 5);
+          let x = (rnd() - 0.5) * 2 * (M.halfWidth - 1.6);
+          if (onTop && Math.abs(x) < 4) x = (x < 0 ? -1 : 1) * (4 + rnd() * 3);   // clear of the tower
           spawnCoin({ ...c,
-            x: (rnd() - 0.5) * 2 * (M.halfWidth - 1.6),
+            x,
             y: (onTop ? P.height : 0) + 3 + (i % 12) * 0.5,
             z, q: cpQuatYXZ(rnd() * Math.PI * 2, (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3) });
         });
