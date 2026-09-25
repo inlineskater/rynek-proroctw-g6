@@ -9,7 +9,7 @@ edge is decided by the solver. Nothing is scripted, teleported or steered.
 | Physics core (no DOM; runs in the browser **and** under Node) | `games/coinpusher-core.js` |
 | View, HUD, audio, network (lazy tab module) | `tabs/coinpusher.js` |
 | Money | `supabase/functions/coinpusher-action/index.ts` |
-| Schema | `supabase/coinpusher.sql` |
+| Schema | `supabase/coinpusher.sql`, then `supabase/coinpusher-shared.sql` (the one shared machine) |
 | Harness (stress, settle, RTP) | `scripts/coinpusher-sim.mjs` |
 
 ## Why the physics can be real and the money still safe
@@ -20,37 +20,38 @@ Re-running the physics server-side would mean simulating 150–300 bodies inside
 an Edge Function with a ~2 s CPU budget, for every drop, with the pusher
 running continuously. That is not a realistic design.
 
-So the server doesn't verify physics. It **bounds the claim**. Each player owns
-one persistent machine, and every coin in it is a `coinpusher_coins` row with a
-server-issued id and value:
+So the server doesn't verify physics. It **bounds the claim**. There is one
+persistent machine (since 2026-09-25 a single shared one — see below), and
+every coin in it is a `coinpusher_coins` row with a server-issued id, value and
+**owner**:
 
 - `drop` debits the stake and inserts a coin worth the stake.
 - `collect` pays each claimed id **once**, via a status-guarded
-  `UPDATE … WHERE status = 'in_machine'`, and only if the coin is in the
-  caller's machine.
+  `UPDATE … WHERE status = 'in_machine'`, and always to the coin's **owner**,
+  never to whoever reported it.
 - Gutter coins are the house's, which is the edge any real arcade pusher has.
-  `RECYCLE` (40 %) of their value goes into that machine's `house_bank`; the
+  `RECYCLE` (40 %) of their value goes into the machine's `house_bank`; the
   rest is burned.
 - Everything that is not a stake comes out of `house_bank` at the moment it is
   issued: refills, 🟡 gold coins (5 × stake), 💎 jackpot tokens, 🌧️ coin rain.
 
 Over a machine's whole life, therefore:
 
-    paid out  ≤  stakes dropped in  +  one house pre-fill of 140 × 100 🪙 per machine (14 000, once — the game's only mint)
+    paid out  ≤  stakes dropped in  +  the machine's one house pre-fill (the game's only mint)
 
 A modified client that claims every coin as a prize gets exactly its own
 stakes back. It never loses to the gutters, so its bank stays empty and it
 never sees a special. Measured against Postgres: 3 000 staked, 3 140 paid.
 
-⚠️ **Never fund anything in this game from outside the player's own machine**
-(no shared jackpot pool, no minted bonus). A modified client can claim any coin
-the instant it exists, so the per-machine closed loop *is* the safety argument.
+⚠️ **Never fund anything in this game from outside the machine** (no pool fed
+by other games, no minted bonus). A modified host can report any coin as fallen
+the instant it exists, so the machine's closed loop *is* the safety argument.
 
 ### The rules that keep the loop closed
 
-- **Lease.** `state` hands the tab a lease and every write must carry it.
-  Otherwise two tabs would simulate the same coins twice and race to claim
-  them.
+- **Host lease.** Only the holder of `coinpusher_shared.host_lease` may
+  report exits, pockets or the pile's shape. Otherwise two browsers would
+  simulate the same coins twice and race to claim them.
 - **Idempotent drops.** `unique(user_id, request_id)` makes a retried drop
   return its original coin. The duplicate check runs *before* the rate limit,
   or a retried success would be refused and its coin never spawned.
@@ -65,10 +66,139 @@ the instant it exists, so the per-machine closed loop *is* the safety argument.
   better return.
 - **`BANK_CAP` = 20 000**: the bank is float, not a vault; overflow is burned.
 
+## One machine for everybody (2026-09-25)
+
+Until 2026-09-25 every player had a private machine. Now there is **one
+cabinet** that everyone sees and throws into together
+(`supabase/coinpusher-shared.sql`).
+
+### Who runs the physics
+
+Supabase can't run a physics loop around the clock, so **one connected
+player's browser, the host, simulates the machine** and streams it to everyone
+else. Whoever holds `coinpusher_shared.host_lease` is the host.
+
+- Every client calls `host_beat` every 3 s. The host renews its lease; a
+  viewer takes over once the lease is 8 s stale. Phones (`pointer: coarse`)
+  wait 16 s, so a desktop in the room wins the race. A phone still hosts if
+  nobody else is there.
+- **A host that leaves hands over at once.** Switching tabs, hiding the page
+  or logging out flushes its exits, saves the pile and `resign`s the lease.
+  Measured: ~1–3 s to a new host, against ~10 s when a tab is just killed.
+- **A host whose beats stop getting through stops by itself** after 6.5 s
+  (`CP_HOST_SELF_DEMOTE_MS`), before the server's 8 s TTL hands the machine to
+  someone else. Two hosts must never stream together. A frozen laptop is the
+  real case; the local test rig reproduced it with 31 s frames.
+- **Beats keep running while the machine loads.** Settling the pile and
+  compiling shaders can take longer than a lease lasts.
+- **Takeover continues the pile.** The new host rebuilds from what it last
+  saw as a viewer (`cpNetLayout`) plus the authoritative coin list, and
+  `resumeAt()` puts the pusher, discs, gates and tower exactly where the old
+  host's last snapshot had them, so nothing is shoved on takeover. Coins the
+  viewer never saw (thrown during the gap) are laid on top, like a reload.
+
+### Who gets paid (the trust model)
+
+- **A coin pays its owner**, the player who threw it, whichever browser
+  reported the fall. Bonus coins from a pocket belong to the owner of the coin
+  that hit the pocket.
+- **Ownerless coins** (house pre-fill, refills, a tower shower with no recent
+  thrower) go to the **most recent thrower within 30 s**, capped at
+  **3 000 🪙/min** per player. With nobody eligible, they are booked like a
+  gutter coin and recycled into the bank.
+- **A coin must be ≥ 1.5 s old to leave.** No thrown coin physically falls
+  faster than that.
+- Every exit is written to `coinpusher_exits`: coin, owner, paid to, where,
+  value, and the reporting host.
+
+So a modified host can decide whether other people's coins fall, but it can't
+take them. At most it can time house coins to fall right after its own throws,
+and the per-minute cap bounds that. The machine as a whole still can't pay out
+more than was thrown in plus its one pre-fill.
+
+### The netcode
+
+Money never travels peer to peer. `drop`, `collect` and `pocket` go through
+the Edge Function, which announces them on the Realtime topic
+`coinpusher_main` with a server-side REST broadcast:
+
+- `spawn` `{coin, x, rain, nick}`: the host drops the coin; viewers show it in
+  the slot until the stream picks it up.
+- `paid` `{paid: {user: {amount, ids, nick, jackpot, gold}}, bank}`: your own
+  win gets the full presentation; other players' wins float up as
+  „Nick +300".
+- `bonus` `{pocket, owner, nick, coins, bank}`: toasts and pocket lights.
+
+Only the pile's *shape* travels between browsers:
+
+- `snap` (host → viewers): `{e: stint id, u: host, h: host clock, t/mt: pusher
+  and mechanism time, ta: tower angle, m: motor, k: keyframe, c: coins, r:
+  exits}`. Coins are packed at 19 bytes each (`cpSnapEncode`: uint32 id, int16
+  position in 1/100 cm, int16 quaternion, uint8 look), base64.
+- A **keyframe** carries every coin; anything missing from it is gone. A
+  **delta** carries only coins that moved more than 0.02 cm or 0.003 in any
+  quaternion component.
+- `need_key` (viewer → host): sent on joining and when a new host's stint
+  starts.
+
+Viewers render **0.35 s behind** the host and interpolate between the last
+samples (slerp for rotation). They pose the kinematic parts with
+`poseMechanics()` and never step the physics world. Two guards:
+
+- a viewer accepts a stint's deltas only after that stint's keyframe;
+- a viewer ignores snapshots from anyone but the host the server last named.
+
+**Realtime quota.** The free plan includes 2 M messages a month.
+
+- Snapshots go out at **4 Hz**, and only while the motor runs or something
+  moves. They also stop when nobody is watching: the host learns the viewer
+  count from its beat.
+- An idle machine sends nothing, and hidden tabs leave the channel entirely.
+- Rough cost: one host plus N viewers ≈ 4 × (1 + N) messages per second of
+  active play. Two viewers for one hour is ~43 k messages.
+
+The first thing to lower if the quota ever bites is `CP_SNAP_MS`.
+
+### Migration from private machines
+
+`coinpusher-shared.sql` moves every coin still in a private machine into the
+shared one, once.
+
+- Player-thrown coins keep their owners.
+- House pre-fill coins become ownerless.
+- The private banks are pooled into the shared bank.
+- The pile is capped at **320 coins**: every player coin moves in, and house
+  pre-fill only up to that total. The excess is marked `retired`, a new status
+  that is never paid and never counted as a house win. On 2026-09-25 prod held
+  463 coins in 5 machines (343 house). At 463, one physics step costs ~4.5 ms
+  of the 8.3 ms budget, and the overfull pile dumps ~270 coins in its first
+  minute.
+- The shared machine's own pre-fill is `SHARED_PREFILL` = 220, minus whatever
+  migrated in, so the migrated pile adds nothing.
+
+### Testing it locally
+
+`coinpusher-action` runs unmodified under Node against local Postgres, with a
+~60-line stand-in for Realtime (SSE fan-out that honours `self: false`, plus
+the REST broadcast endpoint). Three Playwright pages play Ala, Bob and Carl
+(Carl a touch phone). Checked:
+
+- all three see the same 220 coins, then the same pile after 18 throws;
+- at rest, viewer positions match the host's to within **0.03 cm**;
+- every page shows its own server balance;
+- killing the host's tab hands over to the desktop, not the phone, and the
+  phone follows the new stream;
+- a host that leaves properly hands over even to a phone.
+
+Render at LOW quality and small viewports for this test. Three software-GL
+pages on 4 cores freeze the host for 30 s at a time, which tests the takeover
+path, not the netcode.
+
 ## Stats: one row per session, booked at settlement
 
-A drop writes **no** stats row. `collect` adds to the player's open
-`coinpusher_spins` session row:
+A drop writes **no** stats row. `collect` adds, per player involved, to that
+player's open `coinpusher_spins` session row — the owner of each resolved coin,
+and whoever received a prize, whichever browser reported it:
 
 - `bet += Σ funded` of the resolved coins (what they cost the player; 0 for
   starter, refill and rain coins)
@@ -128,7 +258,7 @@ Coins now fall into the machine fast (`drop.downSpeed` 140 cm/s), so spammed
 coins land quickly. The 🟡 special is a **1 000 🪙 coin** (`GOLD_MULT` 10,
 3 % of throws, with the 900 premium paid from the bank). Every coin the
 machine adds by itself (refills, rain) is a 100 🪙 coin bought from the bank.
-Every machine is pre-filled once with 140 × 100 🪙 by the house: the game's one deliberate mint (≤ 14 000 per player).
+Every private machine was pre-filled once with 140 × 100 🪙 by the house. Since the shared machine (2026-09-25) it is one pre-fill of up to 220 × 100 for everybody, and the migrated private pre-fill counts towards it.
 
 
 Every coin a player throws is a 100 🪙 coin: the server's stake list is just
@@ -230,10 +360,14 @@ rather than taking bigger steps.
 ## Run order
 
 1. `supabase/coinpusher.sql`
-2. Re-run `hazard-views.sql`, `coin-inflow-stats.sql`, `economy-stats.sql` and
+2. `supabase/coinpusher-shared.sql` (idempotent; the migration runs only
+   until the shared machine's first `state`).
+3. Re-run `hazard-views.sql`, `coin-inflow-stats.sql`, `economy-stats.sql` and
    `last-active.sql`. All four gained a coinpusher branch.
-3. `supabase functions deploy coinpusher-action`
-4. Push the frontend. It needs the CSP's `'wasm-unsafe-eval'` for Rapier's
+4. `supabase functions deploy coinpusher-action`. The shared function needs
+   step 2 first, and the old frontend's private-machine calls fail against it
+   until the frontend is pushed, so deploy the two back to back.
+5. Push the frontend. It needs the CSP's `'wasm-unsafe-eval'` for Rapier's
    inlined WebAssembly, and that is already in `index.html`.
 
 ## Verifying

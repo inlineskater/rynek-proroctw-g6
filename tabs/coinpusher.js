@@ -27,7 +27,7 @@ const CP_CORE_URL = 'games/coinpusher-core.js';
 // All player-facing strings in one place (Polish today; swap per locale).
 const CP_TEXT = {
   title: 'Automat Monet G6',
-  sub: 'Prawdziwa fizyka: każda moneta to bryła, spychacz pcha stos tylko kontaktem. Co spadnie z przodu — Twoje. Co wpadnie w rynny po bokach — automatu.',
+  sub: 'Jeden automat dla całego biura — wszyscy widzą ten sam stos i wrzucają razem. Prawdziwa fizyka: spychacz pcha monety tylko kontaktem. Twoja moneta, która spadnie z przodu, jest Twoja; co wpadnie w boczne rynny — automatu.',
   loadingLibs: 'Wczytywanie silnika 3D i fizyki…',
   loadingMachine: 'Otwieranie automatu…',
   loadingSettle: 'Układanie monet…',
@@ -52,7 +52,10 @@ const CP_TEXT = {
   rain: '🌧️ Deszcz monet!',
   jackpot: 'JACKPOT',
   bigWin: 'DUŻA WYGRANA',
-  help: 'Kliknij (albo dotknij) w dowolnym miejscu automatu — moneta spadnie dokładnie tam. Możesz klikać ile chcesz. Działa też WRZUĆ i spacja. ←/→ przesuwają zrzut. Moneta spada naprawdę — gdzie wyląduje, decyduje fizyka. Spychacz przesuwa stos; monety spadające z przedniej krawędzi wygrywasz, te z bocznych rynien zabiera automat (to jego przewaga — część z nich wraca do automatu jako złote monety, żetony jackpot i deszcz monet). Silnik staje po minucie bez wrzutu i rusza przy następnej monecie.',
+  help: 'Kliknij (albo dotknij) w dowolnym miejscu automatu — moneta spadnie dokładnie tam. Możesz klikać ile chcesz. Działa też WRZUĆ i spacja. ←/→ przesuwają zrzut. To JEDEN automat dla wszystkich: widzisz monety innych graczy, a oni Twoje. Moneta, którą wrzucisz, należy do Ciebie — gdy spadnie z przedniej krawędzi, wygrywasz ją Ty, niezależnie od tego, czyj rzut ją zepchnął. Monety automatu (bez właściciela) dostaje ostatni wrzucający. Boczne rynny zabiera automat — część ich wartości wraca jako monety 1000, żetony jackpot i deszcz monet. Fizykę liczy przeglądarka jednego z graczy (gospodarz) i transmituje ją reszcie, więc obraz może być opóźniony o ułamek sekundy. Silnik staje po minucie bez wrzutu i rusza przy następnej monecie.',
+  hostYou: '🖥️ Twój komputer prowadzi automat',
+  hostOther: '📡 Na żywo od',
+  hostNone: '⏳ Szukam gospodarza…',
 };
 
 const CP_STATES = ['LOADING', 'READY', 'DROPPING', 'PLAYING', 'BONUS', 'BIG_WIN', 'PAUSED', 'CONNECTION_LOST', 'ERROR'];
@@ -80,6 +83,18 @@ const CP_FLUSH_MS = 450;
 const CP_LAYOUT_MS = 12000;
 const CP_FEED_MS = 30000;
 const CP_REALITY_CHECK_MS = 30 * 60 * 1000;
+// Shared machine netcode. The host renews its lease every beat (the server
+// hands it to someone else after 8 s of silence). Snapshots go out 4×/s, only
+// while something moves and somebody watches — every Realtime message counts
+// against the project's monthly quota, so an idle machine sends nothing.
+const CP_BEAT_MS = 3000;
+const CP_SNAP_MS = 250;
+const CP_KEY_MS = 3000;
+const CP_INTERP_S = 0.35;          // viewers render this far behind the host
+const CP_GHOST_MS = 4000;          // a thrown coin not seen in a snapshot by then is dropped
+// A host that hasn't renewed its lease for this long stops at once: the server
+// hands the machine over after 8 s, and two hosts must never stream together.
+const CP_HOST_SELF_DEMOTE_MS = 6500;
 
 // ── Module state ──────────────────────────────────────────────────────────
 let cpLibsPromise = null;
@@ -117,6 +132,7 @@ let cpPusherPrev = 0;
 let cpShake = 0;
 let cpWinHold = 0;
 let cpLayoutSig = '';
+let cpNet = null;          // shared-machine netcode: role, lease, channel, viewer coins
 let cpPageMode = true;     // full-page while playing; ✕ / Esc returns to the normal tab layout
 
 function cpEmit(type, detail) {
@@ -194,6 +210,11 @@ function cpStore(key, value) {
     .cp-float { position: absolute; left: 0; top: 0; pointer-events: none; font: 800 18px/1 inherit; color: #ffe39a; text-shadow: 0 2px 6px rgba(0,0,0,.8);
       will-change: transform, opacity; white-space: nowrap; }
     .cp-float.is-gutter { color: #9aa0a6; font-size: 13px; font-weight: 600; }
+    .cp-float.is-other { color: #9fd7ff; font-size: 14px; }
+    .cp-float.is-nick { color: #e8dcc2; font-size: 11px; font-weight: 600; opacity: .85; }
+    .cp-who { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; font-size: 11px;
+      color: #e8dcc2; background: rgba(0,0,0,.45); border: 1px solid rgba(255,214,140,.18); pointer-events: none; white-space: nowrap; }
+    @media (max-width: 640px) { .cp-who { bottom: 170px; } }
     .cp-banner { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(.9); opacity: 0; pointer-events: none; text-align: center;
       font: 900 44px/1 inherit; letter-spacing: .08em; color: #fff3c9; text-shadow: 0 0 24px rgba(255,190,60,.8), 0 4px 10px rgba(0,0,0,.8); transition: opacity .25s, transform .35s; z-index: 2; }
     .cp-banner small { display: block; font-size: 20px; margin-top: 8px; color: #ffe39a; }
@@ -318,9 +339,11 @@ function cpPlayable() {
 async function loadCoinPusher() {
   cpReducedMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) || !!cpStore('reducedMotion');
   if (cpSim && cpView && cpServer) {
-    // Coming back to the tab: the machine is still here — just resume.
+    // Coming back to the tab: the scene is still here, but the shared pile
+    // moved on without us — rejoin (fresh coins, host or viewer again).
     if (!cpUi.root.isConnected) document.getElementById('cp-root').replaceChildren(cpUi.root);
-    cpResume();
+    cpApplyPageMode(cpPageMode);
+    cpReconnect();
     return;
   }
   const token = ++cpLoadToken;
@@ -353,30 +376,45 @@ async function cpBuildMachine(state, token) {
   cpServer = state;
   cpStake = state.stakes.includes(cpStore('stake')) ? cpStore('stake') : state.defaultStake;
   cpSetBalance(state.balance);
-  const saved = cpStore('tuning');
-  const overrides = cpDebugAllowed() && saved ? saved : {};
-  if (cpSim) { cpSim.dispose(); cpSim = null; }
-  cpSim = cpCore.cpCreateSim(cpRapier, { config: overrides });
+  if (!cpSim) {
+    const saved = cpStore('tuning');
+    const overrides = cpDebugAllowed() && saved ? saved : {};
+    cpSim = cpCore.cpCreateSim(cpRapier, { config: overrides });
+    cpSim.onCollect = cpOnCollect;
+    cpSim.onImpact = cpOnImpact;
+    cpSim.onPocket = cpOnPocket;
+    cpSim.onTowerTip = cpOnTowerTip;
+  } else {
+    // Same world (the scene's moving parts are bound to its bodies), new coins.
+    cpSim.clearCoins();
+  }
   cpSim.motorOn = false;                        // parked until the first coin
-  cpSim.onCollect = cpOnCollect;
-  cpSim.onImpact = cpOnImpact;
-  cpSim.onPocket = cpOnPocket;
-  cpSim.onTowerTip = cpOnTowerTip;
+  cpSim.collecting = true;
+  cpNetReset();
 
-  // Rebuild the pile: from the saved shape where it matches the server's
-  // coins, otherwise a fresh starting arrangement. Settled hidden, with
-  // collection OFF — nothing can be won by reloading.
+  // Who runs the physics? The first visible client to ask becomes the host;
+  // everyone else watches the host's stream.
+  let beat = null;
+  try { beat = await cpInvoke('host_beat', cpNetBeatBody()); } catch (_) { /* viewer until the next beat */ }
+  if (token !== cpLoadToken) return;
+  if (beat) cpNetApplyBeat(beat, true);
+  // Keep the lease alive while the pile settles and the scene compiles — on a
+  // slow machine that can take longer than the lease lasts.
+  clearInterval(cpTimers.beat); cpTimers.beat = setInterval(cpNetBeat, CP_BEAT_MS);
+
   const coins = state.coins || [];
-  const layout = state.layout && state.layout.v === 1 ? state.layout : null;
-  if (layout) cpSim.restore(layout, coins, 7);
-  else cpSim.layoutPile(coins, 1);
-  cpOverlay('loading', CP_TEXT.loadingSettle, 0.62);
-  for (let i = 0; i < 40; i++) {
-    const moving = cpSim.settleSteps(15);
-    cpOverlayProgress(0.62 + 0.28 * (i + 1) / 40);
-    await new Promise(r => setTimeout(r, 0));
-    if (token !== cpLoadToken) return;
-    if (moving === 0 && i > 2) break;
+  if (cpNet.role === 'host') {
+    // Rebuild the pile: from the saved shape where it matches the server's
+    // coins, otherwise a fresh starting arrangement. Settled hidden, with
+    // collection OFF — nothing can be won by reopening the machine.
+    const layout = state.layout && state.layout.v === 1 ? state.layout : null;
+    if (layout) cpSim.restore(layout, coins, 7);
+    else cpSim.layoutPile(coins, 1);
+    cpOverlay('loading', CP_TEXT.loadingSettle, 0.62);
+    if (!(await cpSettleHidden(token, p => cpOverlayProgress(0.62 + 0.28 * p)))) return;
+    cpLastMotorAt = performance.now() - (state.lastThrowAgoMs ?? 1e9);
+  } else {
+    cpNetSeedViewer(state);
   }
   cpOverlay('loading', CP_TEXT.loadingScene, 0.94);
   await new Promise(r => setTimeout(r, 0));
@@ -385,18 +423,33 @@ async function cpBuildMachine(state, token) {
   // Compile every shader and draw one real frame BEFORE the curtain lifts, so
   // the machine never appears half-built or pops in a second later.
   cpView.carriage.position.x = cpDropX;
+  cpNetViewerFrame(performance.now());
   cpSyncScene(0, 0);
   cpUpdateCamera(0);
   try { await cpView.renderer.compileAsync(cpView.scene, cpView.camera); } catch (_) {}
   if (token !== cpLoadToken || !cpView) return;
   cpView.renderer.render(cpView.scene, cpView.camera);
   cpOverlay(null);
-  cpSession = { started: Date.now(), staked: 0, won: 0, lastWin: 0, lastCheck: Date.now() };
+  if (!cpSession.started) cpSession = { started: Date.now(), staked: 0, won: 0, lastWin: 0, lastCheck: Date.now() };
   cpPusherPrev = cpSim.pusherOffset;
   cpSetState('READY');
-  cpEmit('game_loaded', { coins: coins.length });
+  cpEmit('game_loaded', { coins: coins.length, role: cpNet.role });
+  cpNetConnect();
   cpResume();
   cpLoadFeed();
+}
+
+// Settle the pile out of sight: pusher parked, collection off. Yields to the
+// browser between chunks. False if the load was superseded meanwhile.
+async function cpSettleHidden(token, progress) {
+  for (let i = 0; i < 40; i++) {
+    const moving = cpSim.settleSteps(15);
+    progress && progress((i + 1) / 40);
+    await new Promise(r => setTimeout(r, 0));
+    if (token !== cpLoadToken || !cpSim) return false;
+    if (moving === 0 && i > 2) break;
+  }
+  return true;
 }
 
 function cpResume() {
@@ -408,6 +461,7 @@ function cpResume() {
   cancelAnimationFrame(cpRaf);
   cpRaf = requestAnimationFrame(cpFrame);
   clearInterval(cpTimers.flush); cpTimers.flush = setInterval(cpFlush, CP_FLUSH_MS);
+  clearInterval(cpTimers.beat); cpTimers.beat = setInterval(cpNetBeat, CP_BEAT_MS);
   clearInterval(cpTimers.layout); cpTimers.layout = setInterval(() => cpSaveLayout(false), CP_LAYOUT_MS);
   clearInterval(cpTimers.feed); cpTimers.feed = setInterval(() => { if (activeTab === 'coinpusher' && !document.hidden) cpLoadFeed(); }, CP_FEED_MS);
   cpResize();
@@ -421,9 +475,10 @@ function stopCoinPusher(dispose) {
   cpStopAuto();
   for (const k of Object.keys(cpTimers)) { clearInterval(cpTimers[k]); clearTimeout(cpTimers[k]); }
   cpTimers = {};
+  // Leaving the machine: a host reports what fell, saves the pile and hands
+  // the lease back at once; everyone stops listening (Realtime quota).
+  cpNetLeave();
   if (cpSim && !dispose) {
-    cpFlush();
-    cpSaveLayout(true);
     if (cpState !== 'LOADING' && cpState !== 'ERROR' && cpState !== 'CONNECTION_LOST') cpSetState('PAUSED');
   }
   if (cpAudio) { try { cpAudio.ctx.suspend(); } catch (_) {} }
@@ -435,7 +490,7 @@ function stopCoinPusher(dispose) {
       cpView.ro && cpView.ro.disconnect();
     }
     if (cpAudio) { try { cpAudio.ctx.close(); } catch (_) {} }
-    cpSim = null; cpView = null; cpServer = null; cpUi = null; cpAudio = null; cpFx = null; cpDebug = null;
+    cpSim = null; cpView = null; cpServer = null; cpUi = null; cpAudio = null; cpFx = null; cpDebug = null; cpNet = null;
     cpPending = []; cpInflight = 0; cpState = 'LOADING'; cpLayoutSig = '';
     const root = document.getElementById('cp-root');
     if (root) root.replaceChildren(el('div', { className: 'loading-center' }, el('div', { className: 'spinner' })));
@@ -455,6 +510,7 @@ function cpBuildDom() {
   const [lastBox, lastWin] = kpi(CP_TEXT.lastWin, 'is-win');
   const [totBox, totalWin] = kpi(CP_TEXT.totalWin);
   const status = el('div', { className: 'cp-status', role: 'status', 'aria-live': 'polite' }, '');
+  const who = el('div', { className: 'cp-who' }, CP_TEXT.hostNone);
   const hudTop = el('div', { className: 'cp-hud-top' }, balBox, lastBox, totBox);
 
   const betLabel = el('span', {}, '—');
@@ -481,13 +537,13 @@ function cpBuildDom() {
 
   const banner = el('div', { className: 'cp-banner', 'aria-live': 'assertive' });
   const overlay = el('div', { className: 'cp-overlay' });
-  stage.append(hudTop, status, tools, hudBot, banner, overlay);
+  stage.append(hudTop, status, who, tools, hudBot, banner, overlay);
 
   const leaders = el('div', { className: 'cp-card' }, el('h4', {}, '🏆 Ten tydzień'));
   const feed = el('div', { className: 'cp-card' }, el('h4', {}, '🪙 Ostatnie sesje'));
   const rules = el('div', { className: 'cp-card' },
     el('h4', {}, 'ℹ️ Jak to działa'),
-    el('div', { className: 'cp-note' }, 'Każda moneta ma w banku automatu swój numer. Wygrana to moneta, która naprawdę spadła z przedniej krawędzi — serwer wypłaca ją raz. Monety z bocznych rynien zabiera automat; część ich wartości wraca do Twojego automatu jako monety 1000, żetony jackpot i deszcz monet.'),
+    el('div', { className: 'cp-note' }, 'Jeden automat dla wszystkich. Każda moneta ma w banku automatu swój numer i właściciela — tego, kto ją wrzucił. Gdy spadnie z przedniej krawędzi, serwer wypłaca ją raz, zawsze właścicielowi. Monety automatu (wstępne wypełnienie, dosypki) dostaje ostatni wrzucający (do 3 000 🪙/min). Monety z bocznych rynien zabiera automat; część ich wartości wraca jako monety 1000, żetony jackpot i deszcz monet.'),
     el('div', { className: 'cp-note', id: 'cp-luck-note' }, ''));
   const side = el('div', { className: 'cp-side' }, leaders, feed, rules);
   const hero = el('div', { className: 'cp-hero' },
@@ -496,7 +552,7 @@ function cpBuildDom() {
   const wrap = el('div', { className: 'cp-wrap' }, hero, el('div', {}, stage), side);
   root.replaceChildren(wrap);
 
-  cpUi = { root: wrap, stage, overlay, status, balance, lastWin, totalWin, betLabel, betMinus, betPlus, drop, autoBtn, autoSel,
+  cpUi = { root: wrap, stage, overlay, status, who, balance, lastWin, totalWin, betLabel, betMinus, betPlus, drop, autoBtn, autoSel,
     turbo, page, sound, cam, quality, full, help, banner, leaders, feed, helpBox: null, floats: [], sessionNote: null };
 
   stage.addEventListener('pointermove', cpOnPointer);
@@ -538,14 +594,12 @@ async function cpReconnect() {
   cpOverlay('loading', CP_TEXT.loadingMachine, 0.5);
   try {
     if (!cpThree) await cpImportLibs(p => cpOverlayProgress(p * 0.5));
-    if (cpSim) {
-      // Keep what the player saw: save the local shape first.
-      cpServer = cpServer || {};
-      cpServer.layout = cpSim.snapshotLayout();
-    }
+    let local = null;
+    if (cpSim && cpSim.coins.size) local = cpSim.snapshotLayout();   // what this host last had
+    else if (cpNet && cpNet.coins.size) local = cpNetLayout();       // what this viewer last saw
     const state = await cpInvoke('state');
     if (token !== cpLoadToken) return;
-    if (!state.layout && cpServer && cpServer.layout) state.layout = cpServer.layout;
+    if (!state.layout && local) state.layout = local;
     cpPending = [];
     cpInflight = 0;
     await cpBuildMachine(state, token);
@@ -622,10 +676,19 @@ function cpOnKey(ev) {
   else if (ev.key === 'ArrowDown') { cpChangeStake(-1); ev.preventDefault(); }
 }
 
+// A hidden tab can't host (the browser throttles it) and shouldn't be sent a
+// stream nobody sees: leave on hide, rejoin on return.
 function cpOnVisibility() {
   if (activeTab !== 'coinpusher' || !cpSim) return;
-  if (document.hidden) { cpFlush(); cpSaveLayout(true); if (cpAudio) try { cpAudio.ctx.suspend(); } catch (_) {} }
-  else { cpLastFrame = performance.now(); cpAcc = 0; if (cpAudio && !cpAudioMuted()) try { cpAudio.ctx.resume(); } catch (_) {} }
+  if (document.hidden) {
+    cpNetLeave();
+    clearInterval(cpTimers.beat);
+    if (cpAudio) try { cpAudio.ctx.suspend(); } catch (_) {}
+  } else {
+    cpLastFrame = performance.now(); cpAcc = 0;
+    if (cpAudio && !cpAudioMuted()) try { cpAudio.ctx.resume(); } catch (_) {}
+    if (cpNet && cpNet.left && cpState !== 'LOADING') cpReconnect();
+  }
 }
 
 // ── Dropping ──────────────────────────────────────────────────────────────
@@ -646,7 +709,7 @@ async function cpDropPressed(fromAuto) {
   let res = null;
   for (let attempt = 0; attempt < 2 && !res; attempt++) {
     try {
-      res = await cpInvoke('drop', { stake, requestId, lease: cpServer.lease });
+      res = await cpInvoke('drop', { stake, requestId, x: Math.round(x * 100) / 100 });
     } catch (err) {
       if (err.code === 'network' && attempt === 0) continue;   // same requestId: never a double debit
       cpInflight--;
@@ -658,28 +721,20 @@ async function cpDropPressed(fromAuto) {
   if (!cpSim || !res) return false;
   cpEmit('drop_authorized', { stake, duplicate: !!res.duplicate });
   cpSetBalance(res.balance);
+  if (cpNet) cpNet.balanceAt = performance.now();
   if (cpServer && res.bank != null) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
   if (!res.duplicate) cpSession.staked += stake;
   // Only now — after the server took the stake and issued the coin — does a
-  // physical coin exist.
-  cpSim.dropCoin(res.coin, x);
+  // physical coin exist. The same coin also reaches everybody (this client
+  // included) as a `spawn` broadcast; whichever arrives first drops it.
+  cpNetSpawn(res.coin, res.x ?? x, res.rain || []);
   cpEmit('coin_spawned', { kind: res.coin.kind });
-  cpMotor(true);
-  if (res.coin.kind === 'gold') cpToast(CP_TEXT.gold);
-  if (res.coin.kind === 'jackpot') { cpToast(CP_TEXT.jackpotIn); cpSound('bonus'); cpLed(1.4); }
-  if (res.rain && res.rain.length) cpRain(res.rain);
-  if (cpState === 'DROPPING' || cpState === 'READY') cpSetState('PLAYING');
   cpRenderUi();
   return true;
 }
 
 function cpDropFailed(err) {
   cpStopAuto();
-  if (err.code === 'lease') {
-    cpSetState('ERROR', CP_TEXT.lease);
-    cpOverlay('lease', CP_TEXT.lease);
-    return;
-  }
   if (err.code === 'network') {
     cpSetState('CONNECTION_LOST');
     cpOverlay('lost', CP_TEXT.lost);
@@ -690,13 +745,15 @@ function cpDropFailed(err) {
   if (cpState === 'DROPPING') cpSetState(cpSim && cpSim.motorOn ? 'PLAYING' : 'READY');
 }
 
-// A shower of bank-funded coins, released one by one across the rail.
+// A shower of bank-funded coins, released one by one across the rail. Only
+// the host drops them; viewers see them arrive in the stream.
 function cpRain(list) {
   cpToast(CP_TEXT.rain);
   cpSound('bonus');
   cpLed(1.1);
   cpSetState('BONUS');
   cpEmit('bonus_triggered', { type: 'rain', coins: list.length });
+  if (!cpNet || cpNet.role !== 'host') { setTimeout(() => { if (cpState === 'BONUS') cpSetState('PLAYING'); }, 90 * list.length); return; }
   const D = cpSim.cfg.drop;
   list.forEach((c, i) => {
     setTimeout(() => {
@@ -749,38 +806,43 @@ function cpToggleTurbo() {
   cpRenderUi();
 }
 
-// ── Collection ────────────────────────────────────────────────────────────
+// ── Collection (host only: only the host's sim steps) ─────────────────────
 function cpOnCollect(coin, where) {
   cpPending.push({ id: coin.id, where });
-  cpCollectedKind.set(coin.id, coin.kind);
   const t = coin.body.translation();
   cpEmit('coin_collected', { where, kind: coin.kind });
-  if (where === 'prize') {
-    // The value shown is the one the server issued with this coin.
-    cpFloat(t.x, 0, cpSim.cfg.machine.bedFrontZ + 1, '+' + fmtCoins(coin.value), false);
-    cpSound('chute', coin.value / Math.max(1, cpStake));
-    cpFxBurst(t.x, -0.5, cpSim.cfg.machine.bedFrontZ + 1.5, coin.kind === 'gold' || coin.kind === 'jackpot' ? 18 : 6, 0xffd36b);
-  } else {
-    cpFloat(t.x, -1, t.z, '−', true);
-    cpSound('gutter');
-  }
+  cpNetExited(coin.id, where === 'prize' ? 'p' : 'g', t.x, t.z);
+  cpExitFx(where === 'prize', t.x, t.z, coin.look === 'gold' || coin.look === 'jackpot');
   if (cpPending.length >= 20) cpFlush();
 }
 
+// What leaving the machine looks and sounds like — the same for the host
+// (from its sim) and a viewer (from the stream). The amount appears when the
+// server pays it (`paid`), with the winner's nick.
+function cpExitFx(prize, x, z, rich) {
+  if (!cpSim) return;
+  const M = cpSim.cfg.machine;
+  if (prize) {
+    cpSound('chute', rich ? 10 : 1);
+    cpFxBurst(x, -0.5, M.bedFrontZ + 1.5, rich ? 18 : 6, 0xffd36b);
+  } else {
+    cpFloat(x, -1, z, '−', true);
+    cpSound('gutter');
+  }
+}
+
 async function cpFlush() {
-  if (cpFlushing || !cpPending.length || !cpServer) return;
+  if (cpFlushing || !cpPending.length || !cpServer || !cpNet || cpNet.role !== 'host') return;
   if (cpState === 'CONNECTION_LOST' || cpState === 'ERROR') return;
   cpFlushing = true;
   const batch = cpPending.slice(0, 100);
   try {
-    const res = await cpInvoke('collect', { events: batch, lease: cpServer.lease });
+    const res = await cpInvoke('collect', { events: batch, lease: cpNet.lease });
     cpPending = cpPending.slice(batch.length);
-    if (res.paid > 0) cpPresentWin(res.paid, batch, res);
-    cpSetBalance(res.balance);
-    if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
+    cpNetOnPaid({ paid: res.paid || {}, bank: res.bank });
   } catch (err) {
-    if (err.code === 'lease') { cpPending = []; cpDropFailed(err); }
-    else if (err.code === 'network') cpDropFailed(err);       // keep the queue: collect is idempotent
+    if (err.code === 'host') { cpPending = []; cpNetDemote(); }
+    else if (err.code === 'network') { /* keep the queue: collect is idempotent */ }
     else { console.warn('coinpusher collect', err); cpPending = cpPending.slice(batch.length); }
   } finally {
     cpFlushing = false;
@@ -788,57 +850,54 @@ async function cpFlush() {
 }
 
 // A coin passed a pin-board pocket. The server decides what it's worth (paid
-// from the bank); only coins the player threw count, and only once.
+// from the bank, owned by whoever threw the coin); only thrown coins count,
+// and only once. Everyone hears about it through the `bonus` broadcast.
 async function cpOnPocket(coin, name) {
   const pm = cpView && cpView.pocketMats && cpView.pocketMats[name];
   if (pm) pm.flash = 1;
   cpSound('click');
-  if (name === 'tower' || !cpServer) return;          // the tower pays when it tips
+  if (name === 'tower' || !cpServer || !cpNet || cpNet.role !== 'host') return;   // the tower pays when it tips
   if (coin.kind === 'rain' || coin.kind === 'house') return;
+  const x = coin.body.translation().x;
   try {
-    const res = await cpInvoke('pocket', { pocket: name, coinId: coin.id, lease: cpServer.lease });
+    const res = await cpInvoke('pocket', { pocket: name, coinId: coin.id, lease: cpNet.lease });
     if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
-    if (!res.coins || !res.coins.length || !cpSim) return;
+    if (!res.coins || !res.coins.length || !cpSim || cpNet.role !== 'host') return;
     cpEmit('bonus_triggered', { type: 'pocket_' + name, coins: res.coins.length });
     if (name === 'rain') cpRain(res.coins);
-    else {
-      cpToast('★ Kieszeń 1000! Moneta 1000 🪙 spada do automatu.');
-      cpSound('bonus'); cpLed(1.2);
-      for (const c of res.coins) cpSim.dropCoin(c, coin.body.translation().x);
-    }
-  } catch (err) { if (err.code === 'lease' || err.code === 'network') cpDropFailed(err); }
+    else for (const c of res.coins) cpSim.dropCoin(c, x);
+  } catch (err) { if (err.code === 'host') cpNetDemote(); }
 }
 
 // The jackpot tower tipped: its coins pour out physically, and the server adds
 // a bank-funded shower that tumbles out of the tower's mouth with them.
 async function cpOnTowerTip(count) {
-  cpToast('🗼 Wieża się przechyla!');
   cpSound('jackpot'); cpLed(2); cpShakeCam(0.3);
-  if (!cpServer) return;
+  if (!cpServer || !cpNet || cpNet.role !== 'host') return;
   try {
-    const res = await cpInvoke('pocket', { pocket: 'tower', lease: cpServer.lease });
+    const res = await cpInvoke('pocket', { pocket: 'tower', lease: cpNet.lease });
     if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
-    if (!res.coins || !res.coins.length || !cpSim) return;
+    if (!res.coins || !res.coins.length || !cpSim || cpNet.role !== 'host') return;
     cpEmit('bonus_triggered', { type: 'tower', coins: res.coins.length });
     const T = cpSim.tower, TW = cpSim.cfg.tower;
     res.coins.forEach((c, i) => setTimeout(() => {
-      if (!cpSim) return;
+      if (!cpSim || !cpNet || cpNet.role !== 'host') return;
       cpSim.spawnCoin({ ...c, x: (Math.random() - 0.5) * (TW.w - 1.2), y: TW.floorY + TW.h + 1.5 + (i % 3) * 0.5,
         z: T.hingeZ + 1.8, v: { x: (Math.random() - 0.5) * 20, y: 10, z: 40 }, falling: true,
         q: cpCore.cpQuatXZ(Math.random() * 3, Math.random() * 3) });
     }, 500 + i * 70));
-  } catch (err) { if (err.code === 'lease' || err.code === 'network') cpDropFailed(err); }
+  } catch (err) { if (err.code === 'host') cpNetDemote(); }
 }
 
-function cpPresentWin(paid, batch, res) {
+// One of MY wins, as the server paid it.
+function cpPresentWin(paid, info) {
   cpSession.won += paid;
   cpSession.lastWin = paid;
-  const ids = new Set(res.paidIds || []);
-  const jackpot = batch.some(e => ids.has(e.id) && cpCollectedKind.get(e.id) === 'jackpot');
-  for (const e of batch) cpCollectedKind.delete(e.id);
+  const jackpot = !!(info && info.jackpot);
   const ratio = paid / Math.max(1, cpStake);
   const tier = jackpot ? 'jackpot' : ratio >= 20 ? 'large' : ratio >= 5 ? 'medium' : 'small';
   cpEmit(jackpot ? 'jackpot_triggered' : 'win', { amount: paid, tier });
+  if (cpSim) cpFloat(cpNetExitX(info), 0, cpSim.cfg.machine.bedFrontZ + 1, '+' + fmtCoins(paid), false);
   if (tier === 'jackpot') {
     cpBanner(CP_TEXT.jackpot, '+' + fmtCoins(paid) + ' 🪙', 3200);
     cpSound('jackpot'); cpLed(2.4); cpShakeCam(0.5); cpConfetti(); cpSetState('BIG_WIN');
@@ -859,10 +918,6 @@ function cpPresentWin(paid, batch, res) {
   cpRealityCheck();
 }
 
-// Kind of each coin between its fall and the server's answer (for the
-// jackpot presentation); entries are dropped once the batch is settled.
-const cpCollectedKind = new Map();
-
 function cpRealityCheck() {
   const now = Date.now();
   if (now - cpSession.lastCheck < CP_REALITY_CHECK_MS) return;
@@ -873,13 +928,13 @@ function cpRealityCheck() {
 }
 
 async function cpSaveLayout(force) {
-  if (!cpSim || !cpServer || !cpServer.lease) return;
+  if (!cpSim || !cpServer || !cpNet || cpNet.role !== 'host' || !cpNet.lease) return;
   if (cpState === 'LOADING' || cpState === 'ERROR' || cpState === 'CONNECTION_LOST') return;
   const layout = cpSim.snapshotLayout();
   const sig = layout.coins.length + ':' + layout.coins.reduce((s, r) => s + r[1] + r[3], 0).toFixed(1);
   if (!force && sig === cpLayoutSig) return;
   cpLayoutSig = sig;
-  try { await cpInvoke('save_layout', { layout, lease: cpServer.lease }); } catch (_) { /* cosmetic */ }
+  try { await cpInvoke('save_layout', { layout, lease: cpNet.lease }); } catch (_) { /* cosmetic */ }
 }
 
 async function cpLoadFeed() {
@@ -899,6 +954,437 @@ async function cpLoadFeed() {
     el('span', {}, fmtCoins(r.total_won) + ' z ' + fmtCoins(r.bet) + ' 🪙')));
   cpUi.feed.replaceChildren(el('h4', {}, '🪙 Ostatnie sesje'),
     ...(fRows.length ? fRows : [el('div', { className: 'cp-note' }, 'Brak sesji.')]));
+}
+
+// ── Shared machine: host / viewer netcode ─────────────────────────────────
+// There is ONE machine. One connected browser — the HOST, holder of the
+// server's lease — runs the physics; everyone else is a VIEWER that renders
+// the host's snapshots, a fixed CP_INTERP_S behind, interpolated. Money never
+// rides this channel: throws, wins and bonuses are decided by
+// coinpusher-action and announced by it (`spawn`, `paid`, `bonus`). Only the
+// pile's shape travels peer to peer (`snap`, `need_key`).
+//
+// A snapshot is { e: host stint, h: host clock (s), t/mt: pusher/mechanism
+// time, ta: tower angle, m: motor, k: keyframe, c: coins (cpSnapEncode), r:
+// [[id, 'p'|'g']] coins that left since the last one }. A keyframe carries
+// every coin (anything absent is gone); a delta only the coins that moved.
+function cpNetReset() {
+  const channel = cpNet && cpNet.channel;
+  cpNet = {
+    role: null, lease: null, promoting: false, left: false, channel: channel || null, beatOkAt: performance.now(),
+    hostUser: null, hostNick: null, viewers: 0, beating: false, balanceAt: 0,
+    // viewer
+    coins: new Map(), epoch: null, offset: null, mech: [], motor: false, rt: Infinity, askedAt: 0,
+    // host
+    lastSent: new Map(), removed: [], keyDue: true, lastSnapAt: 0, lastKeyAt: 0, sentMotor: 0,
+    // both
+    spawned: new Set(), paidSeen: new Set(), exitX: new Map(),
+  };
+  cpPending = [];
+}
+
+function cpNetWeak() {
+  // Phones and tablets can watch and throw, but a desktop in the room hosts.
+  return !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+}
+
+function cpNetBeatBody() {
+  return { lease: cpNet && cpNet.lease, canHost: !cpNetWeak(), visible: !document.hidden && activeTab === 'coinpusher' };
+}
+
+async function cpNetBeat() {
+  if (!cpNet || cpNet.beating || cpNet.left || !cpSim || !cpNet.role) return;
+  cpNet.beating = true;
+  try {
+    const res = await cpInvoke('host_beat', cpNetBeatBody());
+    if (cpNet) cpNet.beatOkAt = performance.now();
+    cpNetApplyBeat(res);
+  }
+  catch (_) { /* a host that can't beat loses the lease on its own; collect then says so */ }
+  finally { if (cpNet) cpNet.beating = false; }
+}
+
+function cpNetApplyBeat(res, initial) {
+  if (!cpNet || !res) return;
+  cpNet.hostUser = res.hostUser || null;
+  cpNet.hostNick = res.hostNick || null;
+  cpNet.viewers = Number(res.viewers) || 0;
+  // A win lands on the thrower's account whoever reported it; the beat is
+  // the backstop for a missed `paid`. Not right after a throw, whose answer
+  // may be newer than this one.
+  if (res.balance != null && !cpInflight && performance.now() - cpNet.balanceAt > 1500) cpSetBalance(res.balance);
+  if (res.bank != null && cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
+  // Mid-load a role change waits for the next beat after the machine is up.
+  if (!initial && cpState === 'LOADING') { if (res.host && cpNet.role === 'host') cpNet.lease = res.lease; return; }
+  if (initial) {
+    cpNet.beatOkAt = performance.now();
+    cpNet.role = res.host ? 'host' : 'viewer';
+    cpNet.lease = res.host ? res.lease : null;
+    if (res.host) cpNet.epoch = cpUuid().slice(0, 10);
+  } else if (res.host && cpNet.role !== 'host') {
+    cpNet.lease = res.lease;
+    if (!cpNet.promoting) cpNetPromote();
+  } else if (!res.host && cpNet.role === 'host') {
+    cpNetDemote();
+  } else if (res.host) {
+    cpNet.lease = res.lease;
+  }
+  if (cpNet.role === 'viewer' && cpNet.hostUser && !cpNet.epoch) cpNetAskKey();
+  cpNetRenderWho();
+}
+
+function cpNetRenderWho() {
+  if (!cpUi || !cpUi.who || !cpNet) return;
+  const n = cpNet.viewers + (cpNet.hostUser ? 1 : 0);
+  const people = n > 1 ? ` · 👥 ${n} przy automacie` : '';
+  cpUi.who.textContent = cpNet.role === 'host' ? CP_TEXT.hostYou + people
+    : cpNet.hostUser ? `${CP_TEXT.hostOther}: ${cpNet.hostNick || '—'}${people}` : CP_TEXT.hostNone;
+}
+
+function cpNetConnect() {
+  if (!cpNet || cpNet.channel) return;
+  const ch = sb.channel((cpServer && cpServer.topic) || 'coinpusher_main', { config: { broadcast: { self: false } } });
+  ch.on('broadcast', { event: 'spawn' }, m => cpNetOnSpawn(m.payload))
+    .on('broadcast', { event: 'paid' }, m => cpNetOnPaid(m.payload))
+    .on('broadcast', { event: 'bonus' }, m => cpNetOnBonus(m.payload))
+    .on('broadcast', { event: 'snap' }, m => cpNetApplySnap(m.payload))
+    .on('broadcast', { event: 'need_key' }, () => {
+      if (cpNet && cpNet.role === 'host') { cpNet.keyDue = true; cpNet.viewers = Math.max(1, cpNet.viewers); }
+    })
+    .subscribe(status => { if (status === 'SUBSCRIBED' && cpNet && cpNet.role === 'viewer') cpNetAskKey(true); });
+  cpNet.channel = ch;
+}
+
+function cpNetAskKey(force) {
+  if (!cpNet || !cpNet.channel) return;
+  const now = performance.now();
+  if (!force && now - cpNet.askedAt < 1000) return;
+  cpNet.askedAt = now;
+  cpNet.channel.send({ type: 'broadcast', event: 'need_key', payload: {} }).catch(() => {});
+}
+
+// Leave the machine: the host reports what fell, saves the pile and resigns
+// (so someone else takes over at once, not after the lease times out).
+function cpNetLeave() {
+  if (!cpNet || cpNet.left) return;
+  if (cpNet.role === 'host' && cpNet.lease) {
+    const lease = cpNet.lease;
+    cpSaveLayout(true);
+    Promise.resolve(cpFlush()).finally(() => cpInvoke('host_beat', { lease, resign: true }).catch(() => {}));
+  }
+  if (cpNet.channel) { try { sb.removeChannel(cpNet.channel); } catch (_) {} cpNet.channel = null; }
+  cpNet.left = true;
+  cpNet.role = null;
+  cpNet.lease = null;
+}
+
+// ── Money events (from the server) ──
+function cpNetOnSpawn(p) {
+  if (!p || !p.coin || !cpSim || !cpNet || cpNet.left) return;
+  const mine = me && p.coin.owner === me.id;
+  if (cpNetSpawn(p.coin, Number(p.x) || 0, p.rain || []) && !mine && p.nick) {
+    cpFloat(Number(p.x) || 0, cpSim.cfg.drop.y + 3, cpSim.cfg.drop.z, p.nick, false, 'is-nick');
+  }
+}
+
+// Put a thrown coin into the machine — once, whichever of the drop answer and
+// the broadcast comes first. The host drops it for real; a viewer shows it in
+// the slot until the host's stream picks it up.
+function cpNetSpawn(coin, x, rain) {
+  const id = String(coin.id);
+  if (!cpNet || cpNet.spawned.has(id)) return false;
+  cpNet.spawned.add(id);
+  if (cpNet.spawned.size > 600) cpNet.spawned.delete(cpNet.spawned.values().next().value);
+  cpLastMotorAt = performance.now();
+  if (cpNet.role === 'host') {
+    cpSim.dropCoin(coin, x);
+    cpMotor(true);
+  } else {
+    cpNetGhost(coin, x);
+  }
+  if (coin.kind === 'gold') cpToast(CP_TEXT.gold);
+  if (coin.kind === 'jackpot') { cpToast(CP_TEXT.jackpotIn); cpSound('bonus'); cpLed(1.4); }
+  if (rain && rain.length) cpRain(rain);
+  if (cpState === 'DROPPING' || cpState === 'READY') cpSetState('PLAYING');
+  return true;
+}
+
+function cpNetOnPaid(p) {
+  if (!p || !cpNet) return;
+  if (p.bank != null && cpServer) { cpServer.bank = p.bank; cpUpdateJackpotDisplay(); }
+  for (const [uid, w] of Object.entries(p.paid || {})) {
+    const key = uid + ':' + ((w.ids && w.ids[0]) || '');
+    if (cpNet.paidSeen.has(key)) continue;
+    cpNet.paidSeen.add(key);
+    if (cpNet.paidSeen.size > 400) cpNet.paidSeen.delete(cpNet.paidSeen.values().next().value);
+    const amount = Number(w.amount) || 0;
+    if (me && uid === me.id) {
+      cpSetBalance(Number(me.coins) + amount);
+      cpNet.balanceAt = performance.now();
+      cpPresentWin(amount, w);
+    } else if (cpSim && amount > 0) {
+      cpFloat(cpNetExitX(w), 1.2, cpSim.cfg.machine.bedFrontZ + 1, (w.nick || '?') + ' +' + fmtCoins(amount), false, 'is-other');
+      if (w.jackpot) { cpToast(`💎 JACKPOT dla ${w.nick || 'gracza'}: +${fmtCoins(amount)} 🪙`); cpLed(1.6); }
+    }
+  }
+}
+
+function cpNetOnBonus(p) {
+  if (!p || !cpNet || cpNet.left) return;
+  if (p.bank != null && cpServer) { cpServer.bank = p.bank; cpUpdateJackpotDisplay(); }
+  const pm = cpView && cpView.pocketMats && cpView.pocketMats[p.pocket];
+  if (pm) pm.flash = 1;
+  const who = me && p.owner === me.id ? '' : p.nick ? ` — ${p.nick}` : '';
+  if (p.pocket === 'tower') { cpToast('🗼 Wieża się przechyla!' + (p.coins ? ` +${p.coins} monet` : '')); if (cpNet.role !== 'host') { cpSound('jackpot'); cpLed(2); } }
+  else if (p.pocket === 'gold') { cpToast('★ Kieszeń 1000! Moneta 1000 🪙 spada do automatu' + who); cpSound('bonus'); cpLed(1.2); }
+  else if (p.pocket === 'rain' && cpNet.role !== 'host') { cpToast(CP_TEXT.rain + who); cpSound('bonus'); cpLed(1.1); }
+}
+
+// Where on the rail a win happened (for its floating number).
+function cpNetExitX(info) {
+  const ids = (info && info.ids) || [];
+  for (const id of ids) if (cpNet && cpNet.exitX.has(String(id))) return cpNet.exitX.get(String(id));
+  return 0;
+}
+
+function cpNetExited(id, where, x, z) {
+  if (!cpNet) return;
+  cpNet.exitX.set(String(id), x);
+  if (cpNet.exitX.size > 300) cpNet.exitX.delete(cpNet.exitX.keys().next().value);
+  if (cpNet.role === 'host') {
+    cpNet.removed.push([String(id), where]);
+    cpNet.lastSent.delete(id);
+  }
+}
+
+// ── Host: stream the pile ──
+function cpNetHostSnap(nowMs) {
+  const n = cpNet;
+  if (!n) return;
+  if (performance.now() - n.beatOkAt > CP_HOST_SELF_DEMOTE_MS) { cpNetDemote(); return; }
+  if (!n.channel || nowMs - n.lastSnapAt < CP_SNAP_MS) return;
+  n.lastSnapAt = nowMs;
+  if (!n.viewers) { n.removed.length = 0; n.keyDue = true; return; }   // nobody watching: send nothing
+  const key = n.keyDue || (cpSim.motorOn && nowMs - n.lastKeyAt > CP_KEY_MS);
+  if (key) n.lastSent.clear();
+  const out = [];
+  for (const coin of cpSim.coins.values()) {
+    const t = coin.body.translation(), q = coin.body.rotation();
+    const l = n.lastSent.get(coin.id);
+    if (l && Math.abs(l[0] - t.x) < 0.02 && Math.abs(l[1] - t.y) < 0.02 && Math.abs(l[2] - t.z) < 0.02 &&
+        Math.abs(l[3] - q.x) < 0.003 && Math.abs(l[4] - q.y) < 0.003 && Math.abs(l[5] - q.z) < 0.003 && Math.abs(l[6] - q.w) < 0.003) continue;
+    n.lastSent.set(coin.id, [t.x, t.y, t.z, q.x, q.y, q.z, q.w]);
+    out.push({ id: coin.id, x: t.x, y: t.y, z: t.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, look: coin.look });
+  }
+  const motor = cpSim.motorOn ? 1 : 0;
+  if (!key && !out.length && !n.removed.length && !motor && motor === n.sentMotor) return;
+  const payload = {
+    e: n.epoch, u: me && me.id, h: Math.round(nowMs) / 1000, t: cpSim.time, mt: cpSim.mtime, ta: cpSim.tower ? cpSim.tower.angle : 0,
+    m: motor, k: key ? 1 : 0, c: cpCore.cpSnapEncode(out), r: n.removed.splice(0),
+  };
+  n.channel.send({ type: 'broadcast', event: 'snap', payload }).catch(() => {});
+  n.sentMotor = motor;
+  if (key) { n.keyDue = false; n.lastKeyAt = nowMs; }
+}
+
+// ── Viewer: render the stream ──
+function cpNetApplySnap(p) {
+  const n = cpNet;
+  if (!p || !n || n.role !== 'viewer' || !cpCore) return;
+  // Only the host the server named. During a handover the old host may still
+  // be sending for a moment; its picture is no longer the machine.
+  if (n.hostUser && p.u && p.u !== n.hostUser) return;
+  const now = performance.now() / 1000;
+  if (p.e !== n.epoch) {
+    // A new host (or our first frame): only a keyframe can start the picture.
+    if (!p.k) { cpNetAskKey(); return; }
+    n.epoch = p.e; n.offset = null; n.mech = [];
+    for (const c of n.coins.values()) c.s = c.s.slice(-1).map(s => ({ ...s, h: p.h - CP_SNAP_MS / 1000 }));
+  }
+  const o = now - p.h;
+  if (n.offset == null || o < n.offset) n.offset = o;
+  else n.offset += (o - n.offset) * 0.02;          // drift up slowly; snap down to the fastest delivery
+  n.mech.push({ h: p.h, t: p.t, mt: p.mt, ta: p.ta || 0 });
+  if (n.mech.length > 8) n.mech.shift();
+  n.motor = !!p.m;
+  const seen = p.k ? new Set() : null;
+  const gap = CP_SNAP_MS / 1000 * 1.6;
+  for (const e of cpCore.cpSnapDecode(p.c)) {
+    let c = n.coins.get(e.id);
+    if (!c) { c = { id: e.id, look: e.look, s: [] }; n.coins.set(e.id, c); }
+    c.look = e.look; c.ghost = false;
+    const last = c.s[c.s.length - 1];
+    // A coin that was still (so not sent) held its pose until the previous tick.
+    if (last && p.h - last.h > gap) c.s.push({ ...last, h: p.h - CP_SNAP_MS / 1000 });
+    c.s.push({ h: p.h, x: e.x, y: e.y, z: e.z, qx: e.qx, qy: e.qy, qz: e.qz, qw: e.qw });
+    if (c.s.length > 4) c.s.splice(0, c.s.length - 4);
+    if (seen) seen.add(e.id);
+  }
+  // Exits first, so a keyframe doesn't silently drop a coin that just fell.
+  for (const [id, where] of p.r || []) {
+    const c = n.coins.get(String(id));
+    if (c) { c.until = p.h; c.where = where; }
+  }
+  if (seen) for (const [id, c] of n.coins) if (!seen.has(id) && !c.ghost && c.until == null) n.coins.delete(id);
+}
+
+function cpNetRenderTime(nowMs) {
+  return cpNet.offset == null ? Infinity : nowMs / 1000 - cpNet.offset - CP_INTERP_S;
+}
+
+function cpNetViewerFrame(nowMs) {
+  const n = cpNet;
+  if (!n || !cpSim || n.role === 'host') return;
+  n.rt = cpNetRenderTime(nowMs);
+  const m = cpNetMechAt(n.rt);
+  if (m) cpSim.poseMechanics(m.t, m.mt, m.ta);
+  cpPusherPrev = cpSim.pusherOffset;
+  if (n.motor !== cpSim.motorOn && n.epoch) {
+    cpMotor(n.motor);
+    if (n.motor && cpState === 'READY') cpSetState('PLAYING');
+    else if (!n.motor && cpState === 'PLAYING') cpSetState('READY');
+  }
+  for (const [id, c] of n.coins) {
+    if (c.until != null && n.rt >= c.until) {
+      const s = c.s[c.s.length - 1];
+      n.exitX.set(id, s.x);
+      if (n.exitX.size > 300) n.exitX.delete(n.exitX.keys().next().value);
+      cpExitFx(c.where === 'p', s.x, s.z, c.look === 'gold' || c.look === 'jackpot');
+      n.coins.delete(id);
+    } else if (c.ghost && nowMs - c.born > CP_GHOST_MS) n.coins.delete(id);
+  }
+}
+
+function cpNetMechAt(rt) {
+  const list = cpNet.mech;
+  if (!list.length) return null;
+  if (rt <= list[0].h) return list[0];
+  for (let i = 0; i < list.length - 1; i++) {
+    const a = list[i], b = list[i + 1];
+    if (rt < b.h) {
+      const k = (rt - a.h) / Math.max(1e-6, b.h - a.h);
+      return { t: a.t + (b.t - a.t) * k, mt: a.mt + (b.mt - a.mt) * k, ta: a.ta + (b.ta - a.ta) * k };
+    }
+  }
+  const last = list[list.length - 1];
+  if (!cpNet.motor || !Number.isFinite(rt)) return last;
+  // Running motor, stream late: keep the block moving a little (≤ 0.4 s).
+  const dt = Math.min(0.4, rt - last.h) * cpSim.cfg.pusher.speed;
+  return { t: last.t + dt, mt: last.mt + dt, ta: last.ta };
+}
+
+function cpNetPose(c, rt, tmp) {
+  const s = c.s;
+  let a = s[s.length - 1], b = null, k = 0;
+  if (Number.isFinite(rt)) {
+    if (rt <= s[0].h) a = s[0];
+    else for (let i = 0; i < s.length - 1; i++) {
+      if (rt < s[i + 1].h) { a = s[i]; b = s[i + 1]; k = (rt - a.h) / Math.max(1e-6, b.h - a.h); break; }
+    }
+  }
+  if (!b) { tmp.p.set(a.x, a.y, a.z); tmp.q.set(a.qx, a.qy, a.qz, a.qw).normalize(); return; }
+  tmp.p.set(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k);
+  tmp.q2.set(a.qx, a.qy, a.qz, a.qw).normalize();
+  tmp.q.set(b.qx, b.qy, b.qz, b.qw).normalize();
+  tmp.q2.slerp(tmp.q, k); tmp.q.copy(tmp.q2);
+}
+
+// A coin just thrown, shown standing in the slot until the host's stream
+// picks it up (then it falls exactly as the host's physics says).
+function cpNetGhost(coin, x) {
+  const id = String(coin.id);
+  if (cpNet.coins.has(id)) return;
+  const D = cpSim.cfg.drop;
+  const rt = Number.isFinite(cpNet.rt) ? cpNet.rt : 0;
+  const q = cpCore.cpQuatYXZ(0, Math.PI / 2, 0);
+  cpNet.coins.set(id, { id, ghost: true, born: performance.now(), look: cpCore.cpLookFor(coin.kind, Number(coin.value) || 0),
+    s: [{ h: rt + CP_INTERP_S, x: Math.max(D.minX, Math.min(D.maxX, x)), y: D.y, z: D.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w }] });
+}
+
+// Seed a new viewer's picture from the saved pile, so it isn't empty while
+// the first keyframe is on its way.
+function cpNetSeedViewer(state) {
+  const layout = state.layout && state.layout.v === 1 && Array.isArray(state.layout.coins) ? state.layout.coins : [];
+  const byId = new Map((state.coins || []).map(c => [String(c.id), c]));
+  for (const row of layout) {
+    const c = byId.get(String(row[0]));
+    if (!c || row.length !== 8) continue;
+    cpNet.coins.set(String(c.id), { id: String(c.id), look: cpCore.cpLookFor(c.kind, Number(c.value) || 0),
+      s: [{ h: 0, x: row[1], y: row[2], z: row[3], qx: row[4], qy: row[5], qz: row[6], qw: row[7] }] });
+  }
+}
+
+// The pile as this viewer last saw it, in save_layout's format.
+function cpNetLayout() {
+  const coins = [];
+  for (const c of cpNet.coins.values()) {
+    if (c.ghost || c.until != null) continue;
+    const s = c.s[c.s.length - 1];
+    coins.push([c.id, s.x, s.y, s.z, s.qx, s.qy, s.qz, s.qw]);
+  }
+  return { v: 1, coins };
+}
+
+// The host went away and the server gave US the lease: carry on from the
+// last thing we saw, against the authoritative coin list.
+async function cpNetPromote() {
+  const n = cpNet;
+  if (!n || n.promoting) return;
+  n.promoting = true;
+  const token = cpLoadToken;
+  try {
+    const state = await cpInvoke('state');
+    if (token !== cpLoadToken || cpNet !== n || !n.lease || n.left) return;
+    const seen = cpNetLayout();
+    const mech = n.mech[n.mech.length - 1];
+    cpSim.clearCoins();
+    cpSim.collecting = true;
+    if (seen.coins.length) {
+      cpSim.restore(seen, state.coins || [], 7);
+      if (mech) cpSim.resumeAt(mech.t, mech.mt, mech.ta);
+    } else {
+      // Never saw the pile: the saved one, settled out of sight like a load.
+      const layout = state.layout && state.layout.v === 1 ? state.layout : null;
+      if (layout) cpSim.restore(layout, state.coins || [], 7); else cpSim.layoutPile(state.coins || [], 1);
+      if (!(await cpSettleHidden(token))) return;
+    }
+    cpServer.bank = state.bank; cpUpdateJackpotDisplay();
+    cpLastMotorAt = performance.now() - (state.lastThrowAgoMs ?? 1e9);
+    const idleMs = ((cpServer && cpServer.motorIdleS) || 60) * 1000;
+    cpSim.motorOn = performance.now() - cpLastMotorAt < idleMs;
+    n.coins.clear(); n.mech = []; n.offset = null; n.epoch = null;
+    n.lastSent.clear(); n.removed = []; n.keyDue = true;
+    n.epoch = cpUuid().slice(0, 10);          // our stint: viewers wait for its keyframe
+    cpPending = [];
+    cpAcc = 0; cpLastFrame = performance.now();
+    n.role = 'host';
+    cpEmit('host_promoted', { coins: cpSim.coins.size });
+    cpNetRenderWho();
+  } catch (err) {
+    console.warn('coinpusher promote', err);
+  } finally {
+    n.promoting = false;
+  }
+}
+
+// We lost the lease (another client took over, or ours lapsed): stop
+// simulating and wait for the new host's keyframe, showing the pile as it was.
+function cpNetDemote() {
+  const n = cpNet;
+  if (!n || n.role !== 'host') return;
+  n.coins.clear();
+  for (const coin of cpSim.coins.values()) {
+    const t = coin.body.translation(), q = coin.body.rotation();
+    n.coins.set(String(coin.id), { id: String(coin.id), look: coin.look,
+      s: [{ h: 0, x: t.x, y: t.y, z: t.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w }] });
+  }
+  cpSim.clearCoins();
+  cpPending = [];
+  n.role = 'viewer'; n.lease = null; n.epoch = null; n.offset = null; n.mech = []; n.rt = Infinity;
+  n.motor = cpSim.motorOn;
+  cpEmit('host_demoted', {});
+  cpNetAskKey(true);
+  cpNetRenderWho();
 }
 
 // ── View: three.js ────────────────────────────────────────────────────────
@@ -1477,9 +1963,9 @@ function cpProject(x, y, z) {
   return { x: (v.x * 0.5 + 0.5) * r.width, y: (-v.y * 0.5 + 0.5) * r.height };
 }
 
-function cpFloat(x, y, z, text, gutter) {
+function cpFloat(x, y, z, text, gutter, cls) {
   if (!cpUi || !cpView) return;
-  const node = el('div', { className: 'cp-float' + (gutter ? ' is-gutter' : '') }, text);
+  const node = el('div', { className: 'cp-float' + (gutter ? ' is-gutter' : '') + (cls ? ' ' + cls : '') }, text);
   cpUi.stage.append(node);
   const p = cpProject(x, y, z);
   const t0 = performance.now();
@@ -1761,17 +2247,20 @@ function cpFrame(now) {
   cpAcc += dt;
   if (cpAudio) cpAudio.clinksThisFrame = 0;
 
-  // Motor: park after a minute without a coin (the server stops accepting
-  // prizes soon after — see MOTOR_IDLE_S in coinpusher-action).
+  const host = cpNet && cpNet.role === 'host';
+  // Motor: park after a minute without a coin from anybody (the server stops
+  // accepting prizes soon after — see MOTOR_IDLE_S in coinpusher-action).
   const idleMs = ((cpServer && cpServer.motorIdleS) || 60) * 1000;
-  if (cpSim.motorOn && performance.now() - cpLastMotorAt > idleMs && cpAuto.left <= 0) {
+  if (host && cpSim.motorOn && performance.now() - cpLastMotorAt > idleMs && cpAuto.left <= 0) {
     cpMotor(false);
     if (cpState === 'PLAYING') cpSetState('READY');
   }
 
   const t0 = performance.now();
   let steps = 0;
-  while (cpAcc >= PH.dt && steps < PH.maxStepsPerFrame) {
+  // Only the host simulates; a viewer poses everything from the stream.
+  if (!host) { cpAcc = 0; cpNetViewerFrame(now); }
+  while (host && cpAcc >= PH.dt && steps < PH.maxStepsPerFrame) {
     cpPusherPrev = cpSim.pusherOffset;
     const phaseBefore = cpCore.cpPusherPhase(cpSim.cfg.pusher, cpSim.time);
     cpSim.step();
@@ -1784,7 +2273,8 @@ function cpFrame(now) {
   // taking bigger (less accurate) steps.
   if (cpAcc > PH.dt * PH.maxStepsPerFrame) cpAcc = PH.dt;
   const physMs = performance.now() - t0;
-  const alpha = cpAcc / PH.dt;
+  const alpha = host ? cpAcc / PH.dt : 0;
+  if (host) cpNetHostSnap(now);
 
   cpDropX += (cpDropTarget - cpDropX) * Math.min(1, dt * 14);
   cpSyncScene(alpha, dt);
@@ -1803,7 +2293,15 @@ function cpSyncScene(alpha, dt) {
   const { meshes, tmp, pusher } = cpView;
   const counts = {};
   for (const look of CP_LOOKS) counts[look] = 0;
-  for (const coin of cpSim.coins.values()) {
+  if (cpNet && cpNet.role !== 'host') {
+    for (const c of cpNet.coins.values()) {
+      const mesh = meshes[c.look] || meshes.coin100;
+      cpNetPose(c, cpNet.rt, tmp);
+      tmp.m.compose(tmp.p, tmp.q, tmp.s);
+      const i = counts[c.look]++;
+      if (i < mesh.instanceMatrix.count) mesh.setMatrixAt(i, tmp.m);
+    }
+  } else for (const coin of cpSim.coins.values()) {
     const mesh = meshes[coin.look] || meshes.coin10;
     const b = coin.body;
     const t = b.translation(), q = b.rotation();
@@ -1902,7 +2400,8 @@ function cpToggleDebug() {
 }
 
 function cpDebugApply(over) {
-  if (!cpSim) return;
+  // Tuning changes the physics, which only the host runs.
+  if (!cpSim || !cpNet || cpNet.role !== 'host') { toast('Strojenie działa tylko u gospodarza automatu.'); return; }
   const layout = cpSim.snapshotLayout();
   const coins = Array.from(cpSim.coins.values(), c => ({ id: c.id, kind: c.kind, value: c.value }));
   const motor = cpSim.motorOn;
@@ -1914,6 +2413,7 @@ function cpDebugApply(over) {
   cpSim.settle(1);
   cpSim.motorOn = motor;
   cpPusherPrev = cpSim.pusherOffset;
+  cpRebuildView(cpQualityName);                 // the scene's moving parts belong to the old world
 }
 
 function cpDebugVolumes(on) {

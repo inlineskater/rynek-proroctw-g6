@@ -800,7 +800,51 @@
       return missing.length;
     }
 
+    // Viewers don't simulate: they pose the mechanisms from the host's
+    // snapshot so the renderer can read them exactly as it does on the host.
+    function poseMechanics(time, mtime, towerAngle) {
+      sim.time = time; sim.mtime = mtime;
+      sim.pusherOffset = cpPusherOffset(P, time);
+      pBody.setTranslation({ x: 0, y: P.height / 2, z: pusherZ0 + sim.pusherOffset }, false);
+      for (const m of sim.movers) {
+        if (m.name === 'turntable') {
+          const a = mtime * TT.speed;
+          m.body.setRotation({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, false);
+        } else if (m.name === 'gate') {
+          const u = (mtime % GT.period) / GT.period;
+          const up = u < GT.upFraction ? Math.sin(Math.PI * u / GT.upFraction) : 0;
+          const lo = -GT.height / 2 - 0.3, hi = GT.height / 2 - 0.35;
+          m.body.setTranslation({ x: m.x, y: lo + (hi - lo) * Math.min(1, up * 1.6), z: m.zc }, false);
+        } else if (m.name === 'tower' && sim.tower) {
+          sim.tower.angle = towerAngle || 0;
+          const a = sim.tower.angle;
+          m.body.setRotation({ x: Math.sin(a / 2), y: 0, z: 0, w: Math.cos(a / 2) }, false);
+        }
+      }
+    }
+
+    // A viewer taking over as host: carry on from the old host's last
+    // snapshot — the block, the discs, the gates and the tower exactly where
+    // the pile was last seen against them, so nothing is shoved on takeover.
+    function resumeAt(time, mtime, towerAngle) {
+      poseMechanics(time, mtime, towerAngle);
+      placePusher();
+      const T = sim.tower;
+      if (T) {
+        const a = Math.max(0, Math.min(TW.tipAngle, towerAngle || 0));
+        if (a > 0.01) { T.phase = 'back'; T.t = (1 - a / TW.tipAngle) * TW.returnTime; T.angle = a; }
+        else { T.phase = 'idle'; T.t = 0; T.angle = 0; T.checkIn = 60; }
+      }
+    }
+
+    // Empty the machine (every coin back to the pool) — a client switching
+    // between host and viewer keeps its world and only swaps the coins.
+    function clearCoins() {
+      for (const coin of [...sim.coins.values()]) recycleCoin(coin);
+    }
+
     Object.assign(sim, {
+      poseMechanics, resumeAt, clearCoins,
       spawnCoin, recycleCoin, dropCoin, step, settle, settleSteps, layoutPile, awakeCount, restlessCount,
       snapshotLayout, restore, classify, placePusher,
       dispose() { try { world.free(); } catch (_) {} try { events.free(); } catch (_) {} },
@@ -808,7 +852,62 @@
     return sim;
   }
 
+  // ── Snapshot codec (host → viewers, over Realtime) ───────────────────────
+  // 19 bytes a coin: uint32 id · 3 × int16 position (1/100 cm) · 4 × int16
+  // quaternion (× 32767) · uint8 look. Base64 so it rides a JSON broadcast.
+  const CP_LOOKS_ORDER = ['house', 'coin5', 'coin10', 'coin25', 'coin50', 'coin100', 'gold', 'jackpot'];
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function cpB64(bytes) {
+    let out = '';
+    for (let i = 0; i < bytes.length; i += 3) {
+      const a = bytes[i], b = bytes[i + 1], c = bytes[i + 2];
+      const n = (a << 16) | ((b || 0) << 8) | (c || 0);
+      out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + (i + 1 < bytes.length ? B64[(n >> 6) & 63] : '=') + (i + 2 < bytes.length ? B64[n & 63] : '=');
+    }
+    return out;
+  }
+  function cpUnB64(str) {
+    const clean = str.replace(/=+$/, '');
+    const out = new Uint8Array(Math.floor(clean.length * 3 / 4));
+    let o = 0;
+    for (let i = 0; i < clean.length; i += 4) {
+      const n = (B64.indexOf(clean[i]) << 18) | (B64.indexOf(clean[i + 1]) << 12) |
+                ((B64.indexOf(clean[i + 2]) & 63) << 6) | (B64.indexOf(clean[i + 3]) & 63);
+      if (o < out.length) out[o++] = (n >> 16) & 255;
+      if (o < out.length) out[o++] = (n >> 8) & 255;
+      if (o < out.length) out[o++] = n & 255;
+    }
+    return out;
+  }
+  function cpSnapEncode(entries) {
+    const buf = new ArrayBuffer(entries.length * 19);
+    const dv = new DataView(buf);
+    let o = 0;
+    for (const e of entries) {
+      dv.setUint32(o, Number(e.id) >>> 0); o += 4;
+      for (const v of [e.x, e.y, e.z]) { dv.setInt16(o, Math.max(-32767, Math.min(32767, Math.round(v * 100)))); o += 2; }
+      for (const v of [e.qx, e.qy, e.qz, e.qw]) { dv.setInt16(o, Math.round(Math.max(-1, Math.min(1, v)) * 32767)); o += 2; }
+      dv.setUint8(o, Math.max(0, CP_LOOKS_ORDER.indexOf(e.look))); o += 1;
+    }
+    return cpB64(new Uint8Array(buf));
+  }
+  function cpSnapDecode(str) {
+    const bytes = cpUnB64(str || '');
+    const dv = new DataView(bytes.buffer);
+    const out = [];
+    for (let o = 0; o + 19 <= bytes.length; o += 19) {
+      out.push({
+        id: String(dv.getUint32(o)),
+        x: dv.getInt16(o + 4) / 100, y: dv.getInt16(o + 6) / 100, z: dv.getInt16(o + 8) / 100,
+        qx: dv.getInt16(o + 10) / 32767, qy: dv.getInt16(o + 12) / 32767, qz: dv.getInt16(o + 14) / 32767, qw: dv.getInt16(o + 16) / 32767,
+        look: CP_LOOKS_ORDER[dv.getUint8(o + 18)] || 'coin100',
+      });
+    }
+    return out;
+  }
+
   root.CoinPusherCore = {
+    cpSnapEncode, cpSnapDecode,
     CP_CONFIG, cpCreateSim, cpPusherOffset, cpPusherPhase, cpShapeFor, cpLookFor, cpMergeConfig, cpRng, cpQuatXZ, cpQuatYXZ,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
