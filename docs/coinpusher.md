@@ -83,8 +83,13 @@ else. Whoever holds `coinpusher_shared.host_lease` is the host.
   wait 16 s, so a desktop in the room wins the race. A phone still hosts if
   nobody else is there.
 - **A host that leaves hands over at once.** Switching tabs, hiding the page
-  or logging out flushes its exits, saves the pile and `resign`s the lease.
-  Measured: ~1–3 s to a new host, against ~10 s when a tab is just killed.
+  or logging out (closing the tab too, via `visibilitychange`) flushes its
+  exits, saves the pile and `resign`s the lease.
+- **A resign frees the machine as if the lease had just lapsed.**
+  `host_seen_at` is set 8.1 s back, so a desktop takes over on its next beat
+  (measured ~3 s) and a phone only after its longer 16 s threshold (measured
+  ~11 s). Resetting it to NULL instead handed the machine to whichever client
+  beat first, usually a phone.
 - **A host whose beats stop getting through stops by itself** after 6.5 s
   (`CP_HOST_SELF_DEMOTE_MS`), before the server's 8 s TTL hands the machine to
   someone else. Two hosts must never stream together. A frozen laptop is the
@@ -158,6 +163,33 @@ samples (slerp for rotation). They pose the kinematic parts with
   active play. Two viewers for one hour is ~43 k messages.
 
 The first thing to lower if the quota ever bites is `CP_SNAP_MS`.
+
+### Polish: players strip, your coins, live feed
+
+- **Players strip** (`cpNetRenderWho`, bottom centre of the stage): everyone
+  at the machine now, i.e. `host_beat.players`, the players seen within
+  `VIEWER_SEEN_S`. The host comes first and is marked 🖥️. Each chip shows the
+  player's net for this session (`total_won − bet` of the open session row),
+  and you are „Ty". Phones show three chips plus „+N".
+- **Your coins glow.** A green ring (one extra `InstancedMesh`,
+  `cpView.ring`) is drawn with the same matrices as every coin you own, on
+  host and viewers alike.
+  - Ownership comes from a client-side `cpNet.owners` map filled from
+    `state.coins`, the drop answer, `spawn` (coin and its rain), the host's
+    `pocket` answers, and `bonus`, whose payload carries `ids` for exactly
+    this.
+  - The map is pruned on every exit.
+  - Normal blending, not additive: an additive glow disappears against
+    polished metal.
+  - It can be turned off in „?" (`cp.glow`).
+- **Live feed** (`cpLive`, top left): the last six wins and bonuses, newest
+  on top, fading with age.
+  - It is fed by `paid` and `bonus`.
+  - It is seeded on open from `state.recent`: the last 8 prize batches from
+    `coinpusher_exits`, grouped by `(paid_to, created_at)`, since one collect
+    is one transaction.
+  - It lives in the stage, not the side column, because full-page mode covers
+    the side column.
 
 ### Migration from private machines
 
@@ -304,6 +336,23 @@ Units are cm (gravity −981). +z points at the player.
   deliberately different object: big and heavy.
 
 ### Tuning notes (measured, not guessed)
+
+- **Pin-board vibrator** (`pins.unjamAfter` = 2 s, `unjamPins()`):
+  - About 1 coin in 60 rapid drops wedged in the pin field **for good**. A
+    shared machine never resets, so a day of play would slowly fill the board.
+  - A wedged coin is tilted out of the board's plane, its 3.3 cm diameter
+    spanning the 0.8 cm slot between the panes, so a sideways flick alone just
+    re-wedges it (37 flicks, still stuck).
+  - Any coin that has sat still in the pin field for 2 s is now squared back
+    into the plane (centred in the slot, 3 mm up) and flicked sideways.
+  - Measured: 60 drops every 0.12 s or 0.45 s, 3 seeds each → 0 stuck (was
+    1–2 per run).
+  - It touches only the pin field, never the beds, so what falls off the front
+    is still decided by the pusher alone. RTP after it (stake 100, 250 + 500
+    drops): uniform 98.3 %, centre 99.1 %, edges 98.2 % (before: 98.8 / 99.8 /
+    98.2).
+  - The check runs over all coins every 30 ticks, because a wedged coin is
+    usually asleep and the main loop skips sleepers.
 
 | Knob | Value | Why |
 |---|---|---|

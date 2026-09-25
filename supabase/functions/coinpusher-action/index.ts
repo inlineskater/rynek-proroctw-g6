@@ -263,6 +263,20 @@ async function handleState(user) {
     `;
     const nicks = await nicksOf(tx, [...coins.map(c => c.user_id), m.host_user, m.last_thrower]);
     const luck = await casinoLuck(tx);
+    // The last wins at the machine, to seed the HUD's live feed: one collect
+    // batch is one transaction, so (paid_to, created_at) groups a win.
+    const recent = await tx`
+      select e.paid_to::text as id, pr.nick, sum(e.value)::bigint as amount,
+             bool_or(c.kind = 'jackpot') as jackpot, e.created_at
+        from public.coinpusher_exits e
+        join public.profiles pr on pr.id = e.paid_to
+        left join public.coinpusher_coins c on c.id = e.coin_id
+       where e.where_to = 'prize' and e.paid_to is not null
+         and e.created_at > now() - interval '24 hours'
+       group by e.paid_to, pr.nick, e.created_at
+       order by e.created_at desc
+       limit 8
+    `;
     const hostAlive = m.host_seen_at && Date.now() - new Date(m.host_seen_at).getTime() < HOST_TTL_S * 1000;
     return {
       ok: true,
@@ -284,6 +298,8 @@ async function handleState(user) {
       casinoLuck: luck,
       goldMult: GOLD_MULT,
       topic: TOPIC,
+      recent: recent.map(r => ({ id: r.id, nick: r.nick, amount: Number(r.amount), jackpot: !!r.jackpot,
+        agoMs: Date.now() - new Date(r.created_at).getTime() })),
     };
   });
 }
@@ -304,7 +320,15 @@ async function handleHostBeat(user, payload) {
     let host = false, newLease = null;
     if (isHost(m, user.id, lease)) {
       if (resign || !visible) {
-        await tx`update public.coinpusher_shared set host_user = null, host_lease = null, host_seen_at = null where id = ${MACHINE}`;
+        // Free the machine as if the lease had just lapsed: a desktop can take
+        // over on its next beat, a phone only HOST_TTL_WEAK_S − HOST_TTL_S later —
+        // so a leaving host hands over to a desktop when there is one.
+        await tx`
+          update public.coinpusher_shared
+             set host_user = null, host_lease = null,
+                 host_seen_at = now() - make_interval(secs => ${HOST_TTL_S + 0.1}::double precision)
+           where id = ${MACHINE}
+        `;
       } else {
         await tx`update public.coinpusher_shared set host_seen_at = now() where id = ${MACHINE}`;
         host = true; newLease = lease;
@@ -325,9 +349,25 @@ async function handleHostBeat(user, payload) {
          and user_id <> ${cur ?? user.id}
     `;
     const nicks = await nicksOf(tx, [cur]);
+    // Who is at the machine now (the HUD's players strip): everyone seen in
+    // the last VIEWER_SEEN_S, host first, then by this session's net.
+    const players = await tx`
+      select p.user_id::text as id, pr.nick,
+             coalesce(s.total_won - s.bet, 0)::bigint as net
+        from public.coinpusher_players p
+        join public.profiles pr on pr.id = p.user_id
+        left join public.coinpusher_spins s
+          on s.id = p.session_id
+         and s.updated_at > now() - make_interval(secs => ${SESSION_GAP_S}::double precision)
+       where p.seen_at > now() - make_interval(secs => ${VIEWER_SEEN_S}::double precision)
+          or p.user_id = ${user.id}
+       order by (p.user_id = ${cur ?? user.id}) desc, net desc, pr.nick
+       limit 12
+    `;
     return {
       ok: true,
       host,
+      players: players.map(r => ({ id: r.id, nick: r.nick, host: r.id === cur, net: Number(r.net) })),
       lease: newLease,
       hostUser: cur,
       hostNick: cur ? nicks[cur] ?? null : null,
@@ -604,7 +644,8 @@ async function handlePocket(user, payload) {
     if (coins.length) {
       await tx`update public.coinpusher_shared set house_bank = ${bank}, updated_at = now() where id = ${MACHINE}`;
       const nick = owner ? (await nicksOf(tx, [owner]))[owner] ?? null : null;
-      broadcast([{ event: "bonus", payload: { pocket: kind, owner, nick, coins: coins.length, bank } }]);
+      // `ids` lets every viewer know who owns the new coins (their glow).
+      broadcast([{ event: "bonus", payload: { pocket: kind, owner, nick, coins: coins.length, ids: coins.map(c => String(c.id)), bank } }]);
     }
     return { ok: true, pocket: kind, coins: coins.map(coinOut), bank };
   });

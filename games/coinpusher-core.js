@@ -115,6 +115,10 @@
       rowGap: 3.7,
       spacingX: 5.0,
       radius: 0.28,
+      // A coin at rest in the pin field this long gets a small nudge (a
+      // cabinet's vibrator). ~1 in 60 rapid drops wedges for good otherwise,
+      // and a shared machine never resets, so the board would slowly fill.
+      unjamAfter: 2,
       // Pockets: a coin whose centre passes this band below the last row, inside
       // a pocket's x-range, triggers it once. Rewards are issued by the SERVER
       // from the machine's bank; the host only reports the pass.
@@ -438,6 +442,7 @@
       coin.pocketed = !!c.falling ? false : true;   // only freshly dropped coins can hit a pocket
       coin.spawnTick = sim.ticks;
       coin.ccd = false;
+      coin.jam = 0;
       const b = coin.body;
       b.setEnabled(true);
       b.setTranslation({ x: c.x, y: c.y, z: c.z }, true);
@@ -527,6 +532,7 @@
 
       world.step(events);
       sim.ticks++;
+      if (PN.enabled && PN.unjamAfter && sim.ticks % 30 === 0) unjamPins();
 
       const done = [];
       const maxS2 = PH.maxSpeed * PH.maxSpeed;
@@ -600,6 +606,34 @@
           _t.x = m.x; _t.y = lo + (hi - lo) * Math.min(1, up * 1.6); _t.z = m.zc;
           m.body.setNextKinematicTranslation(_t);
         }
+      }
+    }
+
+    // Pin-board vibrator: every 30 ticks, over ALL coins (a wedged coin may
+    // well be asleep, and the main loop skips sleepers). A coin that has sat
+    // still in the pin field for `unjamAfter` s is flicked sideways and a
+    // little up. Only the pin field: nothing on the beds is ever touched, so
+    // what falls off the front is still decided by the pusher alone.
+    const jamRnd = cpRng(97);
+    function unjamPins() {
+      const checks = Math.max(1, Math.round(PN.unjamAfter / PH.dt / 30));
+      for (const coin of sim.coins.values()) {
+        const b = coin.body, t = b.translation();
+        if (Math.abs(t.z - PN.z) > 1.2 || t.y < PN.pocketTop) { coin.jam = 0; continue; }
+        const v = b.linvel();
+        if (v.x * v.x + v.y * v.y + v.z * v.z > 4) { coin.jam = 0; continue; }   // still moving (> 2 cm/s)
+        coin.jam = (coin.jam || 0) + 1;
+        if (coin.jam < checks) continue;
+        coin.jam = 0;
+        // A wedged coin is almost always tilted out of the board's plane, its
+        // diameter spanning the 0.8 cm slot between the panes: square it back
+        // into the plane (centred in the slot, 3 mm up) before the flick, or
+        // it just wedges again in the same place.
+        b.setTranslation({ x: t.x, y: t.y + 0.3, z: PN.z }, true);
+        b.setRotation(cpQuatYXZ(0, Math.PI / 2, jamRnd() * Math.PI * 2), true);
+        b.setLinvel({ x: (jamRnd() < 0.5 ? -1 : 1) * (10 + jamRnd() * 15), y: 12, z: 0 }, true);
+        b.setAngvel({ x: 0, y: 0, z: (jamRnd() - 0.5) * 6 }, true);
+        sim.stats.unjammed = (sim.stats.unjammed || 0) + 1;
       }
     }
 

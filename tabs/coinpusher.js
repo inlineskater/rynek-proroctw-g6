@@ -53,9 +53,10 @@ const CP_TEXT = {
   jackpot: 'JACKPOT',
   bigWin: 'DUŻA WYGRANA',
   help: 'Kliknij (albo dotknij) w dowolnym miejscu automatu — moneta spadnie dokładnie tam. Możesz klikać ile chcesz. Działa też WRZUĆ i spacja. ←/→ przesuwają zrzut. To JEDEN automat dla wszystkich: widzisz monety innych graczy, a oni Twoje. Moneta, którą wrzucisz, należy do Ciebie — gdy spadnie z przedniej krawędzi, wygrywasz ją Ty, niezależnie od tego, czyj rzut ją zepchnął. Monety automatu (bez właściciela) dostaje ostatni wrzucający. Boczne rynny zabiera automat — część ich wartości wraca jako monety 1000, żetony jackpot i deszcz monet. Fizykę liczy przeglądarka jednego z graczy (gospodarz) i transmituje ją reszcie, więc obraz może być opóźniony o ułamek sekundy. Silnik staje po minucie bez wrzutu i rusza przy następnej monecie.',
-  hostYou: '🖥️ Twój komputer prowadzi automat',
-  hostOther: '📡 Na żywo od',
+  hostYou: '🖥️ Twój komputer liczy fizykę',
+  hostOther: '📡 Na żywo',
   hostNone: '⏳ Szukam gospodarza…',
+  glow: 'Podświetlaj moje monety',
 };
 
 const CP_STATES = ['LOADING', 'READY', 'DROPPING', 'PLAYING', 'BONUS', 'BIG_WIN', 'PAUSED', 'CONNECTION_LOST', 'ERROR'];
@@ -133,6 +134,7 @@ let cpShake = 0;
 let cpWinHold = 0;
 let cpLayoutSig = '';
 let cpNet = null;          // shared-machine netcode: role, lease, channel, viewer coins
+let cpLive = [];           // live wins feed: [{text, cls, at}], newest first
 let cpPageMode = true;     // full-page while playing; ✕ / Esc returns to the normal tab layout
 
 function cpEmit(type, detail) {
@@ -212,9 +214,22 @@ function cpStore(key, value) {
     .cp-float.is-gutter { color: #9aa0a6; font-size: 13px; font-weight: 600; }
     .cp-float.is-other { color: #9fd7ff; font-size: 14px; }
     .cp-float.is-nick { color: #e8dcc2; font-size: 11px; font-weight: 600; opacity: .85; }
-    .cp-who { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; font-size: 11px;
-      color: #e8dcc2; background: rgba(0,0,0,.45); border: 1px solid rgba(255,214,140,.18); pointer-events: none; white-space: nowrap; }
-    @media (max-width: 640px) { .cp-who { bottom: 170px; } }
+    .cp-players { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); display: flex; gap: 4px; flex-wrap: wrap;
+      justify-content: center; align-items: center; width: max-content; max-width: calc(100% - 20px); pointer-events: none; font-size: 11px; }
+    .cp-players > small { color: #cdb58a; margin-right: 2px; white-space: nowrap; }
+    .cp-chip { display: inline-flex; gap: 5px; align-items: baseline; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+      color: #e8dcc2; background: rgba(0,0,0,.5); border: 1px solid rgba(255,214,140,.2); font-variant-numeric: tabular-nums; }
+    .cp-chip.is-me { border-color: rgba(125,255,184,.7); }
+    .cp-chip b { font-weight: 700; color: #b0a89a; }
+    .cp-chip b.is-up { color: #9ff0b0; }
+    .cp-live { position: absolute; left: 10px; top: 64px; display: flex; flex-direction: column; gap: 3px; pointer-events: none;
+      font-size: 12px; max-width: 46%; }
+    .cp-live-row { padding: 2px 8px; border-radius: 8px; background: rgba(0,0,0,.45); color: #f1e3c4; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; transition: opacity .6s; font-variant-numeric: tabular-nums; }
+    .cp-live-row.is-me { color: #9ff0b0; }
+    .cp-live-row.is-jp { color: #fff3c9; background: rgba(120,70,0,.6); font-weight: 700; }
+    .cp-live-row.is-bonus { color: #9fd7ff; }
+    @media (max-width: 640px) { .cp-players { bottom: 170px; } .cp-live { top: 104px; font-size: 11px; } }
     .cp-banner { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(.9); opacity: 0; pointer-events: none; text-align: center;
       font: 900 44px/1 inherit; letter-spacing: .08em; color: #fff3c9; text-shadow: 0 0 24px rgba(255,190,60,.8), 0 4px 10px rgba(0,0,0,.8); transition: opacity .25s, transform .35s; z-index: 2; }
     .cp-banner small { display: block; font-size: 20px; margin-top: 8px; color: #ffe39a; }
@@ -391,6 +406,8 @@ async function cpBuildMachine(state, token) {
   cpSim.motorOn = false;                        // parked until the first coin
   cpSim.collecting = true;
   cpNetReset();
+  cpNetLearnOwners(state.coins);
+  cpLiveSeed(state.recent);
 
   // Who runs the physics? The first visible client to ask becomes the host;
   // everyone else watches the host's stream.
@@ -510,7 +527,8 @@ function cpBuildDom() {
   const [lastBox, lastWin] = kpi(CP_TEXT.lastWin, 'is-win');
   const [totBox, totalWin] = kpi(CP_TEXT.totalWin);
   const status = el('div', { className: 'cp-status', role: 'status', 'aria-live': 'polite' }, '');
-  const who = el('div', { className: 'cp-who' }, CP_TEXT.hostNone);
+  const who = el('div', { className: 'cp-players', 'aria-label': 'Przy automacie' }, el('small', {}, CP_TEXT.hostNone));
+  const live = el('div', { className: 'cp-live', 'aria-live': 'polite', 'aria-label': 'Wygrane na żywo' });
   const hudTop = el('div', { className: 'cp-hud-top' }, balBox, lastBox, totBox);
 
   const betLabel = el('span', {}, '—');
@@ -537,7 +555,7 @@ function cpBuildDom() {
 
   const banner = el('div', { className: 'cp-banner', 'aria-live': 'assertive' });
   const overlay = el('div', { className: 'cp-overlay' });
-  stage.append(hudTop, status, who, tools, hudBot, banner, overlay);
+  stage.append(hudTop, status, who, live, tools, hudBot, banner, overlay);
 
   const leaders = el('div', { className: 'cp-card' }, el('h4', {}, '🏆 Ten tydzień'));
   const feed = el('div', { className: 'cp-card' }, el('h4', {}, '🪙 Ostatnie sesje'));
@@ -552,7 +570,7 @@ function cpBuildDom() {
   const wrap = el('div', { className: 'cp-wrap' }, hero, el('div', {}, stage), side);
   root.replaceChildren(wrap);
 
-  cpUi = { root: wrap, stage, overlay, status, who, balance, lastWin, totalWin, betLabel, betMinus, betPlus, drop, autoBtn, autoSel,
+  cpUi = { root: wrap, stage, overlay, status, who, live, balance, lastWin, totalWin, betLabel, betMinus, betPlus, drop, autoBtn, autoSel,
     turbo, page, sound, cam, quality, full, help, banner, leaders, feed, helpBox: null, floats: [], sessionNote: null };
 
   stage.addEventListener('pointermove', cpOnPointer);
@@ -863,6 +881,7 @@ async function cpOnPocket(coin, name) {
     const res = await cpInvoke('pocket', { pocket: name, coinId: coin.id, lease: cpNet.lease });
     if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
     if (!res.coins || !res.coins.length || !cpSim || cpNet.role !== 'host') return;
+    cpNetLearnOwners(res.coins);
     cpEmit('bonus_triggered', { type: 'pocket_' + name, coins: res.coins.length });
     if (name === 'rain') cpRain(res.coins);
     else for (const c of res.coins) cpSim.dropCoin(c, x);
@@ -878,6 +897,7 @@ async function cpOnTowerTip(count) {
     const res = await cpInvoke('pocket', { pocket: 'tower', lease: cpNet.lease });
     if (cpServer) { cpServer.bank = res.bank; cpUpdateJackpotDisplay(); }
     if (!res.coins || !res.coins.length || !cpSim || cpNet.role !== 'host') return;
+    cpNetLearnOwners(res.coins);
     cpEmit('bonus_triggered', { type: 'tower', coins: res.coins.length });
     const T = cpSim.tower, TW = cpSim.cfg.tower;
     res.coins.forEach((c, i) => setTimeout(() => {
@@ -979,6 +999,8 @@ function cpNetReset() {
     lastSent: new Map(), removed: [], keyDue: true, lastSnapAt: 0, lastKeyAt: 0, sentMotor: 0,
     // both
     spawned: new Set(), paidSeen: new Set(), exitX: new Map(),
+    owners: new Map(),     // coin id → owner id (the glow on your own coins)
+    players: [],           // who is at the machine (from the beat)
   };
   cpPending = [];
 }
@@ -1009,6 +1031,8 @@ function cpNetApplyBeat(res, initial) {
   cpNet.hostUser = res.hostUser || null;
   cpNet.hostNick = res.hostNick || null;
   cpNet.viewers = Number(res.viewers) || 0;
+  if (Array.isArray(res.players)) cpNet.players = res.players;
+  cpLiveRender();
   // A win lands on the thrower's account whoever reported it; the beat is
   // the backstop for a missed `paid`. Not right after a throw, whose answer
   // may be newer than this one.
@@ -1033,12 +1057,62 @@ function cpNetApplyBeat(res, initial) {
   cpNetRenderWho();
 }
 
+// The players strip: who is at the machine right now, the host marked, and
+// each player's net this session (from the beat, so ≤ 3 s old).
 function cpNetRenderWho() {
   if (!cpUi || !cpUi.who || !cpNet) return;
-  const n = cpNet.viewers + (cpNet.hostUser ? 1 : 0);
-  const people = n > 1 ? ` · 👥 ${n} przy automacie` : '';
-  cpUi.who.textContent = cpNet.role === 'host' ? CP_TEXT.hostYou + people
-    : cpNet.hostUser ? `${CP_TEXT.hostOther}: ${cpNet.hostNick || '—'}${people}` : CP_TEXT.hostNone;
+  const label = cpNet.role === 'host' ? CP_TEXT.hostYou
+    : cpNet.hostUser ? CP_TEXT.hostOther : CP_TEXT.hostNone;
+  const list = cpNet.players || [];
+  const max = window.matchMedia && matchMedia('(max-width: 640px)').matches ? 3 : 8;
+  const chips = list.slice(0, max).map(p => {
+    const mine = me && p.id === me.id;
+    const net = Number(p.net) || 0;
+    return el('span', { className: 'cp-chip' + (mine ? ' is-me' : ''), title: p.host ? 'Gospodarz: liczy fizykę automatu' : '' },
+      (p.host ? '🖥️ ' : '') + (mine ? 'Ty' : p.nick || '?'),
+      el('b', { className: net > 0 ? 'is-up' : '' }, net ? (net > 0 ? '+' : '−') + fmtCoins(Math.abs(net)) : ''));
+  });
+  if (list.length > max) chips.push(el('span', { className: 'cp-chip' }, '+' + (list.length - max)));
+  cpUi.who.replaceChildren(el('small', {}, label), ...chips);
+}
+
+// ── Coin owners (the glow on your own coins) ──
+function cpNetLearnOwners(list) {
+  if (!cpNet || !list) return;
+  for (const c of list) if (c && c.owner) cpNet.owners.set(String(c.id), c.owner);
+}
+
+function cpGlowOn() { return cpStore('glow') !== false; }
+
+// ── Live wins feed ──
+const CP_LIVE_MAX = 6;
+function cpLiveAdd(text, cls, at) {
+  cpLive.unshift({ text, cls: cls || '', at: at || Date.now() });
+  if (cpLive.length > CP_LIVE_MAX) cpLive.length = CP_LIVE_MAX;
+  cpLiveRender();
+}
+
+function cpLiveSeed(recent) {
+  cpLive = [];
+  for (const r of (recent || []).slice().reverse()) {
+    const mine = me && r.id === me.id;
+    cpLive.unshift({ text: (mine ? 'Ty' : r.nick || '?') + ' +' + fmtCoins(r.amount) + (r.jackpot ? ' 💎' : ''),
+      cls: r.jackpot ? 'is-jp' : mine ? 'is-me' : '', at: Date.now() - (Number(r.agoMs) || 0) });
+  }
+  cpLive.length = Math.min(cpLive.length, CP_LIVE_MAX);
+  cpLiveRender();
+}
+
+function cpLiveRender() {
+  if (!cpUi || !cpUi.live) return;
+  const max = window.matchMedia && matchMedia('(max-width: 640px)').matches ? 3 : CP_LIVE_MAX;
+  const now = Date.now();
+  cpUi.live.replaceChildren(...cpLive.slice(0, max).map(e => {
+    const row = el('div', { className: 'cp-live-row' + (e.cls ? ' ' + e.cls : '') }, e.text);
+    // Fresh wins are bright; anything older than a couple of minutes recedes.
+    row.style.opacity = String(Math.max(0.35, 1 - (now - e.at) / 180000));
+    return row;
+  }));
 }
 
 function cpNetConnect() {
@@ -1094,6 +1168,7 @@ function cpNetSpawn(coin, x, rain) {
   const id = String(coin.id);
   if (!cpNet || cpNet.spawned.has(id)) return false;
   cpNet.spawned.add(id);
+  cpNetLearnOwners([coin, ...(rain || [])]);
   if (cpNet.spawned.size > 600) cpNet.spawned.delete(cpNet.spawned.values().next().value);
   cpLastMotorAt = performance.now();
   if (cpNet.role === 'host') {
@@ -1118,6 +1193,11 @@ function cpNetOnPaid(p) {
     cpNet.paidSeen.add(key);
     if (cpNet.paidSeen.size > 400) cpNet.paidSeen.delete(cpNet.paidSeen.values().next().value);
     const amount = Number(w.amount) || 0;
+    if (amount > 0) {
+      const mineWin = me && uid === me.id;
+      cpLiveAdd((mineWin ? 'Ty' : w.nick || '?') + ' +' + fmtCoins(amount) + (w.jackpot ? ' 💎' : w.gold ? ' 🟡' : ''),
+        w.jackpot ? 'is-jp' : mineWin ? 'is-me' : '');
+    }
     if (me && uid === me.id) {
       cpSetBalance(Number(me.coins) + amount);
       cpNet.balanceAt = performance.now();
@@ -1134,7 +1214,11 @@ function cpNetOnBonus(p) {
   if (p.bank != null && cpServer) { cpServer.bank = p.bank; cpUpdateJackpotDisplay(); }
   const pm = cpView && cpView.pocketMats && cpView.pocketMats[p.pocket];
   if (pm) pm.flash = 1;
+  if (p.owner && Array.isArray(p.ids)) for (const id of p.ids) cpNet.owners.set(String(id), p.owner);
   const who = me && p.owner === me.id ? '' : p.nick ? ` — ${p.nick}` : '';
+  const whose = me && p.owner === me.id ? ' — Ty' : who;
+  const line = { tower: `🗼 Wieża +${p.coins || 0} monet${whose}`, gold: `★ Moneta 1000${whose}`, rain: `🌧️ Deszcz monet${whose}` }[p.pocket];
+  if (line) cpLiveAdd(line, 'is-bonus');
   if (p.pocket === 'tower') { cpToast('🗼 Wieża się przechyla!' + (p.coins ? ` +${p.coins} monet` : '')); if (cpNet.role !== 'host') { cpSound('jackpot'); cpLed(2); } }
   else if (p.pocket === 'gold') { cpToast('★ Kieszeń 1000! Moneta 1000 🪙 spada do automatu' + who); cpSound('bonus'); cpLed(1.2); }
   else if (p.pocket === 'rain' && cpNet.role !== 'host') { cpToast(CP_TEXT.rain + who); cpSound('bonus'); cpLed(1.1); }
@@ -1151,6 +1235,7 @@ function cpNetExited(id, where, x, z) {
   if (!cpNet) return;
   cpNet.exitX.set(String(id), x);
   if (cpNet.exitX.size > 300) cpNet.exitX.delete(cpNet.exitX.keys().next().value);
+  cpNet.owners.delete(String(id));
   if (cpNet.role === 'host') {
     cpNet.removed.push([String(id), where]);
     cpNet.lastSent.delete(id);
@@ -1225,7 +1310,7 @@ function cpNetApplySnap(p) {
     const c = n.coins.get(String(id));
     if (c) { c.until = p.h; c.where = where; }
   }
-  if (seen) for (const [id, c] of n.coins) if (!seen.has(id) && !c.ghost && c.until == null) n.coins.delete(id);
+  if (seen) for (const [id, c] of n.coins) if (!seen.has(id) && !c.ghost && c.until == null) { n.coins.delete(id); n.owners.delete(id); }
 }
 
 function cpNetRenderTime(nowMs) {
@@ -1251,6 +1336,7 @@ function cpNetViewerFrame(nowMs) {
       if (n.exitX.size > 300) n.exitX.delete(n.exitX.keys().next().value);
       cpExitFx(c.where === 'p', s.x, s.z, c.look === 'gold' || c.look === 'jackpot');
       n.coins.delete(id);
+      n.owners.delete(id);
     } else if (c.ghost && nowMs - c.born > CP_GHOST_MS) n.coins.delete(id);
   }
 }
@@ -1337,6 +1423,7 @@ async function cpNetPromote() {
     if (token !== cpLoadToken || cpNet !== n || !n.lease || n.left) return;
     const seen = cpNetLayout();
     const mech = n.mech[n.mech.length - 1];
+    cpNetLearnOwners(state.coins);
     cpSim.clearCoins();
     cpSim.collecting = true;
     if (seen.coins.length) {
@@ -1420,6 +1507,7 @@ function cpInitView(quality) {
 
   cpView = { T, renderer, scene, camera, canvas, pmrem, Q, meshes: {}, looks: {}, tmp: {
     m: new T.Matrix4(), p: new T.Vector3(), q: new T.Quaternion(), q2: new T.Quaternion(), s: new T.Vector3(1, 1, 1), v: new T.Vector3(),
+    m2: new T.Matrix4(), sj: new T.Vector3(1, 1, 1),
   }, leds: [], ledLevel: 0, camT: 0, perfSamples: [], adapted: false };
 
   cpBuildLights();
@@ -1598,6 +1686,21 @@ function cpBuildCoinMeshes() {
     scene.add(mesh);
     cpView.meshes[look] = mesh;
   }
+  // Your own coins in the shared pile: a green ring round the rim, drawn with
+  // the same matrices as the coins it marks. Normal blending on purpose: an
+  // additive glow disappears against polished metal.
+  const rr = shapes.coin.r + 0.08;
+  const ringGeo = new T.TorusGeometry(rr, 0.15, 6, 40);
+  ringGeo.rotateX(Math.PI / 2);                       // into the coin's plane (its axis is Y)
+  const ring = new T.InstancedMesh(ringGeo, new T.MeshBasicMaterial({ color: 0x3dff8a, transparent: true, opacity: 0.8,
+    depthWrite: false }), cap);
+  ring.instanceMatrix.setUsage(T.DynamicDrawUsage);
+  ring.count = 0;
+  ring.frustumCulled = false;
+  ring.renderOrder = 2;
+  scene.add(ring);
+  cpView.ring = ring;
+  cpView.ringJackpot = (shapes.jackpot.r + 0.08) / rr;
 }
 
 function cpBrushed(w, h, tint, lines) {
@@ -2186,9 +2289,11 @@ function cpToggleHelp() {
     'aria-label': 'Głośność', oninput: e => { cpStore('volume', Number(e.target.value)); if (cpAudio) cpAudio.master.gain.value = Number(e.target.value) * 0.8; } });
   const rm = el('input', { type: 'checkbox', checked: cpReducedMotion,
     onchange: e => { cpReducedMotion = e.target.checked; cpStore('reducedMotion', cpReducedMotion); } });
+  const glow = el('input', { type: 'checkbox', checked: cpGlowOn(), onchange: e => cpStore('glow', e.target.checked) });
   const box = el('div', { className: 'cp-help', role: 'dialog', 'aria-label': 'Pomoc' },
     el('div', {}, CP_TEXT.help),
     el('label', {}, '🔊 Głośność', vol),
+    el('label', {}, glow, CP_TEXT.glow),
     el('label', {}, rm, 'Ogranicz ruch (bez drgań kamery i konfetti)'),
     el('div', { className: 'cp-note' }, 'Skróty: ←/→ zrzut, spacja wrzut, ↑/↓ stawka.'));
   cpUi.stage.append(box);
@@ -2223,7 +2328,7 @@ function cpUpdateCamera(dt) {
   let sway = 0;
   if (!cpReducedMotion) sway = cpCameraMode === 'CINEMATIC' ? Math.sin(cpView.camT * 0.18) * 9 : Math.sin(cpView.camT * 0.25) * 0.6;
   const tx = c.pos[0] + sway, ty = c.pos[1] * fit, tz = c.pos[2] * fit;
-  const k = 1 - Math.pow(0.001, dt);
+  const k = Math.min(1, Math.max(0, 1 - Math.pow(0.001, dt)));
   camera.position.x += (tx - camera.position.x) * k;
   camera.position.y += (ty - camera.position.y) * k;
   camera.position.z += (tz - camera.position.z) * k;
@@ -2243,6 +2348,12 @@ function cpFrame(now) {
   const PH = cpSim.cfg.physics;
   let dt = (now - cpLastFrame) / 1000;
   cpLastFrame = now;
+  // A rAF timestamp is the frame's START, so after a long task (loading,
+  // shader compile) it can be earlier than the performance.now() cpResume
+  // stored — a negative dt of seconds, which the camera's exponential ease
+  // turns into a jump of millions of units (a black screen that slowly
+  // "flies in").
+  if (!(dt > 0)) dt = 0;
   if (dt > 0.25) dt = 0.25;
   cpAcc += dt;
   if (cpAudio) cpAudio.clinksThisFrame = 0;
@@ -2290,9 +2401,19 @@ function cpFrame(now) {
 }
 
 function cpSyncScene(alpha, dt) {
-  const { meshes, tmp, pusher } = cpView;
+  const { meshes, tmp, pusher, ring } = cpView;
   const counts = {};
   for (const look of CP_LOOKS) counts[look] = 0;
+  // Ring round each of MY coins, if the player wants them marked.
+  const owners = cpNet && cpGlowOn() && me ? cpNet.owners : null;
+  let rings = 0;
+  const mark = (id, look) => {
+    if (!ring || !owners || owners.get(String(id)) !== me.id || rings >= ring.instanceMatrix.count) return;
+    if (look === 'jackpot') {
+      tmp.sj.set(cpView.ringJackpot, 1, cpView.ringJackpot);
+      ring.setMatrixAt(rings++, tmp.m2.compose(tmp.p, tmp.q, tmp.sj));
+    } else ring.setMatrixAt(rings++, tmp.m);
+  };
   if (cpNet && cpNet.role !== 'host') {
     for (const c of cpNet.coins.values()) {
       const mesh = meshes[c.look] || meshes.coin100;
@@ -2300,6 +2421,7 @@ function cpSyncScene(alpha, dt) {
       tmp.m.compose(tmp.p, tmp.q, tmp.s);
       const i = counts[c.look]++;
       if (i < mesh.instanceMatrix.count) mesh.setMatrixAt(i, tmp.m);
+      mark(c.id, c.look);
     }
   } else for (const coin of cpSim.coins.values()) {
     const mesh = meshes[coin.look] || meshes.coin10;
@@ -2317,11 +2439,17 @@ function cpSyncScene(alpha, dt) {
     tmp.m.compose(tmp.p, tmp.q, tmp.s);
     const i = counts[coin.look]++;
     if (i < mesh.instanceMatrix.count) mesh.setMatrixAt(i, tmp.m);
+    mark(coin.id, coin.look);
   }
   for (const look of CP_LOOKS) {
     const m = meshes[look];
     m.count = Math.min(counts[look], m.instanceMatrix.count);
     m.instanceMatrix.needsUpdate = true;
+  }
+  if (ring) {
+    ring.count = rings;
+    ring.instanceMatrix.needsUpdate = true;
+    ring.material.opacity = 0.7 + 0.2 * Math.sin(performance.now() / 450);
   }
   const off = cpPusherPrev + (cpSim.pusherOffset - cpPusherPrev) * alpha;
   pusher.position.z = cpSim.pusherShape.z0 + off;
