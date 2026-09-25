@@ -27,8 +27,8 @@ every coin in it is a `coinpusher_coins` row with a server-issued id, value and
 
 - `drop` debits the stake and inserts a coin worth the stake.
 - `collect` pays each claimed id **once**, via a status-guarded
-  `UPDATE … WHERE status = 'in_machine'`, and always to the coin's **owner**,
-  never to whoever reported it.
+  `UPDATE … WHERE status = 'in_machine'`, to **whoever threw last before it
+  fell**. It never pays the browser that reported it for reporting.
 - Gutter coins are the house's, which is the edge any real arcade pusher has.
   `RECYCLE` (40 %) of their value goes into the machine's `house_bank`; the
   rest is burned.
@@ -96,6 +96,14 @@ else. Whoever holds `coinpusher_shared.host_lease` is the host.
   real case; the local test rig reproduced it with 31 s frames.
 - **Beats keep running while the machine loads.** Settling the pile and
   compiling shaders can take longer than a lease lasts.
+- **A host renews its lease once more after the load, before the first
+  frame.** A synchronous shader compile (no `KHR_parallel_shader_compile`)
+  blocks the page for seconds, so no beat gets through. The first frame then
+  saw a stale beat, stood down, and took the machine back 3 s later with a
+  new stint, a needless flip for every viewer.
+- **Restore accepts coins mid-fall in the pin board.** Its old check only
+  accepted coins below 20 cm and dropped every pin-board coin back onto the
+  pile, where it knocked others off (8 of 215 in one takeover).
 - **Takeover continues the pile.** The new host rebuilds from what it last
   saw as a viewer (`cpNetLayout`) plus the authoritative coin list, and
   `resumeAt()` puts the pusher, discs, gates and tower exactly where the old
@@ -104,22 +112,41 @@ else. Whoever holds `coinpusher_shared.host_lease` is the host.
 
 ### Who gets paid (the trust model)
 
-- **A coin pays its owner**, the player who threw it, whichever browser
-  reported the fall. Bonus coins from a pocket belong to the owner of the coin
-  that hit the pocket.
-- **Ownerless coins** (house pre-fill, refills, a tower shower with no recent
-  thrower) go to the **most recent thrower within 30 s**, capped at
-  **3 000 🪙/min** per player. With nobody eligible, they are booked like a
-  gutter coin and recycled into the bank.
+**You throw a coin, and whatever drops is yours**, like a real pusher. This
+rule has applied since the evening of 2026-09-25, when the owner asked for it.
+Before that, a coin paid the player who had thrown it.
+
+- **What falls pays whoever threw last before it fell**, within 30 s
+  (`THROWER_WINDOW_S`). Whose coin it was doesn't matter: your own, another
+  player's, or the machine's.
+  - The host reports each fall with `ago`, how many ms before the report the
+    coin fell. Reports are batched every ~0.45 s.
+  - The server dates the fall `now − ago` (clamped to 10 s) and looks up the
+    latest paid-for coin (`funded > 0`) before that moment.
+  - The index `coinpusher_coins_throws_idx` makes that lookup cheap.
+  - Without `ago`, when two people spam, a coin knocked off by one player's
+    push lands in the next batch and goes to whoever threw during those
+    0.45 s.
+- **Nobody threw in the last 30 s:** the coin goes back to its owner, the
+  player who threw it. A machine coin is recycled into the bank.
+- **The cap is the cheat guard.** The host decides *when* coins fall, so a
+  modified host could time everyone's coins to drop right after its own
+  throws.
+  - Coins a player wins that they didn't throw are capped at **15 000 🪙 per
+    minute** (`TAKE_CAP_PER_MIN`). This includes other players' coins and
+    ownerless ones, tracked in `coinpusher_players.ownerless_since/_paid`;
+    the names predate the rule.
+  - Over the cap, a coin goes to its owner (or the bank), never to the
+    cheater.
+  - Honest play never gets near the cap. A 10 000 jackpot token fits, and
+    your own coins never count.
 - **A coin must be ≥ 1.5 s old to leave.** No thrown coin physically falls
   faster than that.
 - Every exit is written to `coinpusher_exits`: coin, owner, paid to, where,
   value, and the reporting host.
 
-So a modified host can decide whether other people's coins fall, but it can't
-take them. At most it can time house coins to fall right after its own throws,
-and the per-minute cap bounds that. The machine as a whole still can't pay out
-more than was thrown in plus its one pre-fill.
+The machine as a whole still can't pay out more than was thrown in plus its
+one pre-fill. The rule only decides *who* among the players gets it.
 
 ### The netcode
 
@@ -171,7 +198,9 @@ The first thing to lower if the quota ever bites is `CP_SNAP_MS`.
   `VIEWER_SEEN_S`. The host comes first and is marked 🖥️. Each chip shows the
   player's net for this session (`total_won − bet` of the open session row),
   and you are „Ty". Phones show three chips plus „+N".
-- **Your coins glow.** A green ring (one extra `InstancedMesh`,
+- **Your coins glow**, now **off by default**, toggled in „?" and stored as
+  `cp.glow2`. Under the last-thrower rule a ringed coin is one you threw, not
+  one that will pay you. A green ring (one extra `InstancedMesh`,
   `cpView.ring`) is drawn with the same matrices as every coin you own, on
   host and viewers alike.
   - Ownership comes from a client-side `cpNet.owners` map filled from
@@ -181,7 +210,7 @@ The first thing to lower if the quota ever bites is `CP_SNAP_MS`.
   - The map is pruned on every exit.
   - Normal blending, not additive: an additive glow disappears against
     polished metal.
-  - It can be turned off in „?" (`cp.glow`).
+  - It is toggled in „?" (`cp.glow2`).
 - **Live feed** (`cpLive`, top left): the last six wins and bonuses, newest
   on top, fading with age.
   - It is fed by `paid` and `bonus`.

@@ -27,7 +27,7 @@ const CP_CORE_URL = 'games/coinpusher-core.js';
 // All player-facing strings in one place (Polish today; swap per locale).
 const CP_TEXT = {
   title: 'Automat Monet G6',
-  sub: 'Jeden automat dla całego biura — wszyscy widzą ten sam stos i wrzucają razem. Prawdziwa fizyka: spychacz pcha monety tylko kontaktem. Twoja moneta, która spadnie z przodu, jest Twoja; co wpadnie w boczne rynny — automatu.',
+  sub: 'Jeden automat dla całego biura — wszyscy widzą ten sam stos i wrzucają razem. Prawdziwa fizyka: spychacz pcha monety tylko kontaktem. Wrzucasz monetę — co spadnie z przodu po Twoim wrzucie, jest Twoje. Co wpadnie w boczne rynny — automatu.',
   loadingLibs: 'Wczytywanie silnika 3D i fizyki…',
   loadingMachine: 'Otwieranie automatu…',
   loadingSettle: 'Układanie monet…',
@@ -52,11 +52,11 @@ const CP_TEXT = {
   rain: '🌧️ Deszcz monet!',
   jackpot: 'JACKPOT',
   bigWin: 'DUŻA WYGRANA',
-  help: 'Kliknij (albo dotknij) w dowolnym miejscu automatu — moneta spadnie dokładnie tam. Możesz klikać ile chcesz. Działa też WRZUĆ i spacja. ←/→ przesuwają zrzut. To JEDEN automat dla wszystkich: widzisz monety innych graczy, a oni Twoje. Moneta, którą wrzucisz, należy do Ciebie — gdy spadnie z przedniej krawędzi, wygrywasz ją Ty, niezależnie od tego, czyj rzut ją zepchnął. Monety automatu (bez właściciela) dostaje ostatni wrzucający. Boczne rynny zabiera automat — część ich wartości wraca jako monety 1000, żetony jackpot i deszcz monet. Fizykę liczy przeglądarka jednego z graczy (gospodarz) i transmituje ją reszcie, więc obraz może być opóźniony o ułamek sekundy. Silnik staje po minucie bez wrzutu i rusza przy następnej monecie.',
+  help: 'Kliknij (albo dotknij) w dowolnym miejscu automatu — moneta spadnie dokładnie tam. Możesz klikać ile chcesz. Działa też WRZUĆ i spacja. ←/→ przesuwają zrzut. To JEDEN automat dla wszystkich: widzisz monety innych graczy, a oni Twoje. Jak w prawdziwym automacie: co spadnie z przedniej krawędzi, wygrywa ten, kto wrzucił monetę jako ostatni przed spadnięciem — obojętnie, czyja to była moneta. Gdy nikt nie wrzucał od 30 s, moneta wraca do tego, kto ją wrzucił. Boczne rynny zabiera automat — część ich wartości wraca jako monety 1000, żetony jackpot i deszcz monet. Fizykę liczy przeglądarka jednego z graczy (gospodarz) i transmituje ją reszcie, więc obraz może być opóźniony o ułamek sekundy. Silnik staje po minucie bez wrzutu i rusza przy następnej monecie.',
   hostYou: '🖥️ Twój komputer liczy fizykę',
   hostOther: '📡 Na żywo',
   hostNone: '⏳ Szukam gospodarza…',
-  glow: 'Podświetlaj moje monety',
+  glow: 'Podświetlaj monety, które wrzuciłem (wygrywa je ten, kto wrzucił ostatni)',
 };
 
 const CP_STATES = ['LOADING', 'READY', 'DROPPING', 'PLAYING', 'BONUS', 'BIG_WIN', 'PAUSED', 'CONNECTION_LOST', 'ERROR'];
@@ -450,6 +450,18 @@ async function cpBuildMachine(state, token) {
   if (!cpSession.started) cpSession = { started: Date.now(), staked: 0, won: 0, lastWin: 0, lastCheck: Date.now() };
   cpPusherPrev = cpSim.pusherOffset;
   cpSetState('READY');
+  // Renew the lease once more before the machine starts: settling and a
+  // synchronous shader compile can block this page for seconds, so the beats
+  // during the load may not have got through, and the first frame would
+  // otherwise stand down (CP_HOST_SELF_DEMOTE_MS) and take over again.
+  if (cpNet.role === 'host') {
+    try {
+      const res = await cpInvoke('host_beat', cpNetBeatBody());
+      if (cpNet) cpNet.beatOkAt = performance.now();
+      cpNetApplyBeat(res);
+    } catch (_) { /* the regular beats will sort it out */ }
+    if (token !== cpLoadToken || !cpNet) return;
+  }
   cpEmit('game_loaded', { coins: coins.length, role: cpNet.role });
   cpNetConnect();
   cpResume();
@@ -561,7 +573,7 @@ function cpBuildDom() {
   const feed = el('div', { className: 'cp-card' }, el('h4', {}, '🪙 Ostatnie sesje'));
   const rules = el('div', { className: 'cp-card' },
     el('h4', {}, 'ℹ️ Jak to działa'),
-    el('div', { className: 'cp-note' }, 'Jeden automat dla wszystkich. Każda moneta ma w banku automatu swój numer i właściciela — tego, kto ją wrzucił. Gdy spadnie z przedniej krawędzi, serwer wypłaca ją raz, zawsze właścicielowi. Monety automatu (wstępne wypełnienie, dosypki) dostaje ostatni wrzucający (do 3 000 🪙/min). Monety z bocznych rynien zabiera automat; część ich wartości wraca jako monety 1000, żetony jackpot i deszcz monet.'),
+    el('div', { className: 'cp-note' }, 'Jeden automat dla wszystkich. Wrzucasz monetę — wszystko, co spadnie z przedniej krawędzi, zanim ktoś inny wrzuci następną, jest Twoje (także monety innych graczy i automatu). Każda moneta ma w banku automatu swój numer, a serwer wypłaca ją tylko raz. Gdy nikt nie wrzucał od 30 s, spadająca moneta wraca do tego, kto ją wrzucił. Z cudzych monet można wygrać do 15 000 🪙 na minutę. Monety z bocznych rynien zabiera automat; część ich wartości wraca jako monety 1000, żetony jackpot i deszcz monet.'),
     el('div', { className: 'cp-note', id: 'cp-luck-note' }, ''));
   const side = el('div', { className: 'cp-side' }, leaders, feed, rules);
   const hero = el('div', { className: 'cp-hero' },
@@ -826,7 +838,9 @@ function cpToggleTurbo() {
 
 // ── Collection (host only: only the host's sim steps) ─────────────────────
 function cpOnCollect(coin, where) {
-  cpPending.push({ id: coin.id, where });
+  // `at` → the report says how long ago it fell: the winner is whoever threw
+  // last BEFORE the fall, and reports go out in batches.
+  cpPending.push({ id: coin.id, where, at: performance.now() });
   const t = coin.body.translation();
   cpEmit('coin_collected', { where, kind: coin.kind });
   cpNetExited(coin.id, where === 'prize' ? 'p' : 'g', t.x, t.z);
@@ -854,8 +868,9 @@ async function cpFlush() {
   if (cpState === 'CONNECTION_LOST' || cpState === 'ERROR') return;
   cpFlushing = true;
   const batch = cpPending.slice(0, 100);
+  const now = performance.now();
   try {
-    const res = await cpInvoke('collect', { events: batch, lease: cpNet.lease });
+    const res = await cpInvoke('collect', { events: batch.map(e => ({ id: e.id, where: e.where, ago: Math.round(now - e.at) })), lease: cpNet.lease });
     cpPending = cpPending.slice(batch.length);
     cpNetOnPaid({ paid: res.paid || {}, bank: res.bank });
   } catch (err) {
@@ -1082,7 +1097,9 @@ function cpNetLearnOwners(list) {
   for (const c of list) if (c && c.owner) cpNet.owners.set(String(c.id), c.owner);
 }
 
-function cpGlowOn() { return cpStore('glow') !== false; }
+// Off by default since what falls pays the LAST THROWER, not the coin's owner:
+// a ringed coin is one you threw, not one that will pay you.
+function cpGlowOn() { return cpStore('glow2') === true; }
 
 // ── Live wins feed ──
 const CP_LIVE_MAX = 6;
@@ -1426,8 +1443,9 @@ async function cpNetPromote() {
     cpNetLearnOwners(state.coins);
     cpSim.clearCoins();
     cpSim.collecting = true;
+    let missing = 0;
     if (seen.coins.length) {
-      cpSim.restore(seen, state.coins || [], 7);
+      missing = cpSim.restore(seen, state.coins || [], 7);
       if (mech) cpSim.resumeAt(mech.t, mech.mt, mech.ta);
     } else {
       // Never saw the pile: the saved one, settled out of sight like a load.
@@ -1445,7 +1463,7 @@ async function cpNetPromote() {
     cpPending = [];
     cpAcc = 0; cpLastFrame = performance.now();
     n.role = 'host';
-    cpEmit('host_promoted', { coins: cpSim.coins.size });
+    cpEmit('host_promoted', { coins: cpSim.coins.size, missing, seen: seen.coins.length });
     cpNetRenderWho();
   } catch (err) {
     console.warn('coinpusher promote', err);
@@ -2289,7 +2307,7 @@ function cpToggleHelp() {
     'aria-label': 'Głośność', oninput: e => { cpStore('volume', Number(e.target.value)); if (cpAudio) cpAudio.master.gain.value = Number(e.target.value) * 0.8; } });
   const rm = el('input', { type: 'checkbox', checked: cpReducedMotion,
     onchange: e => { cpReducedMotion = e.target.checked; cpStore('reducedMotion', cpReducedMotion); } });
-  const glow = el('input', { type: 'checkbox', checked: cpGlowOn(), onchange: e => cpStore('glow', e.target.checked) });
+  const glow = el('input', { type: 'checkbox', checked: cpGlowOn(), onchange: e => cpStore('glow2', e.target.checked) });
   const box = el('div', { className: 'cp-help', role: 'dialog', 'aria-label': 'Pomoc' },
     el('div', {}, CP_TEXT.help),
     el('label', {}, '🔊 Głośność', vol),

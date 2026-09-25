@@ -24,15 +24,15 @@
 --  3 s, expires after 8 s); when it lapses the next visible client takes over.
 --
 --  ── Who gets paid (the trust model) ───────────────────────────────────────
---  Only the host reports exits. The server pays a prize coin to its OWNER (the
---  player who threw it) — never to the reporter. An OWNERLESS coin (house
---  pre-fill, refills) goes to the most recent thrower within 30 s, capped per
---  player per minute; with nobody eligible it is booked like a gutter coin
---  (recycled into the bank). So a modified host can decide whether other
---  people's coins fall, but cannot take them; at most it can time house coins
---  to follow its own throws, which the cap limits. Every exit is written to
---  coinpusher_exits for auditing. The machine still cannot pay out more than
---  was thrown in plus its one pre-fill.
+--  Only the host reports exits. Like a real pusher, what falls pays whoever
+--  THREW LAST before it fell (within 30 s), whoever's coin it was; with no
+--  recent throw it goes back to its owner, or is recycled if it has none. (Until
+--  later on 2026-09-25 a coin paid its owner — the owner asked for this rule.)
+--  A modified host could time falls to follow its own throws, so winning coins
+--  someone else threw is capped per player per minute (coinpusher_players.
+--  ownerless_since/ownerless_paid); over the cap a coin goes to its owner.
+--  Every exit is written to coinpusher_exits for auditing. The machine still
+--  cannot pay out more than was thrown in plus its one pre-fill.
 --
 --  ── The one-time pre-fill ──────────────────────────────────────────────────
 --  The shared machine is filled ONCE with ownerless 100 🪙 coins, up to
@@ -88,6 +88,11 @@ ALTER TABLE public.coinpusher_coins ADD CONSTRAINT coinpusher_coins_status_check
   CHECK (status IN ('in_machine','prize','gutter','lost','retired'));
 CREATE INDEX IF NOT EXISTS coinpusher_coins_shared_idx
   ON public.coinpusher_coins (machine_id) WHERE status = 'in_machine';
+
+-- The winner of a fall is whoever threw last before it (coinpusher-action's
+-- collect looks up the latest paid-for coin before each fall), 2026-09-25.
+CREATE INDEX IF NOT EXISTS coinpusher_coins_throws_idx
+  ON public.coinpusher_coins (machine_id, created_at DESC) WHERE funded > 0;
 
 ALTER TABLE public.coinpusher_shared  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coinpusher_players ENABLE ROW LEVEL SECURITY;

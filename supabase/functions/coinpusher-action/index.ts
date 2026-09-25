@@ -11,9 +11,11 @@
 //               lease; also how the host learns whether anyone is watching
 //    drop       any player: debit the stake, put a coin THEY own into the
 //               machine, broadcast `spawn` so the host drops it
-//    collect    host only: pay each prize coin to its OWNER (never the
-//               reporter); ownerless coins to the most recent thrower (capped);
-//               gutters feed the bank; book sessions; broadcast `paid`
+//    collect    host only: pay each prize coin to WHOEVER THREW LAST before it
+//               fell (like a real pusher: you throw, what drops is yours) —
+//               the host says how long ago each coin fell; winning coins
+//               someone else threw is capped per minute; gutters feed the
+//               bank; book sessions; broadcast `paid`
 //    pocket     host only: a paid-for coin passed a pin-board pocket, or the
 //               tower tipped — a bonus bought from the bank
 //    save_layout host only: the pile's shape, for the next host
@@ -75,11 +77,18 @@ const SESSION_GAP_S = 8 * 60;
 const HOST_TTL_S = 8;
 const HOST_TTL_WEAK_S = 16;
 const VIEWER_SEEN_S = 10;
-// Ownerless coins (house pre-fill, refills, tower shower with no recent thrower)
-// go to the most recent thrower within this window, capped per player/minute;
-// otherwise they are booked like a gutter coin (recycled into the bank).
-const OWNERLESS_WINDOW_S = 30;
-const OWNERLESS_CAP_PER_MIN = 3000;
+// What falls pays the player who threw last before it fell, if that throw is
+// at most THROWER_WINDOW_S old. With no such throw a coin goes back to its
+// owner (the player who threw it), and an ownerless one is recycled.
+//
+// The host decides WHEN coins fall, so a modified host could time everyone's
+// coins to drop right after its own throws. TAKE_CAP_PER_MIN bounds that: the
+// value of OTHER players' coins (and ownerless ones) one player can win per
+// minute. Over it, a coin goes to its owner (or is recycled), never lost.
+// Honest play never gets near it (a 10 000 jackpot token fits).
+const THROWER_WINDOW_S = 30;
+const TAKE_CAP_PER_MIN = 15_000;
+const MAX_FALL_AGO_MS = 10_000;     // how far back the host may date a fall
 
 const RECYCLE = 0.40;
 const CASINO_LUCK_RECYCLE = 0.70;
@@ -236,7 +245,7 @@ async function nicksOf(tx, ids) {
 
 function recentThrower(m) {
   if (!m.last_thrower || !m.last_throw_at) return null;
-  return Date.now() - new Date(m.last_throw_at).getTime() < OWNERLESS_WINDOW_S * 1000 ? m.last_thrower : null;
+  return Date.now() - new Date(m.last_throw_at).getTime() < THROWER_WINDOW_S * 1000 ? m.last_thrower : null;
 }
 
 // ── state ───────────────────────────────────────────────────────────────────
@@ -451,7 +460,7 @@ async function handleDrop(user, payload) {
 function parseEvents(raw) {
   if (!Array.isArray(raw) || raw.length === 0) throw gameError("Brak monet do rozliczenia.");
   if (raw.length > MAX_COLLECT_BATCH) throw gameError("Za dużo monet naraz.");
-  const out = { prize: [], gutter: [] };
+  const out = { prize: [], gutter: [], ago: new Map() };
   const seen = new Set();
   for (const e of raw) {
     const id = String(e?.id ?? "");
@@ -460,6 +469,10 @@ function parseEvents(raw) {
     if (!where) continue;
     seen.add(id);
     out[where].push(id);
+    // How long before this report the coin fell (host clock) — batches are
+    // sent every ~0.45 s, and the winner is whoever threw last BEFORE the fall.
+    const ago = Number(e?.ago);
+    out.ago.set(id, Number.isFinite(ago) ? Math.max(0, Math.min(MAX_FALL_AGO_MS, ago)) : 0);
   }
   return out;
 }
@@ -514,31 +527,50 @@ async function handleCollect(user, payload) {
     `;
     const byId = new Map(rows.map(r => [String(r.id), r]));
     const prizeSet = new Set(ev.prize);
-    const thrower = recentThrower(m);
+
+    // Who threw last before each prize coin fell: that player wins it.
+    const prizeIds0 = ids.filter(id => prizeSet.has(id) && byId.has(id));
+    const throwers = new Map();         // coin id → thrower at the moment it fell
+    if (claimable && prizeIds0.length) {
+      const falls = prizeIds0.map(id => new Date(Date.now() - (ev.ago.get(id) || 0)).toISOString());
+      const found = await tx`
+        select e.id::text as id, (
+          select c.user_id from public.coinpusher_coins c
+           where c.machine_id = ${MACHINE} and c.funded > 0 and c.user_id is not null
+             and c.created_at <= e.fall_at
+             and c.created_at > e.fall_at - make_interval(secs => ${THROWER_WINDOW_S}::double precision)
+           order by c.created_at desc limit 1) as thrower
+          from unnest(${prizeIds0}::bigint[], ${falls}::timestamptz[]) as e(id, fall_at)
+      `;
+      for (const r of found) if (r.thrower) throwers.set(r.id, r.thrower);
+    }
+
+    // The per-minute cap on winning coins someone else threw (see
+    // TAKE_CAP_PER_MIN). Player rows locked in user-id order.
+    const caps = new Map();             // player → { since, paid, room, taken }
+    for (const u of [...new Set(throwers.values())].sort()) {
+      const p = await lockPlayer(tx, u);
+      const fresh = !p.ownerless_since || Date.now() - new Date(p.ownerless_since).getTime() > 60_000;
+      const paid = fresh ? 0 : Number(p.ownerless_paid);
+      caps.set(u, { since: fresh ? new Date() : p.ownerless_since, paid, room: Math.max(0, TAKE_CAP_PER_MIN - paid), taken: 0 });
+    }
 
     // Decide every coin's fate: [coin, 'prize'|'gutter', recipient|null].
     const fates = [];
-    const ownerlessTo = new Map();      // recipient → ownerless value granted in this batch
-    let throwerRow = null;
-    if (thrower) {
-      throwerRow = await lockPlayer(tx, thrower);
-      const since = throwerRow.ownerless_since ? new Date(throwerRow.ownerless_since).getTime() : 0;
-      if (Date.now() - since > 60_000) throwerRow = { ...throwerRow, ownerless_since: new Date(), ownerless_paid: 0, reset: true };
-    }
-    let ownerlessRoom = throwerRow ? Math.max(0, OWNERLESS_CAP_PER_MIN - Number(throwerRow.ownerless_paid)) : 0;
     for (const id of ids) {
       const c = byId.get(id);
       if (!c) continue;
       if (!prizeSet.has(id)) { fates.push([c, "gutter", null]); continue; }
       if (!claimable) continue;                         // stays in the machine
-      if (c.user_id) { fates.push([c, "prize", c.user_id]); continue; }
-      if (thrower && Number(c.value) <= ownerlessRoom) {
-        ownerlessRoom -= Number(c.value);
-        ownerlessTo.set(thrower, (ownerlessTo.get(thrower) || 0) + Number(c.value));
-        fates.push([c, "prize", thrower]);
-      } else {
-        fates.push([c, "gutter", null]);                // nobody eligible → recycled
+      const value = Number(c.value);
+      let to = throwers.get(id) ?? null;
+      if (to && to !== c.user_id) {
+        const cap = caps.get(to);
+        if (value <= cap.room) { cap.room -= value; cap.taken += value; }
+        else to = null;                                 // over the cap
       }
+      if (!to) to = c.user_id ?? null;                  // nobody threw lately: back to its owner
+      fates.push(to ? [c, "prize", to] : [c, "gutter", null]);   // ownerless and unclaimed → recycled
     }
     if (!fates.length) return { ok: true, paid: {}, settled: [], bank: Number(m.house_bank), claimable };
 
@@ -554,12 +586,14 @@ async function handleCollect(user, payload) {
     if (bank !== Number(m.house_bank)) {
       await tx`update public.coinpusher_shared set house_bank = ${bank}, updated_at = now() where id = ${MACHINE}`;
     }
-    if (throwerRow && ownerlessTo.size) {
+    for (const [u, cap] of caps) {
+      if (!cap.taken) continue;
+      // ownerless_since/ownerless_paid now count every coin won that the
+      // winner did not throw (the column names predate the rule).
       await tx`
         update public.coinpusher_players
-           set ownerless_since = ${throwerRow.reset ? new Date() : throwerRow.ownerless_since},
-               ownerless_paid = ${Number(throwerRow.reset ? 0 : throwerRow.ownerless_paid) + (ownerlessTo.get(thrower) || 0)}
-         where user_id = ${thrower}
+           set ownerless_since = ${cap.since}, ownerless_paid = ${cap.paid + cap.taken}
+         where user_id = ${u}
       `;
     }
 
