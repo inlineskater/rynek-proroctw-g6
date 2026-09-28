@@ -585,8 +585,8 @@ function fwEnsureNbRealtime() {
   fwNbChannel = sb.channel('farm-neighbours')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'farm_tile_events' }, (payload) => {
       const e = payload.new || {};
-      if (e.owner_id === me?.id && e.actor_id !== me?.id) {
-        const who = (typeof sidePeople !== 'undefined' && sidePeople?.find?.(p => p.id === e.actor_id)?.nick) || 'Ktoś';
+      if (e.owner_id === me?.id && e.user_id !== me?.id) {
+        const who = (typeof sidePeople !== 'undefined' && sidePeople?.find?.(p => p.id === e.user_id)?.nick) || 'Ktoś';
         const crop = e.crop_type ? farmCropIdentity(e.crop_type) : null;
         showToast(e.kind === 'steal'
           ? '🥷 ' + who + ' podebrał ' + e.qty + ' ' + (crop ? crop.emoji : '') + ' z twojego pola!'

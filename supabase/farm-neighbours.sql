@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS public.farm_tile_events (
   y           integer NOT NULL,
   planted_at  timestamptz NOT NULL,
   kind        text NOT NULL CHECK (kind IN ('water','steal')),
-  actor_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   owner_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   species     text,
   crop_type   text,
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS public.farm_tile_events (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS farm_tile_events_cycle_idx ON public.farm_tile_events (x, y, planted_at);
-CREATE INDEX IF NOT EXISTS farm_tile_events_actor_idx ON public.farm_tile_events (actor_id, kind, created_at DESC);
+CREATE INDEX IF NOT EXISTS farm_tile_events_user_idx ON public.farm_tile_events (user_id, kind, created_at DESC);
 CREATE INDEX IF NOT EXISTS farm_tile_events_recent_idx ON public.farm_tile_events (created_at DESC);
 
 ALTER TABLE public.farm_tile_events ENABLE ROW LEVEL SECURITY;
@@ -361,19 +361,19 @@ BEGIN
   IF v_tile.ready_at IS NULL OR now() >= v_tile.ready_at THEN RAISE EXCEPTION 'already_ripe'; END IF;
 
   SELECT count(*) INTO v_used FROM public.farm_tile_events
-   WHERE actor_id = v_user AND kind = 'water' AND created_at >= v_today;
+   WHERE user_id = v_user AND kind = 'water' AND created_at >= v_today;
   IF v_used >= public.farm_water_per_day() THEN RAISE EXCEPTION 'water_limit_day'; END IF;
 
   IF EXISTS (SELECT 1 FROM public.farm_tile_events
               WHERE x = p_x AND y = p_y AND planted_at = v_tile.planted_at
-                AND kind = 'water' AND actor_id = v_user) THEN
+                AND kind = 'water' AND user_id = v_user) THEN
     RAISE EXCEPTION 'already_watered';
   END IF;
   SELECT count(*) INTO v_cycle FROM public.farm_tile_events
    WHERE x = p_x AND y = p_y AND planted_at = v_tile.planted_at AND kind = 'water';
   IF v_cycle >= public.farm_water_per_cycle() THEN RAISE EXCEPTION 'water_limit_tile'; END IF;
 
-  INSERT INTO public.farm_tile_events (x, y, planted_at, kind, actor_id, owner_id, species)
+  INSERT INTO public.farm_tile_events (x, y, planted_at, kind, user_id, owner_id, species)
   VALUES (p_x, p_y, v_tile.planted_at, 'water', v_user, v_tile.owner_id, v_tile.planted_species);
 
   INSERT INTO public.farm_user_state (user_id, waterings_given) VALUES (v_user, 1)
@@ -418,11 +418,11 @@ BEGIN
   IF public.farm_is_protected(v_tile.owner_id) THEN RAISE EXCEPTION 'protected'; END IF;
 
   SELECT count(*) INTO v_used FROM public.farm_tile_events
-   WHERE actor_id = v_user AND kind = 'steal' AND created_at >= v_today;
+   WHERE user_id = v_user AND kind = 'steal' AND created_at >= v_today;
   IF v_used >= public.farm_steal_per_day() THEN RAISE EXCEPTION 'steal_limit_day'; END IF;
   IF EXISTS (SELECT 1 FROM public.farm_tile_events
               WHERE x = p_x AND y = p_y AND planted_at = v_tile.planted_at
-                AND kind = 'steal' AND actor_id = v_user) THEN
+                AND kind = 'steal' AND user_id = v_user) THEN
     RAISE EXCEPTION 'already_stolen';
   END IF;
   SELECT count(*) INTO v_thieves FROM public.farm_tile_events
@@ -436,7 +436,7 @@ BEGIN
   v_qty  := LEAST(v_qty, (v_calc->>'yield')::integer);
   IF v_qty < 1 THEN RAISE EXCEPTION 'nothing_to_steal'; END IF;
 
-  INSERT INTO public.farm_tile_events (x, y, planted_at, kind, actor_id, owner_id, species, crop_type, qty)
+  INSERT INTO public.farm_tile_events (x, y, planted_at, kind, user_id, owner_id, species, crop_type, qty)
   VALUES (p_x, p_y, v_tile.planted_at, 'steal', v_user, v_tile.owner_id, v_tile.planted_species, v_def.crop_type, v_qty);
 
   INSERT INTO public.farm_inventory (user_id, crop_type, qty, harvested_at, expires_at)
@@ -516,8 +516,8 @@ BEGIN
       'diversity', json_build_array(public.farm_diversity_bonus(3), public.farm_diversity_bonus(4), public.farm_diversity_bonus(5)),
       'default_talent', public.farm_default_talent_boost()),
     'me', json_build_object(
-      'water_used', (SELECT count(*) FROM public.farm_tile_events WHERE actor_id = v_user AND kind = 'water' AND created_at >= v_today),
-      'steal_used', (SELECT count(*) FROM public.farm_tile_events WHERE actor_id = v_user AND kind = 'steal' AND created_at >= v_today),
+      'water_used', (SELECT count(*) FROM public.farm_tile_events WHERE user_id = v_user AND kind = 'water' AND created_at >= v_today),
+      'steal_used', (SELECT count(*) FROM public.farm_tile_events WHERE user_id = v_user AND kind = 'steal' AND created_at >= v_today),
       'scarecrow_until', (SELECT scarecrow_until FROM public.farm_user_state WHERE user_id = v_user),
       'waterings_given', COALESCE((SELECT waterings_given FROM public.farm_user_state WHERE user_id = v_user), 0),
       'talents', COALESCE((SELECT json_agg(row_to_json(t)) FROM public.farm_active_talents(v_user) t), '[]'::json)),
@@ -533,13 +533,13 @@ BEGIN
                'waters', (SELECT count(*) FROM public.farm_tile_events e
                            WHERE e.x = t.x AND e.y = t.y AND e.planted_at = t.planted_at AND e.kind = 'water'),
                'watered_by_me', EXISTS (SELECT 1 FROM public.farm_tile_events e
-                           WHERE e.x = t.x AND e.y = t.y AND e.planted_at = t.planted_at AND e.kind = 'water' AND e.actor_id = v_user),
+                           WHERE e.x = t.x AND e.y = t.y AND e.planted_at = t.planted_at AND e.kind = 'water' AND e.user_id = v_user),
                'stolen', (SELECT COALESCE(sum(qty), 0) FROM public.farm_tile_events e
                            WHERE e.x = t.x AND e.y = t.y AND e.planted_at = t.planted_at AND e.kind = 'steal'),
                'thieves', (SELECT count(*) FROM public.farm_tile_events e
                            WHERE e.x = t.x AND e.y = t.y AND e.planted_at = t.planted_at AND e.kind = 'steal'),
                'stolen_by_me', EXISTS (SELECT 1 FROM public.farm_tile_events e
-                           WHERE e.x = t.x AND e.y = t.y AND e.planted_at = t.planted_at AND e.kind = 'steal' AND e.actor_id = v_user)))
+                           WHERE e.x = t.x AND e.y = t.y AND e.planted_at = t.planted_at AND e.kind = 'steal' AND e.user_id = v_user)))
         FROM public.farm_tiles t
        WHERE t.planted_species IS NOT NULL
          AND EXISTS (SELECT 1 FROM public.farm_tile_events e
@@ -547,10 +547,10 @@ BEGIN
     'feed', COALESCE((
       SELECT json_agg(json_build_object('kind', e.kind, 'actor', pa.nick, 'owner', po.nick,
                                         'crop_type', e.crop_type, 'species', e.species, 'qty', e.qty,
-                                        'at', e.created_at, 'mine', (e.owner_id = v_user OR e.actor_id = v_user))
+                                        'at', e.created_at, 'mine', (e.owner_id = v_user OR e.user_id = v_user))
                       ORDER BY e.created_at DESC)
         FROM (SELECT * FROM public.farm_tile_events ORDER BY created_at DESC LIMIT 40) e
-        JOIN public.profiles pa ON pa.id = e.actor_id
+        JOIN public.profiles pa ON pa.id = e.user_id
         JOIN public.profiles po ON po.id = e.owner_id), '[]'::json)
   );
 END;

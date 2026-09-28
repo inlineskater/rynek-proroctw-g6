@@ -128,6 +128,9 @@ DECLARE
     'trades:created_at',
     'football_bets:created_at',
     'canvas_paint_log:painted_at',
+    -- 🤝 Sąsiedzi: watering and theft move no coins, so they need their own
+    -- stamp (farm-neighbours.sql). Order fills already stamp via coin_transactions.
+    'farm_tile_events:created_at',
     -- 🌱 Farma, 🛍️ Targowisko, 🏦 Bank, Sklep … — everything that moves coins
     -- leaves a row here, which is why one entry covers all of them.
     'coin_transactions:created_at'
