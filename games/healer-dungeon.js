@@ -1322,6 +1322,11 @@ function hdMobHpSplit(st) {
 }
 
 let hdCtx = null;
+// hdInitCanvas() measures the stage (a forced layout, since the DOM raid frames
+// change between frames), so it runs only when the size can have changed: a
+// resize/relayout or the stage's own ResizeObserver — not on every frame.
+let hdCanvasDirty = true;
+let hdStageRo = null;
 
 function hdInitCanvas() {
   const cv = hdEl('hd-stage');
@@ -1414,6 +1419,7 @@ function hdLayout() {
   // The column just changed size, so a dragged frame position may now be
   // outside it — re-clamp rather than stranding the frames off screen.
   hdApplyFramesPos();
+  hdCanvasDirty = true;   // --hd-scale moved: the stage's on-screen pixels changed
 }
 
 // requestFullscreen() needs a live user gesture, so this only succeeds when
@@ -1438,6 +1444,11 @@ function healerEnterView() {
   hdViewOpen = true;
   document.documentElement.classList.add('hd-view-open');
   window.addEventListener('resize', hdLayout);
+  const stage = hdEl('hd-stage');
+  if (!hdStageRo && stage && window.ResizeObserver) {
+    hdStageRo = new ResizeObserver(() => { hdCanvasDirty = true; });
+    hdStageRo.observe(stage);
+  }
   window.addEventListener('orientationchange', hdLayout);
   document.addEventListener('fullscreenchange', hdLayout);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', hdLayout);
@@ -2849,7 +2860,7 @@ function healerRafLoop(ts) {
   const dt = hdRafLast ? Math.min(120, ts - hdRafLast) : 16;
   hdRafLast = ts;
   hdStepFx(rt, dt);
-  hdCtx = hdInitCanvas();
+  if (hdCanvasDirty || !hdCtx) { hdCtx = hdInitCanvas(); hdCanvasDirty = false; }
   hdDraw();
   hdRafId = requestAnimationFrame(healerRafLoop);
 }

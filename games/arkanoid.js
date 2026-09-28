@@ -721,6 +721,37 @@ function akDrawBricks(ctx, st) {
 
 function akLerp(a, b, k) { return a + (b - a) * k; }
 
+// Background + bricks change only when a brick is hit, yet cost a gradient,
+// a clip and emoji text per brick per frame. They are painted to a layer the
+// size of the real canvas and repainted only when hp/kind actually changed.
+let akLayer = null;
+function akDrawStatic(ctx, st) {
+  const cv = ctx.canvas;
+  let L = akLayer;
+  const resized = !L || L.w !== cv.width || L.h !== cv.height;
+  let stale = resized || !L.hp || L.hp.length !== st.hp.length;
+  for (let i = 0; !stale && i < st.hp.length; i += 1) {
+    if (L.hp[i] !== st.hp[i] || L.kind[i] !== st.kind[i]) stale = true;
+  }
+  if (stale) {
+    if (resized) {
+      const c = document.createElement('canvas');
+      c.width = cv.width; c.height = cv.height;
+      L = akLayer = { canvas: c, x: c.getContext('2d'), w: cv.width, h: cv.height };
+    }
+    L.x.setTransform(ctx.getTransform());
+    L.x.clearRect(0, 0, AK_CS_W, AK_CS_H);
+    akDrawBackground(L.x);
+    akDrawBricks(L.x, st);
+    L.hp = st.hp.slice();
+    L.kind = st.kind.slice();
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(L.canvas, 0, 0);
+  ctx.restore();
+}
+
 function arkanoidDraw(now = performance.now()) {
   const ctx = akCtx;
   if (!ctx) return;
@@ -729,9 +760,8 @@ function arkanoidDraw(now = performance.now()) {
   const S = AK_SCALE;
   const k = rt?.playing && rt.lastTickAt ? Math.max(0, Math.min(1, (now - rt.lastTickAt) / AK_TICK_MS)) : 1;
 
-  akDrawBackground(ctx);
+  if (st) akDrawStatic(ctx, st); else akDrawBackground(ctx);
   if (st) {
-    akDrawBricks(ctx, st);
 
     // Capsules.
     ctx.textAlign = 'center';

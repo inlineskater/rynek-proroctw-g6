@@ -261,7 +261,32 @@ function bbCellCenter(idx) {
   return { x: col * BB_CELL + BB_CELL / 2, y: BB_HUD_H + row * BB_CELL + BB_CELL / 2 };
 }
 
+// 225 radial gradients per frame was the whole cost of this board. Each colour
+// is painted once into a sprite (at 3× for sharpness) and blitted, scaled.
+const BB_SPRITE_R = 24;
+const bbSprites = [];
+function bbBallSprite(color) {
+  if (bbSprites[color]) return bbSprites[color];
+  const c = document.createElement('canvas');
+  c.width = c.height = BB_SPRITE_R * 2 + 2;
+  bbPaintBall(c.getContext('2d'), BB_SPRITE_R + 1, BB_SPRITE_R + 1, BB_SPRITE_R, color);
+  return (bbSprites[color] = c);
+}
+
 function bbDrawBall(ctx, x, y, r, color, opts = {}) {
+  const k = r / BB_SPRITE_R;
+  ctx.drawImage(bbBallSprite(color), x - (BB_SPRITE_R + 1) * k, y - (BB_SPRITE_R + 1) * k,
+    (BB_SPRITE_R * 2 + 2) * k, (BB_SPRITE_R * 2 + 2) * k);
+  if (opts.selected) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function bbPaintBall(ctx, x, y, r, color) {
   const g = ctx.createRadialGradient(x - r * 0.34, y - r * 0.38, r * 0.12, x, y, r);
   g.addColorStop(0, BB_HEX_LITE[color]);
   g.addColorStop(0.55, BB_HEX[color]);
@@ -274,13 +299,6 @@ function bbDrawBall(ctx, x, y, r, color, opts = {}) {
   ctx.beginPath();
   ctx.ellipse(x - r * 0.3, y - r * 0.38, r * 0.26, r * 0.18, -0.5, 0, Math.PI * 2);
   ctx.fill();
-  if (opts.selected) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, r + 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
 }
 
 function bubbleBreakerDraw(now = performance.now()) {
@@ -427,10 +445,15 @@ function bubbleBreakerSetStats() {
   if (bbBestEl)  bbBestEl.textContent  = String(st.best);
 }
 
+// A puzzle board sits still most of the time: frames are drawn only while
+// something moves (the selection pulse, falling balls, bursts, score floats),
+// plus one more to paint the settled state.
 function bubbleBreakerLoop() {
   const rt = bubbleBreakerRuntime;
   if (!rt?.playing) return;
-  bubbleBreakerDraw();
+  const now = performance.now();
+  const busy = !!(rt.sel || (rt.anim && rt.anim.until > now) || rt.burst.length || rt.floats.length);
+  if (busy || !rt.idleDrawn) { bubbleBreakerDraw(now); rt.idleDrawn = !busy; }
   rt.raf = requestAnimationFrame(bubbleBreakerLoop);
 }
 

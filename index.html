@@ -13009,6 +13009,8 @@ async function doLogout() {
   me = null; markets = []; tradesByMarket = {}; myPositionsByMarket = {}; marketsDirty = false;
   pokerState = null; pokerRealtimeReady = false; wheelRealtimeReady = false; fmRealtimeReady = false; stopPokerClock();
   if (typeof lotteryRtReady !== 'undefined') lotteryRtReady = false;
+  if (typeof _lbLoadedAt !== 'undefined') _lbLoadedAt = 0;   // next player sees fresh stats
+  cvLoadedAt = 0;   // realtime was down while logged out: reload the board next visit
   stopPlinkoAnimation(); stopWheelAnimation(); stopBankTimer(); stopHiloTimer(); stopTowerTimer(); stopCoinPusher(true);
   stopLotteryAnimation(); stopShopTimer();
   rouletteState = null; rouletteRealtimeReady = false; rouletteLastResultId = null; stopRouletteHeartbeat();
@@ -13922,7 +13924,8 @@ async function loadMarkets() {
 
   const [marketsRes, tradesRes, profilesRes] = await Promise.all([
     sb.from('markets').select('*').order('created_at'),
-    sb.from('trades').select('id, p_yes_after, created_at, market_id, user_id, nick_snapshot, side, amount, shares').order('created_at', { ascending: true }),
+    // Paged: past 1000 rows the cap would silently drop the NEWEST trades.
+    sbFetchAll(() => sb.from('trades').select('id, p_yes_after, created_at, market_id, user_id, nick_snapshot, side, amount, shares').order('created_at', { ascending: true }).order('id')),
     sb.from('profiles').select('id, nick'),
   ]);
 
@@ -14583,6 +14586,14 @@ function buildVotesColumn(side, voters, stats) {
 }
 
 // ── Realtime ──────────────────────────────────────────────────────────────
+let marketsRenderTimer = null;
+// The 6-hourly settle updates every open bet at once; each row used to trigger
+// its own football-action state call for everyone watching the tab.
+let footballReloadTimer = null;
+function scheduleFootballReload() {
+  clearTimeout(footballReloadTimer);
+  footballReloadTimer = setTimeout(() => { if (activeTab === 'football') loadFootball(false); }, 500);
+}
 function setupRealtime() {
   teardownRealtime();
 
@@ -14625,8 +14636,10 @@ function setupRealtime() {
       // State above is kept current on every tab so the grid is correct the
       // moment it is shown; the expensive render below is not.
       if (activeTab !== 'markets') { marketsDirty = true; return; }
-      updateCardChart(t.market_id);
-      await renderMarkets();
+      // A burst of trades used to rebuild every card (and its chart) once per
+      // trade; coalesce them into one render. renderMarkets redraws the charts.
+      clearTimeout(marketsRenderTimer);
+      marketsRenderTimer = setTimeout(() => { if (activeTab === 'markets') renderMarkets(); }, 300);
     })
     // Seasonal score/award events are subscribed DYNAMICALLY, for the in-season
     // game only — see subscribeSeasonalRealtime() just below. This used to be 22
@@ -14637,10 +14650,10 @@ function setupRealtime() {
     // healer_dungeon and filler; the dynamic lookup covers every entry in
     // SEASONAL_ROTATION, so adding a game needs no edit here.)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'football_matches' }, () => {
-      if (activeTab === 'football') loadFootball(false);
+      scheduleFootballReload();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'football_bets' }, async payload => {
-      if (activeTab === 'football') loadFootball(false);
+      scheduleFootballReload();
       // football_bets is SELECT-able by everyone (`USING (true)`), so realtime
       // hands every client every player's bets. Only MY row can move MY balance
       // — placing a bet debits, settling credits — so refreshing the header on
@@ -14666,8 +14679,8 @@ function setupRealtime() {
       chatOnPresence(payload.new);
     });
 
-  subscribeSeasonalRealtime(ch);
   ch.subscribe();
+  subscribeSeasonalRealtime();
 
   realtimeChannels.push(ch);
   setupShopRealtime();
@@ -14696,10 +14709,21 @@ const SEASONAL_STATE_LOADERS = {
   rps:            () => loadRpsState(false),
 };
 
-function subscribeSeasonalRealtime(ch) {
+// Its own channel (not db-changes) so it can be swapped when Monday 00:00
+// changes the game: a tab left open over the weekend used to stay subscribed
+// to last week's tables. loadSeasonalTab() re-checks on every visit.
+let seasonalRtChannel = null, seasonalRtGame = null;
+function subscribeSeasonalRealtime() {
   let gameType;
   try { gameType = getCurrentSeasonalEntry()?.gameType; } catch (e) { return; }
   if (!gameType || !SEASONAL_STATE_LOADERS[gameType]) return;
+  if (seasonalRtGame === gameType && realtimeChannels.includes(seasonalRtChannel)) return;
+  if (seasonalRtChannel) {
+    try { sb.removeChannel(seasonalRtChannel); } catch (e) {}
+    realtimeChannels = realtimeChannels.filter(c => c !== seasonalRtChannel);
+  }
+  seasonalRtGame = gameType;
+  const ch = seasonalRtChannel = sb.channel('seasonal-' + gameType);
 
   // whack_boss is the one game still living inline; everything else needs its
   // games/*.js fetched before the loader exists.
@@ -14717,6 +14741,8 @@ function subscribeSeasonalRealtime(ch) {
   ch.on('postgres_changes',
     { event: 'INSERT', schema: 'public', table: gameType + '_weekly_awards' },
     async () => { refresh(); await refreshMeCoins(); });
+  ch.subscribe();
+  realtimeChannels.push(ch);
 }
 
 function updateCardProb(m) {
@@ -16012,10 +16038,19 @@ async function refreshShopNavCounts() {
 function setupShopRealtime() {
   // Off the Sklep tab there is no grid to rebuild, but the nav counters still
   // have to follow a listing someone else just posted or cancelled.
-  const reload = () => { if (activeTab === 'shop') loadShop(); else refreshShopNavCounts(); };
+  // One sale fires several of these tables at once (listing + bid + fill), and
+  // each loadShop() is 11+ requests — coalesce a burst into one reload.
+  let shopReloadTimer = null;
+  const reload = () => {
+    clearTimeout(shopReloadTimer);
+    shopReloadTimer = setTimeout(() => { if (activeTab === 'shop') loadShop(); else refreshShopNavCounts(); }, 400);
+  };
   // Item/equipment changes also refresh the 🎒 Mój Majątek hub section if open.
-  const reloadItems = async () => {
-    if (activeTab === 'shop') { invalidateFarmAssetBreakdown(); loadShop(); return; }
+  const reloadItems = async payload => {
+    if (activeTab === 'shop') { invalidateFarmAssetBreakdown(); reload(); return; }
+    // Someone else buying an item can't change my inventory. (UPDATE/DELETE
+    // may carry only the old id, so those always refresh.)
+    if (payload?.eventType === 'INSERT' && payload.new?.owner_id !== me?.id) return;
     await loadMyHeroInventory();
     await invalidateFarmAssetBreakdown({ reload: true });
     if (farmModalEl && farmHubTab === 'inventory') refreshFarmHub();
@@ -18710,6 +18745,7 @@ function seasonDateFmt(weekStartStr) {
 }
 
 function loadSeasonalTab(showSpinner = true) {
+  subscribeSeasonalRealtime();   // follows the week if this tab outlived Monday 00:00
   const current = getCurrentSeasonalEntry();
   const next    = getNextSeasonalEntry();
 
@@ -19041,6 +19077,27 @@ const CANVAS_ERR = {
 };
 
 let cvPixels = new Map();          // "x,y" -> color
+// The board is also kept as a 192×108 bitmap, one texel per cell, so a frame is
+// one scaled drawImage instead of ~20k fillRects; realtime paints one texel.
+let cvBitmap = null, cvBitmapCtx = null, cvBitmapStale = true;
+let cvLoadedAt = 0, cvDrawRaf = 0;
+function cvBitmapPaint(key, color) {
+  const ci = key.indexOf(',');
+  cvBitmapCtx.fillStyle = color;
+  cvBitmapCtx.fillRect(+key.slice(0, ci), +key.slice(ci + 1), 1, 1);
+}
+function cvEnsureBitmap() {
+  if (!cvBitmap) {
+    cvBitmap = document.createElement('canvas');
+    cvBitmap.width = CANVAS_W; cvBitmap.height = CANVAS_H;
+    cvBitmapCtx = cvBitmap.getContext('2d');
+  }
+  if (!cvBitmapStale) return;
+  cvBitmapStale = false;
+  cvBitmapCtx.fillStyle = '#ffffff';   // unpainted cells: white sheet
+  cvBitmapCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  cvPixels.forEach((color, key) => cvBitmapPaint(key, color));
+}
 let cvSelColor = CANVAS_PALETTE[4];
 let cvView = { scale: 1, offsetX: 0, offsetY: 0 };
 let cvHover = null;                // {x,y} or null
@@ -19081,6 +19138,10 @@ async function fetchAllCanvasPixels() {
 async function loadCanvas() {
   cvSetup();
   renderCanvasPalette();
+  // Realtime keeps cvPixels current while away, so a revisit only redraws. The
+  // full reload (up to 21 sequential pages) runs at most every 5 minutes, which
+  // also heals a socket that slept through some pixels.
+  if (cvLoadedAt && Date.now() - cvLoadedAt < 5 * 60 * 1000) { drawCanvas(); updateCanvasStatus(); return; }
   const seq = ++cvLoadSeq;
   const loadChanges = new Map();
   cvLoadChanges = { seq, pixels: loadChanges };
@@ -19091,6 +19152,8 @@ async function loadCanvas() {
     pixels.forEach(p => nextPixels.set(p.x + ',' + p.y, p.color));
     loadChanges.forEach((color, key) => nextPixels.set(key, color));
     cvPixels = nextPixels;
+    cvBitmapStale = true;
+    cvLoadedAt = Date.now();
     if (cvLoadChanges?.seq === seq) cvLoadChanges = null;
     fitCanvasView();
     drawCanvas();
@@ -19107,6 +19170,7 @@ function applyCanvasPixelChange(row) {
   if (!row || row.x == null || row.y == null) return;
   const key = row.x + ',' + row.y;
   cvPixels.set(key, row.color);
+  if (cvBitmapCtx && !cvBitmapStale) cvBitmapPaint(key, row.color);
   if (cvLoadChanges) cvLoadChanges.pixels.set(key, row.color);
   if (activeTab === 'canvas') drawCanvas();
 }
@@ -19137,7 +19201,12 @@ function fitCanvasView() {
   cvView.offsetY = (rect.height - CANVAS_H * s) / 2;
 }
 
+// Pointer moves and realtime pixels can arrive many times a frame; draw once.
 function drawCanvas() {
+  if (cvDrawRaf) return;
+  cvDrawRaf = requestAnimationFrame(() => { cvDrawRaf = 0; drawCanvasNow(); });
+}
+function drawCanvasNow() {
   const info = cvBackingSetup();
   if (!info) return;
   const { rect, dpr } = info;
@@ -19147,16 +19216,10 @@ function drawCanvas() {
   // surrounding stage (outside the board)
   ctx.fillStyle = '#e2e8f0';
   ctx.fillRect(0, 0, rect.width, rect.height);
-  // board background (unpainted cells) — white sheet
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(offsetX, offsetY, CANVAS_W * scale, CANVAS_H * scale);
-  // painted pixels
-  cvPixels.forEach((color, key) => {
-    const ci = key.indexOf(',');
-    const x = +key.slice(0, ci), y = +key.slice(ci + 1);
-    ctx.fillStyle = color;
-    ctx.fillRect(offsetX + x * scale, offsetY + y * scale, scale + 0.6, scale + 0.6);
-  });
+  // board: white sheet + painted pixels, from the one-texel-per-cell bitmap
+  cvEnsureBitmap();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(cvBitmap, offsetX, offsetY, CANVAS_W * scale, CANVAS_H * scale);
   // grid lines once zoomed in
   if (scale >= 7) {
     ctx.strokeStyle = 'rgba(15,23,42,0.08)';

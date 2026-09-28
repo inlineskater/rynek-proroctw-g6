@@ -342,12 +342,14 @@ function drawPlinkoBucketsCanvas(ctx, layout, rows, payouts, hitBucket = null) {
   });
 }
 
-function drawPlinkoPegs(ctx, layout, rows, activeIndex = -1) {
+function drawPlinkoPegs(ctx, layout, rows, activeIndex = -1, onlyHot = false) {
   const rad = Math.max(5.5, Math.min(14, Math.min(layout.gapX, layout.gapY) * 0.34));
   for (let r = 1; r <= rows; r += 1) {
+    const rowHot = activeIndex instanceof Set ? activeIndex.has(r) : r === activeIndex;
+    if (onlyHot && !rowHot) continue;
     for (let k = 0; k <= r; k += 1) {
       const p = layout.node(r, k);
-      const hot = activeIndex instanceof Set ? activeIndex.has(r) : r === activeIndex;
+      const hot = rowHot;
       // soft contact shadow under the peg
       ctx.beginPath();
       ctx.fillStyle = 'rgba(15,23,42,.16)';
@@ -471,6 +473,24 @@ function ensurePlinkoRaf() {
   plinkoRaf = requestAnimationFrame(plinkoFrame);
 }
 
+// The background and the resting pegs (~150 radial gradients with shadowBlur)
+// never change between frames, so they are painted once per size/row count and
+// blitted; only the pegs a ball is touching are drawn live, on top.
+let plinkoStatic = null;
+function plinkoStaticLayer(W, H, rows, layout) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const key = W + 'x' + H + '@' + dpr + ':' + rows;
+  if (plinkoStatic?.key === key) return plinkoStatic.canvas;
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+  const x = c.getContext('2d');
+  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawPlinkoBackground(x, W, H);
+  drawPlinkoPegs(x, layout, rows, -1);
+  plinkoStatic = { key, canvas: c };
+  return c;
+}
+
 function drawPlinkoBoard() {
   const cc = plinkoCanvasContext();
   if (!cc) return;
@@ -485,7 +505,7 @@ function drawPlinkoBoard() {
   const dt = plinkoLastFrameMs ? Math.min(0.05, (now - plinkoLastFrameMs) / 1000) : 0.016;
   plinkoLastFrameMs = now;
 
-  drawPlinkoBackground(ctx, W, H);
+  ctx.drawImage(plinkoStaticLayer(W, H, rows, layout), 0, 0, W, H);
 
   // Resolve every active ball's current position (skip ones still on stagger delay).
   const balls = [];
@@ -524,7 +544,7 @@ function drawPlinkoBoard() {
   }
 
   drawPlinkoBucketsCanvas(ctx, layout, rows, payouts, plinkoLastHitBucket);
-  drawPlinkoPegs(ctx, layout, rows, activeRows.size ? activeRows : -1);
+  if (activeRows.size) drawPlinkoPegs(ctx, layout, rows, activeRows, true);
 
   for (const anim of plinkoAnims) {
     if (!anim.trail.length) continue;
@@ -1091,47 +1111,8 @@ function wheelCanvasContext() {
 // into a single ring: big bezel, prize-only radial labels, and the
 // LED/glow/pointer-kick treatment. `highlightIndex` (the resolved round's
 // segment, or null) flashes the winning wedge and dims the rest.
-function drawWheelBoard(rotation = wheelBoardRotation) {
-  const cc = wheelCanvasContext();
-  if (!cc) return;
-  const { ctx, w, h, size } = cc;
-  const cx = w / 2, cy = h / 2;
-  const r = size / 2 - 10;
-  const segAngle = (Math.PI * 2) / WHEEL_SEGMENT_COUNT;
-  const twoPi = Math.PI * 2;
-  const nowMs = performance.now();
-  const phase = wheelPhaseAnim;
-  const highlightIndex = (phase === 'result' && wheelRound && wheelRound.segmentIndex != null)
-    ? Number(wheelRound.segmentIndex) : null;
-
-  ctx.clearRect(0, 0, w, h);
-
-  // The wheel is letterboxed inside a possibly non-square canvas, so the
-  // DOM pointer pin must track the actual rim, not the stage top.
-  const pointerEl = document.querySelector('#tab-wheel .wheel-pointer');
-  if (pointerEl) {
-    const topPx = Math.round(cc.canvas.offsetTop + (cy - r) - 14);
-    if (wheelPointerTop !== topPx) {
-      wheelPointerTop = topPx;
-      pointerEl.style.top = topPx + 'px';
-    }
-  }
-
-  const hubR = r * 0.20;
-  const ringR0 = hubR + r * 0.02;
-  const ringR1 = r * 0.94;
-
-  // Decorative dark bezel behind the ring, so the segments read as an inset
-  // wheel rather than floating flat on the stage background.
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, twoPi);
-  ctx.fillStyle = '#0c2416';
-  ctx.fill();
-
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(rotation);
-
+// The 20 segments with their labels, drawn around (0,0) in wheel space.
+function wheelDrawSegments(ctx, size, ringR0, ringR1, segAngle, highlightIndex) {
   for (let i = 0; i < WHEEL_SEGMENTS.length; i += 1) {
     const mult = WHEEL_SEGMENTS[i];
     const start = -Math.PI / 2 + i * segAngle - segAngle / 2;
@@ -1197,6 +1178,72 @@ function drawWheelBoard(rotation = wheelBoardRotation) {
       ctx.globalAlpha = 1;
       ctx.restore();
     }
+  }
+}
+
+// 20 gradient/text wedges redrawn at 60 fps were most of the wheel's frame
+// cost; the un-highlighted face is rendered once per size and rotated as an image.
+let wheelFace = null;
+function wheelFaceLayer(size, ringR0, ringR1, segAngle) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const key = size + '@' + dpr;
+  if (wheelFace?.key === key) return wheelFace;
+  const half = Math.ceil(ringR1 + 4);
+  const c = document.createElement('canvas');
+  c.width = c.height = Math.round(half * 2 * dpr);
+  const x = c.getContext('2d');
+  x.setTransform(dpr, 0, 0, dpr, half * dpr, half * dpr);
+  wheelDrawSegments(x, size, ringR0, ringR1, segAngle, null);
+  wheelFace = { key, half, canvas: c };
+  return wheelFace;
+}
+
+function drawWheelBoard(rotation = wheelBoardRotation) {
+  const cc = wheelCanvasContext();
+  if (!cc) return;
+  const { ctx, w, h, size } = cc;
+  const cx = w / 2, cy = h / 2;
+  const r = size / 2 - 10;
+  const segAngle = (Math.PI * 2) / WHEEL_SEGMENT_COUNT;
+  const twoPi = Math.PI * 2;
+  const nowMs = performance.now();
+  const phase = wheelPhaseAnim;
+  const highlightIndex = (phase === 'result' && wheelRound && wheelRound.segmentIndex != null)
+    ? Number(wheelRound.segmentIndex) : null;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // The wheel is letterboxed inside a possibly non-square canvas, so the
+  // DOM pointer pin must track the actual rim, not the stage top.
+  const pointerEl = document.querySelector('#tab-wheel .wheel-pointer');
+  if (pointerEl) {
+    const topPx = Math.round(cc.canvas.offsetTop + (cy - r) - 14);
+    if (wheelPointerTop !== topPx) {
+      wheelPointerTop = topPx;
+      pointerEl.style.top = topPx + 'px';
+    }
+  }
+
+  const hubR = r * 0.20;
+  const ringR0 = hubR + r * 0.02;
+  const ringR1 = r * 0.94;
+
+  // Decorative dark bezel behind the ring, so the segments read as an inset
+  // wheel rather than floating flat on the stage background.
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, twoPi);
+  ctx.fillStyle = '#0c2416';
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  if (highlightIndex == null) {
+    // Spinning or idle, the face is identical every frame: blit the cached one.
+    const face = wheelFaceLayer(size, ringR0, ringR1, segAngle);
+    ctx.drawImage(face.canvas, -face.half, -face.half, face.half * 2, face.half * 2);
+  } else {
+    wheelDrawSegments(ctx, size, ringR0, ringR1, segAngle, highlightIndex);
   }
   ctx.restore();
 

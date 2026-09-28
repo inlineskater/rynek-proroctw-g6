@@ -331,10 +331,17 @@ function towerDraw(now = performance.now()) {
   ctx.textAlign = 'left';
 }
 
+// Measuring the canvas every frame forced a layout per frame; a
+// ResizeObserver flags the (rare) frames where the size really changed.
+let towerCanvasDirty = true, towerRo = null;
 function towerLoop() {
   towerRaf = null;
   if (activeTab !== 'tower') return;
-  towerInitCanvas();
+  if (!towerRo && window.ResizeObserver) {
+    const c = document.getElementById('tower-canvas');
+    if (c) { towerRo = new ResizeObserver(() => { towerCanvasDirty = true; }); towerRo.observe(c); }
+  }
+  if (towerCanvasDirty || !towerRo) { towerInitCanvas(); towerCanvasDirty = false; }
   towerDraw();
   towerRaf = requestAnimationFrame(towerLoop);
 }

@@ -211,12 +211,20 @@ async function loadSeasonHistory() {
   }
 }
 
-async function loadLeaderboard() {
+// A tab switch hides the panels rather than clearing them, so a quick return
+// can keep what is on screen: the full load is ~25 requests (all trades, the
+// ledgers, every award view) and none of it moves in two minutes.
+let _lbLoadedAt = 0;
+const LB_REUSE_MS = 2 * 60 * 1000;
+
+async function loadLeaderboard(force = false) {
   const cashWrap = document.getElementById('leaderboard-cash-wrap');
   const netWrap = document.getElementById('leaderboard-net-wrap');
   const historyWrap = document.getElementById('transaction-history-wrap');
   const hazardHistWrap = document.getElementById('hazard-history-wrap');
   const hazardistaWrap = document.getElementById('hazardista-wrap');
+  if (!force && _lbLoadedAt && Date.now() - _lbLoadedAt < LB_REUSE_MS && !cashWrap.querySelector('.spinner')) return;
+  _lbLoadedAt = Date.now();
   cashWrap.replaceChildren(makeSpinner());
   netWrap.replaceChildren(makeSpinner());
   historyWrap.replaceChildren(makeSpinner());
@@ -227,7 +235,8 @@ async function loadLeaderboard() {
   const seasonPromise = loadSeasonHistory();
   loadCoinRace(seasonPromise);
 
-  const [leaderboardRes, leaderboardNetRes, tradesRes, marketsRes, allTradesRes, gameRes, hazardRes, playersRes] = await Promise.all([
+  let results;
+  try { results = await Promise.all([
     sb.from('leaderboard').select('*').neq('is_admin', true).order('coins', { ascending: false }).limit(20),
     sb.from('leaderboard').select('*').neq('is_admin', true).order('net_worth', { ascending: false }).limit(20),
     sb.from('trades').select('id, created_at, market_id, nick_snapshot, side, amount, shares, p_yes_after').order('created_at', { ascending: false }).limit(500),
@@ -242,7 +251,16 @@ async function loadLeaderboard() {
     // Every player, not just a top-20 slice: Trafność and Medale need nicks for
     // people who may rank outside both money lists, plus the staff flag.
     sb.from('leaderboard').select('id, nick, is_admin'),
-  ]);
+  ]); } catch (e) {
+    // A network failure used to leave all five spinners turning forever.
+    _lbLoadedAt = 0;
+    const retry = () => el('div', { style: { color: 'var(--muted)', fontSize: '13px', padding: '24px', textAlign: 'center' } },
+      'Nie udało się wczytać statystyk. ',
+      el('button', { className: 'btn-ghost', onclick: () => loadLeaderboard(true) }, 'Spróbuj ponownie'));
+    [cashWrap, netWrap, historyWrap, hazardHistWrap, hazardistaWrap].forEach(w => w.replaceChildren(retry()));
+    return;
+  }
+  const [leaderboardRes, leaderboardNetRes, tradesRes, marketsRes, allTradesRes, gameRes, hazardRes, playersRes] = results;
   _playerIndex = new Map((playersRes.data || []).map(r => [r.id, { nick: r.nick, isAdmin: !!r.is_admin }]));
   // loadSeasonHistory() runs concurrently and may have rendered the medal table
   // before the index existed (falling back to nick snapshots, and unable to drop

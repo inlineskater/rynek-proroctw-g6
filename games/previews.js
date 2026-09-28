@@ -41,10 +41,16 @@ function agpRandSeed() {
 function agpFitCanvas(p) {
   const canvas = p.canvas;
   if (!canvas) return false;
-  const rect = canvas.getBoundingClientRect();
+  // Measured only when agpRo says the box changed: a getBoundingClientRect per
+  // preview per frame, between DOM previews writing styles, forced a layout
+  // each time.
+  if (p.fitDirty !== false || !agpRo) {
+    const rect = canvas.getBoundingClientRect();
+    p.cssW = rect.width; p.cssH = rect.height; p.fitDirty = false;
+  }
   const dpr = Math.min(window.devicePixelRatio || 1, AGP_DPR_CAP);
-  const w = Math.max(1, Math.round((rect.width || p.vw) * dpr));
-  const h = Math.max(1, Math.round((rect.height || p.vh) * dpr));
+  const w = Math.max(1, Math.round((p.cssW || p.vw) * dpr));
+  const h = Math.max(1, Math.round((p.cssH || p.vh) * dpr));
   if (canvas.width !== w || canvas.height !== h || !p.ctx) {
     canvas.width = w;
     canvas.height = h;
@@ -94,6 +100,7 @@ function agpMount(card) {
       canvas.style.aspectRatio = p.vw + ' / ' + p.vh;
       p.canvas = canvas;
       stage.appendChild(canvas);
+      if (agpRo) agpRo.observe(canvas);
     }
     def.init(p);
     p.ready = true;
@@ -162,7 +169,7 @@ function agpStartPreviews() {
     }, { rootMargin: '120px 0px' });
   }
   if (!agpRo && 'ResizeObserver' in window) {
-    agpRo = new ResizeObserver(() => { agpLive.forEach(p => { if (p.host) agpScaleDom(p); }); });
+    agpRo = new ResizeObserver(() => { agpLive.forEach(p => { p.fitDirty = true; if (p.host) agpScaleDom(p); }); });
   }
   if (!agpVisibilityHooked) {
     agpVisibilityHooked = true;
