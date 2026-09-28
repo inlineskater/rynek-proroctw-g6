@@ -13,7 +13,7 @@ const db = databaseUrl
   ? postgres(databaseUrl, { prepare: false, max: 4, idle_timeout: 20 })
   : null;
 
-// „Papier, Kamień, Biuro G6" (rps) — a remake of ICQ's „RPS Online".
+// „Kamień, Papier, Nożyce G6" (rps) — a remake of ICQ's „RPS Online".
 //
 // A 7×6 board. Each side has 14 pieces on its two home rows: 12 fighters that
 // are secretly ✊ kamień / ✋ papier / ✌️ nożyce (4 of each), one 🚩 flag and
