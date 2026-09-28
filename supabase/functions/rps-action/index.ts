@@ -427,6 +427,8 @@ async function lockActiveRound(tx, userId) {
   }
   const [secret] = await tx`select state from public.rps_round_secrets where round_id = ${round.id}`;
   if (!secret) return null;
+  // Rows written before the db.json() fix hold the state as a JSON *string*.
+  if (typeof secret.state === "string") secret.state = JSON.parse(secret.state);
   return { round, secret };
 }
 
@@ -481,7 +483,7 @@ async function startRound(userId, body) {
       values (${userId}, ${profile.nick}, ${mode}, now() + (${ROUND_EXPIRES_SECONDS} || ' seconds')::interval)
       returning *
     `;
-    await tx`insert into public.rps_round_secrets (round_id, state) values (${round.id}, ${JSON.stringify(state)}::jsonb)`;
+    await tx`insert into public.rps_round_secrets (round_id, state) values (${round.id}, ${db.json(state)})`;
     return { round, secret: { state } };
   });
 
@@ -514,14 +516,14 @@ async function settle(tx, round, st, userId) {
       values (
         ${round.id}, ${userId}, ${round.nick_snapshot}, public.rps_week_start(now()), ${scoreValue},
         ${st.result === "won"}, ${survivors}, ${st.kills[0]}, ${st.moves[0]}, ${durationMs}, ${accuracy},
-        ${JSON.stringify({ server_validated: true, base_score: baseScore, item_effect: itemEffect, reason: st.reason })}::jsonb
+        ${db.json({ server_validated: true, base_score: baseScore, item_effect: itemEffect, reason: st.reason })}
       )
       on conflict (round_id) do nothing
     `;
   } else {
     await tx`
       insert into public.arcade_scores (user_id, game_type, score, coins_paid, client_meta)
-      values (${userId}, 'rps', ${scoreValue}, 0, ${JSON.stringify({ won: st.result === "won", kills: st.kills[0], moves: st.moves[0] })}::jsonb)
+      values (${userId}, 'rps', ${scoreValue}, 0, ${db.json({ won: st.result === "won", kills: st.kills[0], moves: st.moves[0] })})
     `;
   }
 
@@ -575,7 +577,7 @@ async function playAction(userId, body, action) {
     else {
       await tx`update public.rps_rounds set moves = ${st.moves[0]} where id = ${round.id}`;
     }
-    await tx`update public.rps_round_secrets set state = ${JSON.stringify(st)}::jsonb where round_id = ${round.id}`;
+    await tx`update public.rps_round_secrets set state = ${db.json(st)} where round_id = ${round.id}`;
 
     const status = st.result || "active";
     return {
