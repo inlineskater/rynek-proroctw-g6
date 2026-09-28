@@ -254,18 +254,29 @@ async function fwFillOrder(o, btn) {
   const s = document.createElement('style');
   s.id = 'farm-weather-css';
   s.textContent = `
-    #fw-banner { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; margin: 0 0 10px;
-      padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); color: var(--text); }
+    /* One line, the height of the Wspólny Cel bar it sits beside (.farm-strips
+       in index.html); the forecast tiles and the crop table open on demand and
+       then take the whole row. A container query drops the mini forecast when
+       the strip shares its row on a narrow screen. */
+    #fw-banner { display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box; margin: 0; min-width: 0;
+      padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); color: var(--text);
+      container-type: inline-size; }
     #fw-banner.hidden { display: none; }
-    .fw-wx-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
-    .fw-wx-ic { font-size: 26px; line-height: 1; flex: 0 0 auto; }
-    .fw-wx-main { flex: 1 1 220px; min-width: 0; }
-    .fw-wx-title { font-size: 13px; font-weight: 700; }
-    .fw-wx-sub { font-size: 12px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+    #fw-banner.fw-open { grid-column: 1 / -1; }
+    .fw-wx-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .fw-wx-ic { font-size: 22px; line-height: 1; flex: 0 0 auto; }
+    .fw-wx-main { flex: 1 1 auto; min-width: 0; }
+    .fw-wx-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fw-wx-sub { font-size: 12px; color: var(--muted); line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fw-wx-mini { display: flex; gap: 4px; flex: 0 0 auto; }
+    .fw-wx-mini > span { display: flex; flex-direction: column; align-items: center; min-width: 38px; padding: 2px 4px; border-radius: 7px;
+      background: var(--surface); border: 1px solid var(--border); font-size: 10px; line-height: 1.25; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .fw-wx-mini b { font-size: 13px; }
+    @container (max-width: 470px) { .fw-wx-mini { display: none; } }
     .fw-wx-sub b { color: var(--text); }
     .fw-wx-good { color: #16a34a; font-weight: 700; }
     .fw-wx-bad { color: #dc2626; font-weight: 700; }
-    .fw-wx-btn { flex: 0 0 auto; font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 4px 0; }
+    .fw-wx-btn { flex: 0 0 auto; font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 4px 0; white-space: nowrap; }
     .fw-wx-strip { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
     .fw-wx-strip::-webkit-scrollbar { display: none; }
     .fw-wx-cell { flex: 1 0 44px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px;
@@ -412,7 +423,7 @@ function fwRenderWeatherBanner() {
 
   const sub = el('div', { className: 'fw-wx-sub' });
   if (good.length) {
-    sub.append('Teraz rośnie lepiej: ');
+    sub.append('Lepiej: ');
     good.forEach(([ct, m]) => sub.append(fwWxCropChip(ct, m), ' '));
   }
   if (bad.length) {
@@ -422,27 +433,32 @@ function fwRenderWeatherBanner() {
   }
   if (!good.length && !bad.length) sub.append('Ta pogoda nie sprzyja ani nie szkodzi żadnej uprawie.');
 
-  const btn = el('button', { className: 'fw-wx-btn', type: 'button' }, fwWxOpen ? 'Zwiń ▴' : 'Jak pogoda działa ▾');
+  const btn = el('button', { className: 'fw-wx-btn', type: 'button', title: 'Prognoza i to, jak pogoda działa na uprawy' },
+    fwWxOpen ? 'Zwiń ▴' : 'Więcej ▾');
   btn.addEventListener('click', () => { fwWxOpen = !fwWxOpen; fwRenderWeatherBanner(); });
 
   const temp = cur.temp_c != null ? ', ' + Math.round(cur.temp_c) + '°C' : '';
+  host.classList.toggle('fw-open', fwWxOpen);
+  const blocks = fwWxBlocks(fwWxOpen ? 8 : 4);
+  const mini = el('div', { className: 'fw-wx-mini', 'aria-hidden': 'true' });
+  if (!fwWxOpen) blocks.slice(1).forEach(b => mini.append(el('span', { title: b.name }, el('b', {}, b.ic), b.temp, ' ' + b.label)));
   host.replaceChildren(
     el('div', { className: 'fw-wx-row' },
       el('span', { className: 'fw-wx-ic' }, lab.ic),
       el('div', { className: 'fw-wx-main' },
-        el('div', { className: 'fw-wx-title' }, 'Pogoda we Wrocławiu: ' + lab.name + temp),
+        el('div', { className: 'fw-wx-title', title: 'Pogoda we Wrocławiu' }, 'Wrocław: ' + lab.name + temp),
         sub),
-      btn),
-    fwWxStrip());
-  if (fwWxOpen) host.append(fwWxDetails(crops));
+      mini,
+      btn));
+  if (fwWxOpen) host.append(fwWxStrip(blocks), fwWxDetails(crops));
 }
 
-// Next 48 h in 6-hour blocks, each shown as its most common condition.
-function fwWxStrip() {
+// The next n 6-hour blocks, each shown as its most common condition.
+function fwWxBlocks(n) {
   const H = 3600000, now = Date.now();
-  const strip = el('div', { className: 'fw-wx-strip' });
   const start = Math.floor(now / (6 * H)) * 6 * H;
-  for (let i = 0; i < 8; i++) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
     const a = start + i * 6 * H, b = a + 6 * H;
     const hs = fwWx.hours.filter(h => h.ms >= a && h.ms < b);
     if (!hs.length) continue;
@@ -450,13 +466,19 @@ function fwWxStrip() {
     hs.forEach(h => { counts[h.c] = (counts[h.c] || 0) + 1; });
     const cat = Object.keys(counts).sort((x, y) => counts[y] - counts[x])[0];
     const temps = hs.map(h => Number(h.t)).filter(Number.isFinite);
-    const d = new Date(a);
-    const label = i === 0 ? 'teraz' : String(d.getHours()).padStart(2, '0') + ':00';
-    strip.append(el('div', { className: 'fw-wx-cell' + (i === 0 ? ' now' : ''), title: (FW_WX_LABELS[cat] || {}).name || cat },
-      el('b', {}, (FW_WX_LABELS[cat] || FW_WX_LABELS.cloudy).ic),
-      temps.length ? Math.round(Math.max(...temps)) + '°' : '',
-      el('span', {}, label)));
+    const lab = FW_WX_LABELS[cat] || FW_WX_LABELS.cloudy;
+    out.push({ now: i === 0, ic: lab.ic, name: lab.name,
+      temp: temps.length ? Math.round(Math.max(...temps)) + '°' : '',
+      label: i === 0 ? 'teraz' : String(new Date(a).getHours()).padStart(2, '0') + ':00' });
   }
+  return out;
+}
+
+// Next 48 h, shown only while the strip is expanded.
+function fwWxStrip(blocks) {
+  const strip = el('div', { className: 'fw-wx-strip' });
+  blocks.forEach(b => strip.append(el('div', { className: 'fw-wx-cell' + (b.now ? ' now' : ''), title: b.name },
+    el('b', {}, b.ic), b.temp, el('span', {}, b.label))));
   return strip;
 }
 

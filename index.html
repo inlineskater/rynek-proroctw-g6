@@ -7114,8 +7114,22 @@
     .farm-box-coll-emoji { font-size: 24px; }
     .farm-box-coll-item small { font-size: 10px; color: var(--muted); font-weight: 700; }
     /* Ogródek farm: side toolbar + catalog / inventory modals */
-    .farm-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-    .farm-toolbar .farm-tool-btn { width: auto; flex: 0 1 auto; padding: 9px 16px; }
+    /* Nine hub buttons since the 📋/🤝 tabs (2026-09-28): compact, one line each,
+       short labels (FARM_HUB_TABS[].short) so the row fits beside an open chat. */
+    .farm-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+    .farm-toolbar .farm-tool-btn { width: auto; flex: 0 1 auto; padding: 7px 9px; font-size: 12px; white-space: nowrap; }
+    /* Wspólny Cel + weather share one row when both fit (auto-fit collapses the
+       empty track, so a lone strip takes the whole width). */
+    /* Phone: one swipeable row instead of three wrapped ones. */
+    @media (max-width: 600px) {
+      .farm-toolbar-host { justify-content: flex-start; min-width: 0; }
+      .farm-toolbar { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none;
+        -webkit-overflow-scrolling: touch; max-width: 100%; }
+      .farm-toolbar::-webkit-scrollbar { display: none; }
+      .farm-toolbar .farm-tool-btn { flex: 0 0 auto; }
+    }
+    .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; margin: 0 0 10px; align-items: stretch; }
+    .farm-strips > .og-goal { margin: 0; }
     .farm-toolbar .farm-box-link-btn { margin-bottom: 0; }
     .farm-tool-btn { display: block; width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; font-weight: 800; font-size: 12px; color: var(--text); background: var(--surface); }
     .farm-tool-btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -7179,8 +7193,8 @@
     /* Hub modal tab bar (Katalog / Mój Majątek / Jak to działa) */
     /* Wraps to a second row instead of ellipsising labels — with 7 tabs the old
        `flex: 1 1 0` squeezed them into „Mój M…" / „Jak to…" on narrow modals. */
-    .farm-hub-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; margin: 0 0 10px; background: var(--surface); border-radius: var(--r-md); }
-    .farm-hub-tab { flex: 0 1 auto; min-width: max-content; padding: 9px 12px; border: none; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; transition: background .12s, color .12s; }
+    .farm-hub-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; margin: 0 0 10px; background: var(--surface); border-radius: var(--r-md); }
+    .farm-hub-tab { flex: 0 1 auto; min-width: max-content; padding: 8px 9px; border: none; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-weight: 600; font-size: 12.5px; cursor: pointer; white-space: nowrap; transition: background .12s, color .12s; }
     .farm-hub-tab:hover { color: var(--text); }
     .farm-hub-tab.active { background: var(--accent); color: #fff; font-weight: 700; box-shadow: var(--sh-sm); }
     .farm-cat-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
@@ -8437,6 +8451,26 @@
     .rail-launcher { display: none; }
     #chat-rail .rail-hide-btn { display: none; }
 
+    /* Desktop fold (2026-09-28): the column can shrink to a 44px strip, like a
+       collapsed navigation panel. --chat-w is overridden on body, so every
+       consumer (the tab padding-left, the toast offsets) follows it for free.
+       The strip is the launcher: 🌼, a vertical label and the unread badge. */
+    @media (min-width: 901px) {
+      body.rail-collapsed { --chat-w: 44px; }
+      #chat-rail .rail-fold-btn { display: inline-flex; margin-left: 6px; }
+      #chat-rail .side-people .side-mod-meta { margin-left: auto; }
+      #chat-rail.rail-collapsed > *:not(.rail-launcher) { display: none; }
+      #chat-rail.rail-collapsed > .rail-launcher {
+        display: flex; flex-direction: column; align-items: center; gap: 10px;
+        width: 100%; padding: 14px 0; border: 0; background: none; cursor: pointer;
+        color: var(--c-ink); font: inherit; font-size: 12px; font-weight: 600;
+      }
+      #chat-rail.rail-collapsed > .rail-launcher:hover { background: var(--c-line); }
+      #chat-rail.rail-collapsed .rail-launcher > span:nth-child(2) { writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: .04em; }
+      #chat-rail.rail-collapsed .rail-launcher-flower { font-size: 18px; line-height: 1; }
+    }
+    @media (max-width: 900px) { #chat-rail .rail-fold-btn { display: none; } }
+
     .side-mod { display: flex; flex-direction: column; min-height: 0; border-bottom: 1px solid var(--c-line); }
     .side-mod-head {
       flex: none;
@@ -9006,6 +9040,7 @@
       <div class="side-mod-head">
         <span class="side-mod-title">Biuro</span>
         <span class="side-mod-meta" id="side-people-meta"></span>
+        <button class="chat-hbtn rail-fold-btn" id="rail-fold-btn" title="Zwiń panel" aria-label="Zwiń panel">«</button>
       </div>
       <div class="side-people-list" id="side-people"></div>
     </section>
@@ -11591,10 +11626,12 @@
         <div class="farm-topbar" id="farm-topbar">
           <div class="farm-toolbar-host" id="farm-topbar-btns"></div>
         </div>
+        <div class="farm-strips">
         <div class="og-goal hidden" id="og-goal" role="button" tabindex="0"
              onclick="openOfficeGoalModal()"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
         <div class="hidden" id="fw-banner"></div>
+        </div>
         <div class="farm-stage">
           <div class="garden-sky">
             <div class="garden-glow"></div><div class="garden-stars"></div>
@@ -14829,8 +14866,9 @@ function teardownRealtime() {
 
 const chatRailEl = () => document.getElementById('chat-rail');
 
-// ── Mobile collapse ─────────────────────────────────────────────────────────
-// Above 900px the rail is a column of the page and is never collapsible. On a
+// ── Collapse ────────────────────────────────────────────────────────────────
+// Above 900px the rail is a column of the page that folds to a 44px strip (the
+// « in the Biuro header; remembered per device in localStorage). On a
 // phone it is a dock that covers 42% of the screen, so it starts SHUT and the
 // launcher pill carries the notification: a badge with everything that arrived
 // while it was closed (whispers, and room messages — which normally toast
@@ -14839,15 +14877,24 @@ const chatRailEl = () => document.getElementById('chat-rail');
 // The state is per page load on purpose: „hidden by default on mobile" means
 // every visit, not „until you once opened it".
 const railIsMobile = () => window.matchMedia('(max-width: 900px)').matches;
+const RAIL_FOLD_KEY = 'rp_rail_folded';
+function railDeskFolded() { try { return localStorage.getItem(RAIL_FOLD_KEY) === '1'; } catch (e) { return false; } }
+// Where the rail should start for the current width: shut on a phone, the
+// remembered choice on a desktop.
+const railDefaultOpen = () => railIsMobile() ? false : !railDeskFolded();
 let railOpen = true;
 let chatRoomUnread = 0;   // room messages that landed while the rail was shut
 
-function setRailOpen(open) {
+function setRailOpen(open, remember = false) {
   railOpen = open;
+  if (remember && !railIsMobile()) { try { localStorage.setItem(RAIL_FOLD_KEY, open ? '0' : '1'); } catch (e) {} }
   const rail = chatRailEl();
   if (!rail) return;
   rail.classList.toggle('rail-collapsed', !open);
   document.body.classList.toggle('rail-collapsed', !open);
+  // The content column changed width without the window resizing; the farm
+  // board and other canvases only re-fit on resize.
+  window.dispatchEvent(new Event('resize'));
   if (open) {
     chatRoomUnread = 0;
     if (chatView === 'thread' && chatPeerId) chatMarkRead(chatPeerId);
@@ -14856,18 +14903,16 @@ function setRailOpen(open) {
   chatRenderUnreadBadges();
 }
 
-// Rotating a phone to landscape can cross 900px, and there is no launcher on the
-// desktop side of that line — so a rail collapsed on the phone would become
-// unreachable. Force it open on the way up; going back down re-collapses it.
-// Whether the panel is actually on screen. Derived, not just read off railOpen:
-// the collapsed CSS lives inside the mobile media query, so above 900px the rail
-// is visible no matter what the flag says — and a stale flag must not make an
-// open panel start toasting its own room messages.
-const railVisible = () => !railIsMobile() || railOpen;
+// Crossing 900px (rotating a phone, resizing a window) swaps between the phone
+// dock and the desktop column, so re-apply that side's default: shut on the
+// phone, the remembered fold state on the desktop.
+// Whether the panel is actually on screen — both layouts collapse now, so the
+// flag is the truth. A folded desktop strip must badge/toast like a shut dock.
+const railVisible = () => railOpen;
 
 function railWatchViewport() {
   const mq = window.matchMedia('(max-width: 900px)');
-  const onChange = e => setRailOpen(!e.matches);
+  const onChange = () => setRailOpen(railDefaultOpen());
   if (mq.addEventListener) mq.addEventListener('change', onChange);
   else if (mq.addListener) mq.addListener(onChange);
 }
@@ -15129,7 +15174,7 @@ async function initChat() {
   if (!rail) return;
   show(rail);
   chatWireListenersOnce();
-  setRailOpen(!railIsMobile());     // hidden by default on a phone, docked on desktop
+  setRailOpen(railDefaultOpen());   // shut on a phone; on desktop, as the player left it
   railWatchViewport();
   try { chatSoundOn = localStorage.getItem('rp_chat_sound') === '1'; } catch (e) {}
   chatSyncSoundBtn();
@@ -15165,8 +15210,9 @@ function chatWireListenersOnce() {
   if (!rail || rail.dataset.wired) return;
   rail.dataset.wired = '1';
 
-  document.getElementById('rail-launcher').addEventListener('click', () => setRailOpen(true));
-  document.getElementById('rail-hide-btn').addEventListener('click', () => setRailOpen(false));
+  document.getElementById('rail-launcher').addEventListener('click', () => setRailOpen(true, true));
+  document.getElementById('rail-hide-btn').addEventListener('click', () => setRailOpen(false, true));
+  document.getElementById('rail-fold-btn').addEventListener('click', () => setRailOpen(false, true));
   document.getElementById('chat-sound-btn').addEventListener('click', chatToggleSound);
   document.getElementById('chat-thread-back').addEventListener('click', () => setChatView('room'));
 
@@ -23177,13 +23223,14 @@ function farmBoxLinkBtn() {
 // Hub buttons, rendered at the bottom of the wooden side panel. 🎒 Mój Majątek is
 // the prominent primary action (selling & leveling live there now).
 // Built from FARM_HUB_TABS so the garden top bar and the hub modal's tab bar can
-// never drift apart — they open the same places, so they must show the same
-// labels in the same order (they previously disagreed: „Jak to działa" vs
-// „Pomoc", and the top bar was missing 🏅 Osiągnięcia entirely).
+// never drift apart — they open the same places in the same order (they
+// previously disagreed: „Jak to działa" vs „Pomoc", and the top bar was missing
+// 🏅 Osiągnięcia entirely). The top bar may use an entry's `short` label, with
+// the full one as its tooltip — the one deliberate difference.
 function farmToolbar() {
   const bar = el('div', { className: 'farm-toolbar' });
   FARM_HUB_TABS.forEach(t => {
-    const b = el('button', { className: 'farm-tool-btn' + (t.id === 'inventory' ? ' primary' : '') }, t.label);
+    const b = el('button', { className: 'farm-tool-btn' + (t.id === 'inventory' ? ' primary' : ''), title: t.label }, t.short || t.label);
     b.addEventListener('click', () => openFarmHub(t.id));
     bar.append(b);
   });
@@ -25368,15 +25415,17 @@ function buildFarmCatalogBody(bodyEl) {
 
 // ── Ogródek hub: one modal, unified tab bar ──
 let farmHubTab = 'inventory';
+// `short` is the garden top bar's label (nine buttons have to fit one row);
+// the hub modal's tab bar always shows the full `label`.
 const FARM_HUB_TABS = [
-  { id: 'inventory', label: '🎒 Mój Majątek' },
-  { id: 'collections', label: '🏅 Osiągnięcia' },
+  { id: 'inventory', label: '🎒 Mój Majątek', short: '🎒 Majątek' },
+  { id: 'collections', label: '🏅 Osiągnięcia', short: '🏅 Medale' },
   { id: 'seasonal',  label: '🏆 Wyzwanie' },
   { id: 'orders',    label: '📋 Zamówienia' },
   { id: 'neighbours', label: '🤝 Sąsiedzi' },
   { id: 'catalog',   label: '📖 Katalog' },
-  { id: 'market',    label: '📈 Cennik' },
-  { id: 'help',      label: '❓ Pomoc' },
+  { id: 'market',    label: '📈 Cennik', short: '📈 Ceny' },
+  { id: 'help',      label: '❓ Pomoc', short: '❓' },
   { id: 'boxes',     label: '📦 Skrzynki' },
 ];
 
