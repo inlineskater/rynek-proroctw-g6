@@ -332,7 +332,10 @@ function rpsTokAt(i) {
 // Web Animations helper; resolves at once when motion is reduced.
 function rpsAnim(node, frames, opts) {
   if (!node || rpsReducedMotion() || !node.animate) return Promise.resolve();
-  return node.animate(frames, opts).finished.catch(() => {});
+  // Raced against a timer: an animation must never be able to stall a turn
+  // (a background tab can hold `finished` back).
+  const cap = (opts.duration || 0) + (opts.delay || 0) + 400;
+  return Promise.race([node.animate(frames, opts).finished.catch(() => {}), rpsSleep(cap)]);
 }
 
 // The token now at `to` visually travels from `from` (FLIP).
