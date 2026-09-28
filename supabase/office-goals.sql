@@ -380,7 +380,9 @@ BEGIN
        AND ct.delta < 0
        AND ct.reason IN ('farm_box_buy','farm_goldbox_buy','card_levelup','nft_breed',
                          'farm_tile_buy','farm_land_tax_pay','farm_land_tax_autopay',
-                         'office_goal_contribution')
+                         'office_goal_contribution',
+                         -- farm-neighbours.sql: the 🧑‍🌾 scarecrow is a pure burn
+                         'farm_scarecrow_buy')
      GROUP BY 1
   LOOP
     IF rec.off BETWEEN 0 AND c_days - 1 THEN

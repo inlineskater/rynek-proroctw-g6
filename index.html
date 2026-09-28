@@ -12365,7 +12365,7 @@ const TAB_MODULES = {
   tower:       'tabs/tower.js',  // Wieżowiec G6
   coinpusher:  'tabs/coinpusher.js', // Automat Monet G6 (imports three + Rapier itself)
   chatfx:      'tabs/chat-reactions.js', // not a tab: Czat G6 reactions + naklejki, fetched by initChat()
-  farmworld:   'tabs/farm-world.js', // not a tab: Ogródek orders board (📋 Zamówienia hub tab)
+  farmworld:   'tabs/farm-world.js', // not a tab: Ogródek orders, weather, neighbours
 };
 const _tabModulePromises = {};
 let _tabActivationId = 0;
@@ -14222,6 +14222,7 @@ const ACT_COIN_REASONS = {
   lootbox_open:               '🎁 otworzył skrzynkę z kartami',
   card_levelup:               '⭐ ulepszył kartę roślinną',
   farm_order_payout:          '📋 zrealizował zamówienie z Ogródka',
+  farm_scarecrow_buy:         '🧑‍🌾 postawił stracha na wróble',
   // Sklep / przedmioty specjalne
   store_purchase:             '🛒 kupił nagrodę w Sklepie',
   hero_item_purchase:         '🎒 kupił przedmiot specjalny',
@@ -22091,7 +22092,7 @@ async function loadFarm() {
     (mktRes.data || []).forEach(m => fmMarket.set(m.crop_type, normalizeFarmMarket(m)));
     await refreshFarmSeasonalState();
     refreshOfficeGoal();
-    withTabModule('farmworld', fwWeatherRefresh);   // real Wrocław weather banner
+    withTabModule('farmworld', fwRefresh);   // weather banner + neighbour badges (tabs/farm-world.js)
     renderFarmPanels();
     renderFarmBoard();
     renderZenZone();
@@ -22584,6 +22585,7 @@ function buildFarmDisplayCell(cx, cy, now = Date.now()) {
     if (tile.listed) {
       cell.appendChild(el('span', { className: 'farm-sale-sign', 'aria-label': 'For sale' }, el('span', {}, 'FOR SALE')));
     }
+    farmWorldDecorateCell(cell, tile, now);
   }
   if (pending) {
     const label = pending.kind === 'harvest' ? 'Zbieram…' : 'Sadzę…';
@@ -24138,9 +24140,13 @@ function farmPerDayIncome(d, price, level = 1) {
 // this is plant profitability, not a prediction of the player's debt schedule.
 // `over` substitutes ONE NFT instance's stored base stats (bred hybrids differ
 // per serial); fungible cards continue to derive them from the species def.
-// Real Wrocław weather over the growing window (supabase/farm-weather.sql);
-// tabs/farm-world.js replaces this neutral stub once the forecast is loaded.
+// Real Wrocław weather over the growing window (farm-weather.sql) and the
+// combos/talents/watering layer (farm-neighbours.sql); tabs/farm-world.js
+// replaces these neutral stubs, plus the two board hooks, once it loads.
 function farmWeatherYieldMult() { return 1; }
+function farmNeighbourYieldMult() { return 1; }
+function farmWorldDecorateCell() {}
+function farmWorldTileActions() {}
 function farmPlantIncomeCalc(def, level, over) {
   const mkt = def && fmMarket.get(def.crop_type);
   if (!mkt || mkt.base_price == null) return null;
@@ -24156,7 +24162,7 @@ function farmPlantIncomeCalc(def, level, over) {
   const growthBonus = over?.growthBonus != null ? Number(over.growthBonus) : farmGrowthBonus();
   const growMin = Math.max(1440, coreGrow * (1 - growthBonus));
   const weatherMult = farmWeatherYieldMult(def, over, growMin);
-  const yld = Math.round(coreYield * (1 + yieldBonus) * weatherMult);
+  const yld = Math.round(coreYield * (1 + yieldBonus) * weatherMult * farmNeighbourYieldMult(def, over));
   const growDays = Math.max(1, growMin / 1440);
   const activeBonus = farmActiveSeasonalBonus(def.crop_type);
   const eventBounds = activeBonus > 0 ? farmSeasonalEventBounds() : null;
@@ -25334,6 +25340,7 @@ const FARM_HUB_TABS = [
   { id: 'collections', label: '🏅 Osiągnięcia' },
   { id: 'seasonal',  label: '🏆 Wyzwanie' },
   { id: 'orders',    label: '📋 Zamówienia' },
+  { id: 'neighbours', label: '🤝 Sąsiedzi' },
   { id: 'catalog',   label: '📖 Katalog' },
   { id: 'market',    label: '📈 Cennik' },
   { id: 'help',      label: '❓ Pomoc' },
@@ -25353,6 +25360,7 @@ function renderFarmHubBody() {
   else if (farmHubTab === 'collections') buildFarmCollectionsBody(bodyEl);
   else if (farmHubTab === 'seasonal') buildFarmSeasonalBody(bodyEl);
   else if (farmHubTab === 'orders') withTabModule('farmworld', () => buildFarmOrdersBody(bodyEl));
+  else if (farmHubTab === 'neighbours') withTabModule('farmworld', () => buildFarmNeighboursBody(bodyEl));
   else if (farmHubTab === 'catalog') buildFarmCatalogBody(bodyEl);
   else if (farmHubTab === 'market') buildFarmMarketBody(bodyEl);
   else if (farmHubTab === 'help') buildFarmHelpBody(bodyEl);
@@ -26472,7 +26480,7 @@ function openFarmPlantedModal(tile, x, y) {
       growCore: ((inst && inst.stat_grow_minutes != null) ? inst.stat_grow_minutes : def.base_grow_minutes)
         * Math.pow(0.92, level - 1),
       readyAt: projectedHarvestAt,
-      wxFrom: tile.planted_at, wxTo: tile.ready_at,
+      wxFrom: tile.planted_at, wxTo: tile.ready_at, tileXY: x + ',' + y,
     });
   };
 
@@ -26553,6 +26561,7 @@ function openFarmPlantedModal(tile, x, y) {
     rmBtn.addEventListener('click', async () => { if (await removeCrop(x, y, rmBtn)) close(); });
     actions.append(rmBtn);
   }
+  farmWorldTileActions(tile, x, y, actions, close);
 
   const body = el('div', { className: 'fds rar-' + rar },
     hero, focus, priceSlot, facts, isNft ? null : levelsSlot, actions);

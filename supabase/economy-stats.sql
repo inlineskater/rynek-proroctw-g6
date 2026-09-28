@@ -306,7 +306,7 @@ AS $$
                              'garden_certificate','arcade_entry','hero_appearance_change',
                              'canvas_pixel','canvas_pixel_adjustment',
                              'farm_tile_buy','farm_box_buy','farm_goldbox_buy','lootbox_open','card_levelup',
-                             'nft_breed',
+                             'nft_breed','farm_scarecrow_buy',
                              'farm_land_tax_pay','farm_land_tax_autopay',
                              'zapps_purchase',
                              -- Casino shares are burned at purchase and then

@@ -252,6 +252,29 @@ plon              = round(rdzeń × (1 + bonus_ziemi) × mnożnik_pogody)
 
 **Podgląd w kliencie** (`farmWeatherYieldMult`, nadpisuje stub w index.html; używa go `farmPlantIncomeCalc`): przeszłe godziny z tego samego logu, przyszłe z prognozy Open-Meteo (3 dni), a dalej średnia z ostatnich 24 h + prognozy — jutro najpewniej wygląda jak dziś.
 
+## 🤝 Sąsiedzi: pary, talenty NFT, podlewanie, podbieranie (od 2026-09-28)
+
+`supabase/farm-neighbours.sql`, UI w `tabs/farm-world.js` (zakładka hubu **🤝 Sąsiedzi**, odznaki na polach, akcje w popupie rośliny).
+
+**Po co.** Pomiar z 2026-09-28: osiem pasjansów na jednej planszy — nic, co robił jeden gracz, nie dotykało drugiego, i nic nie nagradzało uprawy więcej niż jednej rośliny. Z 54 NFT zasadzonych było 12.
+
+```text
+brutto = rdzeń × (1 + ziemia) × pogoda × (1 + min(sufit, pary + różnorodność + talenty + podlewanie))
+plon   = max(0, brutto − podebrane)
+sufit  = +25%  (+35%, gdy wkłada się talent NFT — żeby zasadzone NFT nigdy nie zniknęło pod sufitem)
+```
+
+- **Pary** (`farm_companion_pairs`, po `crop_type`, symetryczne, +10% dla obu): działają, gdy partner rośnie na INNYM TWOIM polu w chwili zbioru. Celowo „twoje pola", a nie sąsiednie kafelki: plansza jest zapisana jako 13×4, ale rysowana w 8 albo 7 kolumnach, więc „obok" znaczyłoby co innego na telefonie i na komputerze.
+- **Różnorodność**: 3 / 4 / 5+ różnych gatunków zasadzonych naraz = +5 / +10 / +15%.
+- **Talenty NFT** (`farm_nft_talents`, dane): zasadzone NFT daje talent całej farmie właściciela — `crop_boost` (+15% do jednej rośliny), `all_boost`, `scarecrow` (nikt nie podbierze), `water_double`, `diversity_plus` (+1 gatunek), `weather_shield` (zła pogoda nie obniża plonu). Ten sam rodzaj się nie sumuje. Gatunek bez wiersza (przyszłe kolekcje tygodniowe) dostaje `farm_default_talent_boost()` = +3% na wszystko, więc każde nowe NFT ma talent od pierwszego dnia.
+- **💧 Podlewanie**: rosnącą roślinę innego gracza; 3 razy dziennie, raz na roślinę na cykl, max 3 podlewających na cykl, +3% każde. Pomocnik nie dostaje monet — tylko licznik.
+- **🥷 Podbieranie**: roślina dojrzała i niezebrana od ≥ 12 h (liczone od `GREATEST(ready_at, farm_steal_launch_at())` — plony, które już leżały w chwili wdrożenia, nie są od razu łupem); 10% brutto na złodzieja, max 3 złodziei na cykl, 5 kradzieży dziennie. Plon przechodzi do złodzieja (nowa partia, gnije po 5 dniach), właściciel dostaje powiadomienie. Nic nie powstaje z niczego.
+- **🧑‍🌾 Strach na wróble**: 1 500 🪙 **spalone** (`farm_scarecrow_buy`), 7 dni ochrony wszystkich pól, sumuje się do 28 dni. Jest na liście `farm_burn_per_day()`, więc zasila budżet NPC jak każde inne spalenie na farmie.
+
+Zdarzenia cyklu siedzą w `farm_tile_events` kluczowanym `(x, y, planted_at)`, więc `harvest_crop` nie potrzebuje żadnych kolumn do resetu — nowe sadzenie ma nowe `planted_at`. Wszystko liczy hak `farm_harvest_yield()` (patrz Pogoda); klient ma podgląd w `farmNeighbourYieldMult()` z tymi samymi składnikami i sufitem.
+
+**Inflacja.** Bonusy zmieniają tylko ilość (przyciętą sufitem), ilość wycenia throttle popytu; podbieranie to transfer; strach na wróble to spalenie.
+
 ## Karty NFT (legendarne, numerowane)
 
 Karty z `edition_size` to limitowane NFT. Wypadają z tej samej skrzynki; przy trafieniu serwer mintuje unikalny numer seryjny + zabawne imię-personę do `farm_nft_instances` (kolejny serial pochodzi z monotonicznego `minted_count`, nie z liczby żywych egzemplarzy).

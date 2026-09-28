@@ -1711,6 +1711,9 @@ function buildBalancePoints({ userId, coins, createdAt, trades = [], games = [],
       // net-worth loss, not a move from cash into an asset.
       : t.reason === 'office_goal_contribution'
       ? '🎯 Wspólny cel: ' + (t.meta?.title || 'wpłata')
+      // A pure burn (farm-neighbours.sql), so deliberately NOT in NEUTRAL.
+      : t.reason === 'farm_scarecrow_buy'
+      ? '🧑‍🌾 Strach na wróble'
       : t.reason === 'farm_order_payout'
       ? '📋 Zamówienie: ' + (t.meta?.customer || 'NPC')
       : t.reason === 'daily_interest'
