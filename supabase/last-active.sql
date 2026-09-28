@@ -122,6 +122,7 @@ DECLARE
     'bubble_breaker_scores:submitted_at',
     'saper_scores:submitted_at',
     'arkanoid_scores:submitted_at',
+    'rps_scores:submitted_at',
     'arcade_scores:created_at',
     -- 📊 Rynki / ⚽ Mundial / 🎨 Płótno
     'trades:created_at',

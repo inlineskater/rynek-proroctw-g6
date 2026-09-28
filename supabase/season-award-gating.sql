@@ -53,14 +53,18 @@ AS $$
     WHEN '2026-09-14' THEN 'snake'  -- pinned (slot 17 % 14)
     WHEN '2026-09-21' THEN 'invoice_horde'  -- pinned (slot 18 % 14) — in season when this shipped
     WHEN '2026-09-28' THEN 'arkanoid'  -- „Arkanoid G6" debut
+    -- 2026-09-28: appending a 16th game („Papier, Kamień, Biuro G6") turns
+    -- % 15 into % 16. Every week up to and including the current one is
+    -- already an override, so nothing played or in progress moves.
+    WHEN '2026-10-05' THEN 'rps'  -- „Papier, Kamień, Biuro G6" debut
     -- SEASONAL_ROTATION from its 2026-05-18 Monday anchor.
     ELSE
       (ARRAY[
         'whack_boss','bug_jumper','flappy_pants','snake','invoice_horde',
         'var_patrol','egg_catch','super_mariusz','popup_panic','tetris','healer_dungeon','filler',
-        'bubble_breaker','saper','arkanoid'
+        'bubble_breaker','saper','arkanoid','rps'
       ])[
-        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 15) + 1
+        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 16) + 1
       ]
   END;
 $$;
@@ -222,5 +226,16 @@ SELECT cron.schedule(
       THEN json_build_object('ok', true, 'skipped', 'not_midnight_warsaw')
       WHEN public.seasonal_game_for_week(public.arkanoid_week_start(now() - interval '7 days')) = 'arkanoid'
       THEN public.award_arkanoid_week(public.arkanoid_week_start(now() - interval '7 days'))
+      ELSE json_build_object('ok', true, 'skipped', 'not_in_season') END;$$
+);
+
+-- „Papier, Kamień, Biuro G6" — debuts the week of 2026-10-05 (see supabase/rps.sql).
+SELECT cron.schedule(
+  'rps_weekly_awards',
+  '0 22,23 * * 0',
+  $$SELECT CASE WHEN EXTRACT(hour FROM (now() AT TIME ZONE 'Europe/Warsaw'))::integer <> 0
+      THEN json_build_object('ok', true, 'skipped', 'not_midnight_warsaw')
+      WHEN public.seasonal_game_for_week(public.rps_week_start(now() - interval '7 days')) = 'rps'
+      THEN public.award_rps_week(public.rps_week_start(now() - interval '7 days'))
       ELSE json_build_object('ok', true, 'skipped', 'not_in_season') END;$$
 );
