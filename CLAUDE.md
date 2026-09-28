@@ -158,6 +158,8 @@ Winners always get at least their bet back; the losing side's coins are split pr
 
 `el(tag, attrs, ...children)` creates DOM nodes. **Children must be strings or Node objects — never arrays.** When you need to mix text and multiple element nodes outside of `el()`, use `node.append(str, node, str, ...)` instead.
 
+Other shared helpers worth reusing instead of re-inventing: `toast(msg)` (alias of `showToast`), `uiConfirm(text, {okLabel, danger})` / `uiPrompt(text, value)` (in-app, promise-based replacements for `confirm()`/`prompt()`), `isTypingTarget(evt.target)` (every game keydown handler must ignore keys typed into the chat input), and `stopAllArcadeRounds()` (the ONE list of arcade stop functions — add a new game's stop there, not in four places). Every arcade `start*Round()` carries a double-tap/left-mid-start guard (`rt.starting` + a `stale()` check on the runtime object after each await) — copy it into a new game's start function.
+
 ### Permissions
 
 All mutations require authentication and go through Supabase RPCs:

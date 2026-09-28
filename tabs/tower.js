@@ -211,7 +211,8 @@ function towerDraw(now = performance.now()) {
   const topY = TOWER_GROUND - floors * TOWER_BLOCK_H;
   const wantCam = Math.max(0, 250 - topY);
   A.camY += (wantCam - A.camY) * 0.12;
-  const shake = A.shake > now ? Math.sin(now / 18) * 3 : 0;
+  const calm = towerReducedMotion();   // reduced motion: no shake, no crane swing
+  const shake = !calm && A.shake > now ? Math.sin(now / 18) * 3 : 0;
 
   // Sky + skyline (parallax: slower than the tower).
   const sky = ctx.createLinearGradient(0, 0, 0, TOWER_H);
@@ -282,7 +283,7 @@ function towerDraw(now = performance.now()) {
   ctx.restore();
 
   // Crane (screen-space, always at the top).
-  const swing = Math.sin(now / (towerBusy ? 170 : 520)) * (towerBusy ? 0.42 : 0.28);
+  const swing = calm ? 0 : Math.sin(now / (towerBusy ? 170 : 520)) * (towerBusy ? 0.42 : 0.28);
   const hookX = TOWER_W / 2 + Math.sin(swing) * 70;
   const hookY = 44 + Math.cos(swing) * 20;
   ctx.fillStyle = '#f59e0b';
@@ -379,6 +380,7 @@ async function towerAnimateDrop(place, won) {
 function towerCollapse() {
   const A = towerAnim;
   const now = performance.now();
+  if (towerReducedMotion()) { A.blocks = []; return; }   // no flying debris
   A.debris = A.blocks.map((b, i) => ({
     ...b,
     y: TOWER_GROUND - 6 - (i + 1) * TOWER_BLOCK_H,
@@ -396,7 +398,7 @@ function towerCollapse() {
 function towerCelebrate(payout, floors, mult) {
   const A = towerAnim;
   const now = performance.now();
-  for (let i = 0; i < 26; i += 1) {
+  for (let i = 0; i < (towerReducedMotion() ? 0 : 26); i += 1) {
     A.coins.push({ x: TOWER_W / 2, y: 120, vx: (Math.random() - 0.5) * 320, vy: -120 - Math.random() * 180, t0: now + i * 18 });
   }
   A.message = { title: '+' + towerCoins(payout) + ' 🪙', sub: floors + ' ' + plCount(floors, 'piętro', 'piętra', 'pięter') + ' · ' + towerMult(mult), color: '#fbbf24', until: now + 2200 };

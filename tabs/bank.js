@@ -561,11 +561,12 @@ function bankDepositTable(product) {
       const ready = until <= Date.now();
       const btn = el('button', { className: 'btn-ghost bk-btn' },
         ready ? 'Wypłać' : (isLokata ? 'Zerwij' : 'Rozbij'));
-      btn.addEventListener('click', () => {
-        if (!ready && !confirm(isLokata
+      btn.addEventListener('click', async () => {
+        if (!ready && !(await uiConfirm(isLokata
           ? `Zerwanie lokaty przed terminem: odsetki (${bankCoins(d.interest_if_held)}) przepadają w całości, `
             + `otrzymasz ${bankCoins(d.principal)}. Kontynuować?`
-          : `Skarbonka nie osiągnęła ${BANK_PIGGY_LOCK_DAYS} dni — odsetki przepadną. Rozbić?`)) return;
+          : `Skarbonka nie osiągnęła ${BANK_PIGGY_LOCK_DAYS} dni — odsetki przepadną. Rozbić?`,
+          { okLabel: isLokata ? 'Zerwij lokatę' : 'Rozbij', danger: true }))) return;
         bankCall('bank_close_deposit', { p_id: d.id },
           r => r.interest > 0
             ? `Wypłacono ${bankCoins(r.principal + r.interest)}, w tym ${bankCoins(r.interest)} odsetek.`
@@ -745,13 +746,13 @@ function bankHoldingTable(kind, p) {
   }));
 }
 
-function bankListPrompt(h, btn) {
+async function bankListPrompt(h, btn) {
   const fair = h.kind === 'bond' ? Number(h.face_value) + Number(h.accrued) : Number(h.purchase_price);
-  const raw = prompt(
+  const raw = await uiPrompt(
     'Cena wystawienia w 🪙 (sprzedaż natychmiastowa, pierwszy chętny nabywa).\n'
     + `Wartość odniesienia: ${bankFmt(fair)} 🪙`
     + (h.kind === 'bond' ? ' (nominał + kupon naliczony).' : ' (cena nabycia).'),
-    String(fair));
+    String(fair), { okLabel: 'Wystaw' });
   if (raw === null) return;
   const price = Math.floor(Number(raw) || 0);
   if (price < 1) { showToast('❌ Nieprawidłowa cena.'); return; }

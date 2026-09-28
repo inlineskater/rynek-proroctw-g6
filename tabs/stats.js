@@ -1977,7 +1977,9 @@ function animateCoinRace(canvas, series, bounds, opts = {}) {
   if (!canvas || !series || !series.length || !bounds) return;
   const prev = _coinRaceRAF.get(canvas);
   if (prev) cancelAnimationFrame(prev);
-  const dur = opts.duration || 6000, span = bounds.tMax - bounds.tMin, t0 = performance.now();
+  // Reduced motion: jump straight to the finished race.
+  const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const dur = calm ? 1 : (opts.duration || 6000), span = bounds.tMax - bounds.tMin, t0 = performance.now();
   function frame(now) {
     const e = Math.min(1, (now - t0) / dur);
     const eased = 1 - Math.pow(1 - e, 3);

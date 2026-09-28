@@ -482,7 +482,10 @@ function buildMarketplaceCard(listing) {
   const canCancel = isOpen && (isSeller || isAdmin());
   const addCancel = (label, warn) => {
     const b = el('button', { className: 'mlc-cancel' }, label);
-    b.addEventListener('click', () => { if (warn && !window.confirm('Anulować aukcję? Aktualny lider otrzyma zwrot monet.')) return; cancelMarketplaceListing(listing.id, b); });
+    b.addEventListener('click', async () => {
+      if (warn && !(await uiConfirm('Anulować aukcję? Aktualny lider otrzyma zwrot monet.', { okLabel: 'Anuluj aukcję', danger: true }))) return;
+      cancelMarketplaceListing(listing.id, b);
+    });
     body.appendChild(b);
   };
 
@@ -1481,8 +1484,12 @@ async function submitZappsRequest() {
 async function resolveZapps(r, approve, btns) {
   if (!isAdmin()) return;
   let note = '';
-  if (!approve) note = (prompt('Powód odrzucenia (opcjonalnie):', '') || '').trim();
-  if (approve && !confirm('Zatwierdzić zakup ' + r.amount + ' 💎 (−' + r.amount + ' 🪙) dla ' + (r.nick_snapshot || '?') + '?')) return;
+  if (!approve) {
+    const typed = await uiPrompt('Powód odrzucenia (opcjonalnie):', '', { okLabel: 'Odrzuć', danger: true });
+    if (typed === null) return;   // Anuluj now really cancels (prompt's null used to reject anyway)
+    note = typed.trim();
+  }
+  if (approve && !(await uiConfirm('Zatwierdzić zakup ' + r.amount + ' 💎 (−' + r.amount + ' 🪙) dla ' + (r.nick_snapshot || '?') + '?', { okLabel: 'Zatwierdź' }))) return;
   btns.forEach(b => b.disabled = true);
   try {
     const { data, error } = await sb.rpc('resolve_zapps_purchase', { p_id: r.id, p_approve: approve, p_note: note });

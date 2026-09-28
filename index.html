@@ -8712,6 +8712,46 @@
          cost, and the glow is the part nobody would miss. */
       .farm-cell.crop.ready .farm-cell-emoji { filter: none; }
     }
+    /* uiConfirm/uiPrompt — above any modal that opened them. */
+    .ui-dlg-overlay { z-index: 400; }
+    .ui-dlg { max-width: 380px; }
+    .ui-dlg-text { margin: 0 0 16px; font-size: 14px; line-height: 1.55; white-space: pre-line; color: var(--text); }
+    .ui-dlg-input { margin-bottom: 16px !important; }
+    .ui-dlg-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .ui-dlg-actions > button { width: auto; min-height: 40px; margin: 0; padding: 8px 18px; }
+    .ui-dlg-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 12px rgba(220,38,38,.2); }
+    /* ── Shared motion & focus polish ─────────────────────────────────────── */
+    /* Modals ease in instead of popping: the overlay fades and the sheet rises
+       (a bottom sheet on phones, a slight zoom on desktop) — opacity/transform
+       only. The pack-opening overlay is skipped: an ancestor below full opacity
+       flattens its 3D card flip. */
+    .modal-overlay:not(.farm-pack-overlay) { animation: moFade .18s ease-out; }
+    .modal-overlay > .modal { animation: moRise .26s cubic-bezier(.2,.9,.25,1); }
+    @keyframes moFade { from { opacity: 0; } }
+    @keyframes moRise { from { transform: translateY(24px); } }
+    @media (min-width: 640px) {
+      .modal-overlay > .modal { animation-name: moZoom; }
+      @keyframes moZoom { from { transform: translateY(8px) scale(.97); } }
+    }
+    /* A full-screen blur behind every modal is a costly composite on phones —
+       the header and nav already dropped theirs below 900px. */
+    @media (max-width: 900px) {
+      .modal-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(15,23,42,.5); }
+    }
+    /* Keyboard focus is visible on every control that has no ring of its own
+       (zero specificity, so any component style still wins). */
+    :where(button, a[href], summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    /* Reduced motion, everywhere: most of the ~90 keyframes had no guard of
+       their own. Spinners keep turning (slowly) so loading never looks frozen. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important; scroll-behavior: auto !important;
+      }
+      .spinner { animation-duration: 1.4s !important; animation-iteration-count: infinite !important; }
+    }
   </style>
 </head>
 <body>
@@ -29980,6 +30020,43 @@ function showToast(msg) {
 }
 // tabs/*.js call toast(); without this the name resolved to <div id="toast"> and threw.
 function toast(msg) { showToast(msg); }
+
+// In-app replacements for confirm()/prompt(): the native ones freeze the page,
+// can't be styled, and drop a phone out of fullscreen. Resolve to true/false,
+// or to the typed string / null.
+function uiDialog({ text, input = null, okLabel = 'OK', danger = false }) {
+  return new Promise(resolve => {
+    const field = input != null ? el('input', { type: 'text', value: String(input), className: 'ui-dlg-input' }) : null;
+    const ok = el('button', { className: 'btn-primary' + (danger ? ' ui-dlg-danger' : '') }, okLabel);
+    const cancel = el('button', { className: 'btn-ghost' }, 'Anuluj');
+    const overlay = el('div', { className: 'modal-overlay ui-dlg-overlay', role: 'dialog', 'aria-modal': 'true' },
+      el('div', { className: 'modal ui-dlg' },
+        el('p', { className: 'ui-dlg-text' }, text), field,
+        el('div', { className: 'ui-dlg-actions' }, cancel, ok)));
+    let settled = false;
+    const done = v => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(v);
+    };
+    const no = () => done(field ? null : false), yes = () => done(field ? field.value : true);
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); no(); }
+      else if (e.key === 'Enter') { e.preventDefault(); yes(); }
+    };
+    ok.addEventListener('click', yes);
+    cancel.addEventListener('click', no);
+    overlay.addEventListener('click', e => { if (e.target === overlay) no(); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(overlay);
+    (field || ok).focus();
+    if (field) field.select();
+  });
+}
+const uiConfirm = (text, opts = {}) => uiDialog({ ...opts, text });
+const uiPrompt = (text, value = '', opts = {}) => uiDialog({ ...opts, text, input: value });
 
 // ── Auto-update nudge ───────────────────────────────────────────────────────
 // GitHub Pages serves index.html with a fixed 10-minute cache, and — more to the
