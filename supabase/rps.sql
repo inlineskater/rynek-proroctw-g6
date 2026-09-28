@@ -1,4 +1,4 @@
--- „Papier, Kamień, Biuro G6" (rps) seasonal game support for Rynek Proroctw G6.
+-- „Kamień, Papier, Nożyce G6" (rps) seasonal game support for Rynek Proroctw G6.
 --
 -- A remake of ICQ's „RPS Online": a 7×6 board, 14 pieces a side — 12 hidden
 -- ✊/✋/✌️ fighters, a 🚩 flag and a 🕳️ trap. Fights reveal both pieces and

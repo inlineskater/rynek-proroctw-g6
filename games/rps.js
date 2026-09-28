@@ -1,6 +1,6 @@
-// ── „Papier, Kamień, Biuro G6" (rps) — a remake of ICQ's „RPS Online" ────────
-// A 7×6 board, 14 pieces a side: 12 hidden fighters (✊ Zszywacz = kamień,
-// ✋ Faktura = papier, ✌️ Niszczarka = nożyce), a 🚩 flag and a 🕳️ trap. Fights
+// ── „Kamień, Papier, Nożyce G6" (rps) — a remake of ICQ's „RPS Online" ────────
+// A 7×6 board, 14 pieces a side: 12 hidden fighters (✊ kamień, ✋ papier,
+// ✌️ nożyce), a 🚩 flag and a 🕳️ trap. Fights
 // reveal both pieces; a tie makes both pick again; take the flag to win.
 //
 // SERVER-AUTHORITATIVE for every move (see supabase/functions/rps-action):
@@ -23,9 +23,9 @@ const RPS_ROWS = 6;
 const RPS_HOME_FIRST = (RPS_ROWS - 2) * RPS_COLS;   // first cell of your two home rows
 const RPS_MAX_SCORE = 3000;
 const RPS_LOOK = {
-  R: { emoji: '✊', name: 'Zszywacz', kind: 'kamień' },
-  P: { emoji: '✋', name: 'Faktura', kind: 'papier' },
-  S: { emoji: '✌️', name: 'Niszczarka', kind: 'nożyce' },
+  R: { emoji: '✊', name: 'Kamień', kind: 'kamień' },
+  P: { emoji: '✋', name: 'Papier', kind: 'papier' },
+  S: { emoji: '✌️', name: 'Nożyce', kind: 'nożyce' },
   F: { emoji: '🚩', name: 'Flaga', kind: 'flaga' },
   T: { emoji: '🕳️', name: 'Pułapka', kind: 'pułapka' },
 };
@@ -83,6 +83,40 @@ const RPS_FIGHT_MS = 1100;
     .rps-tie-btns button small { font-size: 10px; color: #475569; margin-top: 2px; }
     .rps-tie-btns button:hover { border-color: #2563eb; background: #eff6ff; }
     .rps-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    @keyframes rps-pop { 0% { transform: scale(.6); opacity: 0 } 70% { transform: scale(1.06) } 100% { transform: scale(1); opacity: 1 } }
+    @keyframes rps-fade { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes rps-pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.1) } }
+    @keyframes rps-dot { 0%,100% { transform: scale(.8); opacity: .7 } 50% { transform: scale(1.15); opacity: 1 } }
+    @keyframes rps-in-l { 0% { transform: translateX(-90px) rotate(-30deg); opacity: 0 } 60% { transform: translateX(10px) rotate(8deg); opacity: 1 } 100% { transform: none } }
+    @keyframes rps-in-r { 0% { transform: translateX(90px) rotate(30deg); opacity: 0 } 60% { transform: translateX(-10px) rotate(-8deg); opacity: 1 } 100% { transform: none } }
+    @keyframes rps-shake { 0%,100% { transform: none } 20% { transform: translateX(-6px) } 40% { transform: translateX(6px) } 60% { transform: translateX(-4px) } 80% { transform: translateX(4px) } }
+    @keyframes rps-win { 0%,100% { transform: scale(1) } 50% { transform: scale(1.25) } }
+    @keyframes rps-lose { to { filter: grayscale(1); opacity: .35; transform: scale(.8) rotate(-12deg) } }
+    @keyframes rps-spark { 0% { transform: scale(0); opacity: 1 } 100% { transform: scale(2.4); opacity: 0 } }
+    @keyframes rps-fall { from { transform: translateY(-40px) rotate(0) } to { transform: translateY(var(--rps-fall, 600px)) rotate(var(--rps-rot, 360deg)); opacity: 0 } }
+    .rps-duel, .rps-tie { animation: rps-fade .15s ease-out; }
+    .rps-duel .rps-card, .rps-tie .rps-card, .rps-end .rps-card { animation: rps-pop .28s ease-out; }
+    .rps-duel-row { position: relative; }
+    .rps-duel-side.l { animation: rps-in-l .45s cubic-bezier(.3,.7,.3,1) both; }
+    .rps-duel-side.r { animation: rps-in-r .45s cubic-bezier(.3,.7,.3,1) both; }
+    .rps-duel-row .vs { animation: rps-pop .3s .35s both; }
+    .rps-duel-row.clash { animation: rps-shake .35s .42s; }
+    .rps-duel-row.clash::after { content: '💥'; position: absolute; left: 50%; top: 50%; margin: -22px 0 0 -22px; font-size: 44px;
+      animation: rps-spark .5s .42s both; pointer-events: none; }
+    .rps-duel-side.win { animation: rps-in-l .45s cubic-bezier(.3,.7,.3,1) both, rps-win .4s .8s 2; }
+    .rps-duel-side.r.win { animation: rps-in-r .45s cubic-bezier(.3,.7,.3,1) both, rps-win .4s .8s 2; }
+    .rps-duel-side.lose > :first-child { display: inline-block; animation: rps-lose .4s .8s forwards; }
+    .rps-cell.sel .rps-tok { animation: rps-pulse .9s ease-in-out infinite; }
+    .rps-cell.target::after { animation: rps-dot 1s ease-in-out infinite; }
+    .rps-tok.pop { animation: rps-pop .3s ease-out; }
+    .rps-tie-btns button { transition: transform .12s; }
+    .rps-tie-btns button:hover { transform: translateY(-4px) scale(1.06); }
+    .rps-board.shake { animation: rps-shake .5s; }
+    .rps-confetti { position: absolute; top: 0; font-size: 22px; pointer-events: none; z-index: 4;
+      animation: rps-fall var(--rps-dur, 1.8s) ease-in forwards; }
+    @media (prefers-reduced-motion: reduce) {
+      .rps-stage *, .rps-board { animation: none !important; transition: none !important; }
+    }
     .rps-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); justify-content: center; margin-top: 8px; }
   `;
   document.head.appendChild(s);
@@ -104,8 +138,8 @@ const RPS_FIGHT_MS = 1100;
     el('section', { className: 'bj-game-panel' },
       el('div', { className: 'bj-head' },
         el('div', {},
-          el('h2', { className: 'page-title' }, '„Papier, Kamień, Biuro G6" ✂️'),
-          el('p', { className: 'page-sub' }, 'Pamiętasz RPS z ICQ? Wracamy. Czternastu pracowników na stronę, każdy w tajemnicy jest zszywaczem, fakturą albo niszczarką. Zdobądź flagę bota, zanim on zdobędzie Twoją.')),
+          el('h2', { className: 'page-title' }, '„Kamień, Papier, Nożyce G6" ✂️'),
+          el('p', { className: 'page-sub' }, 'Pamiętasz RPS z ICQ? Wracamy. Czternaście pionków na stronę, każdy w tajemnicy jest kamieniem, papierem albo nożycami. Zdobądź flagę bota, zanim on zdobędzie Twoją.')),
         el('div', { className: 'bj-prizes', 'aria-label': 'Nagrody tygodniowe' },
           el('span', { className: 'bj-prize' }, '🥇 1000 🪙'),
           el('span', { className: 'bj-prize' }, '🥈 500 🪙'),
@@ -114,7 +148,7 @@ const RPS_FIGHT_MS = 1100;
         el('div', { className: 'bj-rules-title' }, 'Jak grać'),
         el('ul', {},
           li('Najpierw kliknij na swoich dwóch rzędach, gdzie stoi ', el('strong', {}, '🚩 flaga'), ', a potem ', el('strong', {}, '🕳️ pułapka'), '. Resztę pionków serwer rozdaje losowo: po 4 z każdego rodzaju.'),
-          li(el('strong', {}, '✊ Zszywacz'), ' bije ✌️ Niszczarkę, ', el('strong', {}, '✌️ Niszczarka'), ' bije ✋ Fakturę, ', el('strong', {}, '✋ Faktura'), ' bije ✊ Zszywacz.'),
+          li(el('strong', {}, '✊ Kamień'), ' bije ✌️ nożyce, ', el('strong', {}, '✌️ Nożyce'), ' biją ✋ papier, ', el('strong', {}, '✋ Papier'), ' bije ✊ kamień.'),
           li('Kliknij swój pionek, potem pole obok (góra, dół, lewo, prawo). Wejście na wroga to pojedynek: oba pionki się odkrywają, przegrany znika. Przy remisie obaj wybieracie znak jeszcze raz.'),
           li('Kto wejdzie na pułapkę, ginie. Kto wejdzie na flagę, wygrywa. Flaga i pułapka nigdy się nie ruszają, bot wie o tym tak samo jak Ty. 👁 na Twoim pionku znaczy, że bot już go widział.'),
           li(el('strong', {}, 'Punkty:'), ' wygrana 1000 + 60 za każdego ocalałego + do 800 za tempo (−8 za ruch). Przegrana: 25 za każdego zbitego wroga. Liczy się najlepsza partia tygodnia.'))),
@@ -125,7 +159,7 @@ const RPS_FIGHT_MS = 1100;
         stat('Twoi w grze', 'rps-alive', '12')),
       el('div', { className: 'rps-stage', id: 'rps-stage' }, el('div', { className: 'rps-board', id: 'rps-board' })),
       el('div', { className: 'rps-legend' },
-        el('span', {}, '✊ Zszywacz = kamień'), el('span', {}, '✋ Faktura = papier'), el('span', {}, '✌️ Niszczarka = nożyce')),
+        el('span', {}, '✊ bije ✌️'), el('span', {}, '✌️ bije ✋'), el('span', {}, '✋ bije ✊')),
       el('div', { className: 'bj-actions rps-actions' },
         el('button', { className: 'btn-primary bj-start-btn', id: 'rps-start-btn' }, 'Start partii'),
         el('button', { className: 'btn-ghost', id: 'rps-random-btn' }, '🎲 Losuj flagę i pułapkę'),
@@ -198,8 +232,11 @@ function rpsRender() {
       if (i < 2 * RPS_COLS) node.append(rpsToken({ o: 1, t: null, m: false }));
       else if (i >= RPS_HOME_FIRST) {
         node.classList.add('home-pick');
-        if (i === rt.flag) node.append(rpsToken({ o: 0, t: 'F' }));
-        else if (i === rt.trap) node.append(rpsToken({ o: 0, t: 'T' }));
+        if (i === rt.flag || i === rt.trap) {
+          const tok = rpsToken({ o: 0, t: i === rt.flag ? 'F' : 'T' });
+          if (rt.justPlaced === i) tok.classList.add('pop');
+          node.append(tok);
+        }
         else node.append(el('div', { className: 'rps-tok me', style: 'opacity:.45' }, el('span', { className: 'rps-q' }, '·')));
       }
     } else {
@@ -213,6 +250,10 @@ function rpsRender() {
     cellsOut.push(node);
   }
   rpsBoardEl.replaceChildren(...cellsOut);
+  rt.justPlaced = null;
+  // A tie waiting on the player must always show its picker, whatever path
+  // got us here (resume, a playback that ended on a tie, a re-render).
+  if (board?.pending && !rt.busy && !rt.overlay?.classList.contains('rps-tie')) rpsShowTie();
   rpsSetStats();
   rpsSetButtons();
 }
@@ -259,33 +300,140 @@ function rpsDuelCard(ev) {
     text = mineAtt ? 'Partia wygrana.' : 'Partia przegrana.';
   } else if (ev.out === 'trap') {
     title = mineAtt ? '🕳️ Pułapka!' : '🕳️ Bot wpadł w Twoją pułapkę!';
-    text = mineAtt ? 'Twój ' + RPS_LOOK[ev.a].name + ' przepada.' : 'Jego ' + RPS_LOOK[ev.a].name + ' przepada.';
+    text = (mineAtt ? 'Twój pionek (' : 'Jego pionek (') + RPS_LOOK[ev.a].emoji + ' ' + RPS_LOOK[ev.a].kind + ') przepada.';
   } else if (ev.out === 'tie') {
     title = '🤝 Remis!';
     text = 'Obaj wybieracie jeszcze raz.';
   } else {
     const iWon = (ev.out === 'att') === mineAtt;
     title = iWon ? '✅ Wygrywasz pojedynek' : '❌ Przegrywasz pojedynek';
-    text = RPS_LOOK[iWon ? myT : theirT].name + ' bije ' + RPS_LOOK[iWon ? theirT : myT].name + '.';
+    const w = iWon ? myT : theirT;
+    text = RPS_LOOK[w].name + (w === 'S' ? ' biją ' : ' bije ') + RPS_LOOK[iWon ? theirT : myT].kind + '.';
   }
-  const side = (t, who) => el('div', { className: 'rps-duel-side' }, RPS_LOOK[t].emoji, el('small', {}, who + ': ' + RPS_LOOK[t].name));
+  // Who won the clash, from the player's side: 'me' | 'them' | null (tie).
+  const iWonFight = ev.out === 'tie' ? null
+    : ev.out === 'flag' || ev.out === 'att' ? mineAtt : !mineAtt;
+  const side = (t, who, lr, mine) => el('div', {
+    className: 'rps-duel-side ' + lr + (iWonFight == null ? '' : iWonFight === mine ? ' win' : ' lose'),
+  }, el('span', {}, RPS_LOOK[t].emoji), el('small', {}, who + ': ' + RPS_LOOK[t].name));
   return el('div', { className: 'rps-duel' }, el('div', { className: 'rps-card' },
     el('h3', {}, title),
-    el('div', { className: 'rps-duel-row' }, side(myT, 'Ty'), el('span', { className: 'vs' }, 'VS'), side(theirT, 'Bot')),
+    el('div', { className: 'rps-duel-row clash' }, side(myT, 'Ty', 'l', true), el('span', { className: 'vs' }, 'VS'), side(theirT, 'Bot', 'r', false)),
     el('p', {}, text)));
 }
 
+const rpsReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const rpsSleep = ms => new Promise(r => setTimeout(r, ms));
+
+function rpsTokAt(i) {
+  return rpsBoardEl?.children[i]?.querySelector('.rps-tok') || null;
+}
+
+// Web Animations helper; resolves at once when motion is reduced.
+function rpsAnim(node, frames, opts) {
+  if (!node || rpsReducedMotion() || !node.animate) return Promise.resolve();
+  return node.animate(frames, opts).finished.catch(() => {});
+}
+
+// The token now at `to` visually travels from `from` (FLIP).
+function rpsSlide(from, to, ms = 260) {
+  const tok = rpsTokAt(to);
+  const a = rpsBoardEl?.children[from]?.getBoundingClientRect();
+  const b = rpsBoardEl?.children[to]?.getBoundingClientRect();
+  if (!tok || !a || !b) return Promise.resolve();
+  const dx = a.left - b.left, dy = a.top - b.top;
+  return rpsAnim(tok, [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+    { duration: ms, easing: 'cubic-bezier(.3,.7,.3,1)' });
+}
+
+// The attacker lunges half-way at the defender and back.
+function rpsLunge(from, to) {
+  const tok = rpsTokAt(from);
+  const a = rpsBoardEl?.children[from]?.getBoundingClientRect();
+  const b = rpsBoardEl?.children[to]?.getBoundingClientRect();
+  if (!tok || !a || !b) return Promise.resolve();
+  const dx = (b.left - a.left) * 0.45, dy = (b.top - a.top) * 0.45;
+  return rpsAnim(tok, [{ transform: 'none' }, { transform: `translate(${dx}px, ${dy}px) scale(1.12)` }, { transform: 'none' }],
+    { duration: 320, easing: 'ease-in-out' });
+}
+
+function rpsFlip(i) {
+  return rpsAnim(rpsTokAt(i), [{ transform: 'rotateY(90deg)' }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
+}
+
+function rpsVanish(i) {
+  return rpsAnim(rpsTokAt(i), [{ transform: 'none', opacity: 1 }, { transform: 'scale(0.2) rotate(40deg)', opacity: 0 }],
+    { duration: 300, easing: 'ease-in', fill: 'forwards' });
+}
+
+// Replays the server's events on a copy of the board as it looked before the
+// request, so every step is visible: moves slide, fights reveal and clash,
+// losers vanish. The real server board replaces the copy afterwards.
 async function rpsPlayEvents(events) {
   const rt = rpsRuntime;
   rt.last = [];
-  for (const ev of events || []) {
-    if (ev.side === 1) rt.last = [ev.from, ev.to];
-    if (ev.k !== 'fight') continue;
-    rpsOverlay(rpsDuelCard(ev));
-    await new Promise(r => setTimeout(r, ev.out === 'flag' ? 1600 : RPS_FIGHT_MS));
-    if (rpsRuntime !== rt) return;    // stopped meanwhile
+  if (!rt.round?.board) return;
+  const vb = JSON.parse(JSON.stringify(rt.round.board));
+  const saved = rt.round;
+  rt.round = { ...saved, board: vb };
+  vb.turn = -1;                               // nothing clickable during playback
+  let prevSide = 0;
+  try {
+    for (const ev of events || []) {
+      if (rpsRuntime !== rt) return;
+      if (ev.side === 1 && prevSide === 0) await rpsSleep(380);   // the bot "thinks"
+      prevSide = ev.side;
+      if (ev.side === 1) rt.last = [ev.from, ev.to];
+      const att = vb.cells[ev.from];
+      if (ev.k === 'move') {
+        vb.cells[ev.to] = att ? { ...att, m: true } : null;
+        vb.cells[ev.from] = null;
+        rpsRender();
+        await rpsSlide(ev.from, ev.to);
+        continue;
+      }
+      // Fight: both pieces show their faces first.
+      if (att) { att.t = ev.a; att.r = true; att.m = true; }
+      const def = vb.cells[ev.to];
+      if (def) { def.t = ev.d; def.r = true; }
+      rpsRender();
+      await Promise.all([rpsFlip(ev.from), rpsFlip(ev.to)]);
+      await rpsLunge(ev.from, ev.to);
+      rpsOverlay(rpsDuelCard(ev));
+      await rpsSleep(rpsReducedMotion() ? 700 : ev.out === 'flag' ? 1700 : RPS_FIGHT_MS + 250);
+      if (rpsRuntime !== rt) return;
+      rpsOverlay(null);
+      if (ev.out === 'att' || ev.out === 'flag') {
+        await rpsVanish(ev.to);
+        vb.cells[ev.to] = att;
+        vb.cells[ev.from] = null;
+        rpsRender();
+        await rpsSlide(ev.from, ev.to, 220);
+      } else if (ev.out === 'def' || ev.out === 'trap') {
+        await rpsVanish(ev.from);
+        vb.cells[ev.from] = null;
+        rpsRender();
+      }
+    }
+  } finally {
+    if (rpsRuntime === rt) { rt.round = saved; rpsOverlay(null); }
   }
-  rpsOverlay(null);
+}
+
+function rpsConfetti() {
+  if (!rpsStageEl || rpsReducedMotion()) return;
+  const h = rpsStageEl.offsetHeight || 500;
+  const pieces = ['🎉', '✨', '🏆', '✊', '✋', '✌️', '🚩', '⭐'];
+  for (let k = 0; k < 42; k++) {
+    const n = el('span', { className: 'rps-confetti' }, pieces[k % pieces.length]);
+    n.style.left = (Math.random() * 96) + '%';
+    n.style.setProperty('--rps-fall', (h * (0.7 + Math.random() * 0.4)) + 'px');
+    n.style.setProperty('--rps-rot', (Math.random() * 720 - 360) + 'deg');
+    n.style.setProperty('--rps-dur', (1.4 + Math.random() * 1.2) + 's');
+    n.style.animationDelay = (Math.random() * 0.6) + 's';
+    rpsStageEl.appendChild(n);
+    setTimeout(() => n.remove(), 3400);
+  }
 }
 
 function rpsShowTie() {
@@ -304,12 +452,14 @@ function rpsShowEnd(round, summary) {
   const score = summary?.score ?? round.score ?? 0;
   const saved = round.mode === 'arcade' ? 'Zapisano w rankingu arcade.' : 'Zapisano w rankingu tygodnia.';
   rpsOverlay(el('div', { className: 'rps-end' }, el('div', { className: 'rps-card' },
-    el('h3', {}, won ? '🏆 Wygrana!' : '💼 Przegrana'),
+    el('h3', {}, won ? '🏆 Wygrana!' : '😵 Przegrana'),
     el('p', {}, why),
     el('p', {}, el('strong', {}, 'Wynik: ' + score), summary?.itemEffect ? ' (w tym +' + summary.itemEffect.bonus + ' z przedmiotu)' : ''),
     el('p', {}, saved + ' Plansza pokazuje teraz wszystkie pionki bota.'),
     el('button', { type: 'button', className: 'btn-primary rps-again', onclick: () => rpsNewSetup() }, 'Zagraj ponownie'))));
   rpsSetStatus((won ? 'Wygrana' : 'Przegrana') + ' · wynik ' + score + '.');
+  if (won) rpsConfetti();
+  else if (rpsBoardEl) { rpsBoardEl.classList.remove('shake'); void rpsBoardEl.offsetWidth; rpsBoardEl.classList.add('shake'); }
 }
 
 // ── Flow ────────────────────────────────────────────────────────────────────
@@ -369,6 +519,7 @@ async function rpsStart() {
   try {
     const data = await invokeRps({ action: 'start', flag: rt.flag, trap: rt.trap, mode: allGamesMode ? 'arcade' : 'season' });
     rpsApplyRound(data.round);
+    rt.dealt = true;
   } catch (err) {
     showToast('❌ ' + err.message);
     rpsSetStatus('Nie udało się rozpocząć partii.');
@@ -376,6 +527,15 @@ async function rpsStart() {
     rt.busy = false;
     rpsRender();
     rpsStatusForBoard();
+    // The deal: every piece drops onto the board, row by row.
+    if (rt.dealt && !rpsReducedMotion()) {
+      [...(rpsBoardEl?.children || [])].forEach((c, i) => {
+        const tok = c.querySelector('.rps-tok');
+        const row = Math.floor(i / RPS_COLS);
+        if (tok) rpsAnim(tok, [{ transform: 'translateY(-18px) scale(.4)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+          { duration: 320, delay: (row < 2 ? row : row - 2) * 90 + (i % RPS_COLS) * 25, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'backwards' });
+      });
+    }
   }
 }
 
@@ -420,9 +580,8 @@ function rpsOnCell(i) {
     if (i < RPS_HOME_FIRST) return;
     if (i === rt.flag) rt.flag = null;
     else if (i === rt.trap) rt.trap = null;
-    else if (rt.flag == null) rt.flag = i;
-    else if (rt.trap == null) rt.trap = i;
-    else rt.trap = i;                           // both set: move the trap
+    else if (rt.flag == null) { rt.flag = i; rt.justPlaced = i; }
+    else { rt.trap = i; rt.justPlaced = i; }     // (both set: this moves the trap)
     rpsSetStatus(rt.flag == null ? 'Kliknij pole na dole, żeby postawić 🚩 flagę.'
       : rt.trap == null ? 'Teraz 🕳️ pułapka: najlepiej tam, gdzie bot będzie szukał flagi.'
       : 'Gotowe. Kliknij „Start partii".');
