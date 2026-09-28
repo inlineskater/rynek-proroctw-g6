@@ -49,6 +49,13 @@
     .fw-foot .farm-mini-btn { margin-left: auto; }
     .fw-fills { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
     .fw-empty { padding: 18px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+    /* One line up front, the rules behind a disclosure (2026-09-28). */
+    .fw-help { font-size: 12px; color: var(--muted); line-height: 1.55; }
+    .fw-help:not([open]) { display: inline; }
+    .fw-help > summary { cursor: pointer; color: var(--accent); font-weight: 600; list-style: none; display: inline; }
+    .fw-help > summary::-webkit-details-marker { display: none; }
+    .fw-help[open] > summary { margin-bottom: 4px; display: block; }
+    .fw-help b { color: var(--text); }
 
     /* Paper notes pinned to a cork board (2026-09-28). The notes keep their own
        ink colours on purpose: paper is paper in dark mode too. */
@@ -119,6 +126,11 @@ function fwFxAt(x, y, kind, cropType) {
   }
   document.body.append(fx);
   setTimeout(() => fx.remove(), kind === 'water' ? 1400 : 1800);
+}
+
+// A lead that is one sentence, with the rules one click away.
+function fwHelp(label, ...body) {
+  return el('details', { className: 'fw-help' }, el('summary', {}, label || '❓ Jak to działa'), el('div', {}, ...body));
 }
 
 const FW_ORDERS_STALE_MS = 20000;
@@ -199,11 +211,11 @@ function fwTimeLeft(iso) {
 function fwRenderOrders(bodyEl) {
   const wrap = el('div', { className: 'fw-orders' });
   wrap.append(el('div', { className: 'fw-lead' },
-    'Klienci biura zamawiają ', el('b', {}, 'zestawy plonów'),
-    ' — zwykle tych, których nikt teraz nie uprawia, i płacą za nie ',
-    el('b', {}, 'wyraźnie więcej niż skup'), '. Każde zamówienie możesz zrealizować raz; nikt nikomu go nie zabiera. ',
-    'Codziennie o północy przychodzą nowe, a każde wisi 3 dni — jest czas, żeby coś pod nie zasadzić. ',
-    el('b', {}, '💎 Kolekcjoner'), ' kupuje plony z kart NFT.'));
+    'Zestawy plonów za ', el('b', {}, 'więcej niż skup'), '. ',
+    fwHelp(null,
+      'Klienci zamawiają głównie to, czego nikt teraz nie uprawia. Każde zamówienie możesz zrealizować raz — nikt nikomu go nie zabiera. ',
+      'Nowe przychodzą o północy i wiszą 3 dni, więc zdążysz coś pod nie zasadzić. ',
+      el('b', {}, '💎 Kolekcjoner'), ' kupuje plony z kart NFT.')));
 
   const wk = fwOrders.my_week || {};
   wrap.append(el('div', { className: 'fw-week' },
@@ -350,6 +362,24 @@ async function fwFillOrder(o, btn) {
     .fw-wx-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
     .fw-wx-table tr:last-child td { border-bottom: 0; }
     @media (max-width: 560px) { .fw-wx-table .fw-hide-sm { display: none; } }
+
+    /* The farm sky: rain/snow/fog/storm already exist (renderGardenWeather);
+       these add the two conditions that matter most to crops. A plain overlay,
+       opacity-only animation, above the field and below the rain layer. */
+    .fw-sky-fx { position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: 12px; opacity: 0; transition: opacity 1s ease; }
+    .fw-sky-hot .fw-sky-fx { opacity: 1;
+      background: linear-gradient(0deg, rgba(255,140,30,.18) 0%, rgba(255,190,70,.08) 45%, rgba(255,200,80,0) 72%); }
+    .fw-sky-hot .fw-sky-fx::before { content: ''; position: absolute; left: -5%; right: -5%; top: clamp(52px, 9vh, 100px); height: 42px;
+      background: repeating-radial-gradient(ellipse 60px 10px at 50% 50%, rgba(255,246,220,.30) 0, rgba(255,246,220,0) 9px, rgba(255,246,220,0) 16px);
+      filter: blur(4px); animation: fwHaze 3.2s ease-in-out infinite alternate; }
+    @keyframes fwHaze { from { transform: translate(-10px, 1px) scaleY(.9); opacity: .3; } to { transform: translate(10px, -2px) scaleY(1.15); opacity: .75; } }
+    .fw-sky-frost .fw-sky-fx { opacity: 1;
+      background: radial-gradient(ellipse at 0% 100%, rgba(236,248,255,.6), rgba(236,248,255,0) 38%),
+                  radial-gradient(ellipse at 100% 100%, rgba(236,248,255,.6), rgba(236,248,255,0) 38%),
+                  linear-gradient(0deg, rgba(196,226,255,.24), rgba(196,226,255,0) 62%); }
+    .fw-sky-frost .farm-cell.crop, .fw-sky-frost .farm-cell.unowned {
+      background-image: linear-gradient(160deg, rgba(242,250,255,.55), rgba(242,250,255,0) 58%); }
+    @media (prefers-reduced-motion: reduce) { .fw-sky-hot .fw-sky-fx::before { animation: none; } }
   `;
   document.head.appendChild(s);
 })();
@@ -468,12 +498,32 @@ function fwWxCropChip(ct, m) {
   return el('span', { title: id.name + ' ×' + m.toFixed(2) }, id.emoji);
 }
 
+// Drive the farm sky from the SAME hour of the weather log the harvest will
+// use. The sky's own Open-Meteo fetch (fetchWroclawWeather) can disagree by an
+// update, and a sky showing rain over crops being paid as sunny would be a lie.
+function fwSyncSky() {
+  const stage = document.querySelector('#tab-farm .farm-stage');
+  const cur = fwWx?.current;
+  if (!stage || !cur) return;
+  if (!stage.querySelector(':scope > .fw-sky-fx')) stage.append(el('div', { className: 'fw-sky-fx', 'aria-hidden': 'true' }));
+  stage.classList.toggle('fw-sky-hot', cur.category === 'hot');
+  stage.classList.toggle('fw-sky-frost', cur.category === 'frost');
+  if (typeof gardenWeather !== 'undefined' && gardenWeather && typeof wmoCategory === 'function') {
+    const base = wmoCategory(cur.code);
+    if (gardenWeather.category !== base) {
+      gardenWeather.category = base;
+      if (typeof applyFarmAtmosphere === 'function') applyFarmAtmosphere();
+    }
+  }
+}
+
 function fwRenderWeatherBanner() {
   const host = document.getElementById('fw-banner');
   if (!host) return;
   const cur = fwWx?.current;
   if (!fwWx || !cur) { host.classList.add('hidden'); return; }
   host.classList.remove('hidden');
+  fwSyncSky();
   const lab = FW_WX_LABELS[cur.category] || FW_WX_LABELS.cloudy;
 
   const crops = fwWxCrops();
@@ -545,10 +595,10 @@ function fwWxDetails(crops) {
   const H = 3600000, now = Date.now();
   const wrap = el('div', { className: 'fw-wx-details' });
   wrap.append(el('div', { className: 'fw-wx-note' },
-    'Pogoda jest prawdziwa — serwer co pół godziny pobiera ją dla Wrocławia z Open-Meteo. ',
-    'Każda roślina lubi inną pogodę. Przy zbiorze plon mnoży się przez ', el('b', {}, 'średnią z każdej godziny'),
-    ', którą roślina spędziła w ziemi (od ×' + fwWx.bounds.lo.toFixed(2) + ' do ×' + fwWx.bounds.hi.toFixed(2) + '). ',
-    'Kolumna „Zasadzone teraz" to prognoza na najbliższy dzień wzrostu — rzeczywisty mnożnik wyjdzie z tego, jaka pogoda naprawdę będzie.'));
+    'Plon × średnia pogoda z każdej godziny wzrostu (×' + fwWx.bounds.lo.toFixed(2) + '–×' + fwWx.bounds.hi.toFixed(2) + '). ',
+    fwHelp(null,
+      'Pogoda jest prawdziwa: serwer co pół godziny pobiera ją dla Wrocławia z Open-Meteo, a przy zbiorze liczy średnią z każdej godziny, którą roślina spędziła w ziemi. ',
+      'Kolumna „Zasadzone teraz" to prognoza na najbliższy dzień — rzeczywisty mnożnik wyjdzie z pogody, która naprawdę będzie.')));
   const table = el('table', { className: 'fw-wx-table' });
   table.append(el('thead', {}, el('tr', {},
     el('th', {}, 'Uprawa'), el('th', {}, 'Lubi'), el('th', { className: 'fw-hide-sm' }, 'Nie lubi'),
@@ -859,11 +909,14 @@ function fwRenderNeighbours(bodyEl) {
   const mine = fwNb.me || {};
   const wrap = el('div', { className: 'fw-orders' });
   wrap.append(el('div', { className: 'fw-lead' },
-    'Farma to wspólne pole. ', el('b', {}, 'Różnorodność i pary roślin'), ' na twoich działkach podnoszą plon, ',
-    el('b', {}, 'zasadzone NFT'), ' dają talenty całej twojej farmie, sąsiadom możesz ', el('b', {}, 'podlewać'),
-    ' rośliny — a to, co ktoś zostawi dojrzałe na ponad ' + (L.steal_grace_hours || 12) + ' h, można ',
-    el('b', {}, 'podebrać'), '. Łączny bonus: do +' + Math.round((L.bonus_cap || 0.25) * 100) + '% (+'
-      + Math.round((L.bonus_cap_talent || 0.35) * 100) + '% z talentem NFT).'));
+    'Pary, różnorodność i zasadzone NFT podnoszą plon. ',
+    fwHelp(null,
+      'Farma to wspólne pole: sąsiadom możesz ', el('b', {}, 'podlewać'), ' rosnące rośliny (+'
+        + Math.round((L.water_bonus || 0.03) * 100) + '% plonu dla nich), a to, co ktoś zostawi dojrzałe na ponad '
+        + (L.steal_grace_hours || 12) + ' h, można ', el('b', {}, 'podebrać'), ' (' + Math.round((L.steal_share || 0.1) * 100)
+        + '%). Strach na wróble albo NFT z talentem „nikt nie podbierze" chroni wszystkie twoje pola. ',
+      'Łączny bonus: do +' + Math.round((L.bonus_cap || 0.25) * 100) + '% (+'
+        + Math.round((L.bonus_cap_talent || 0.35) * 100) + '% z talentem NFT).')));
 
   // ── Me: today's allowance + protection ──
   const until = mine.scarecrow_until && new Date(mine.scarecrow_until).getTime() > Date.now() ? new Date(mine.scarecrow_until) : null;
@@ -906,9 +959,10 @@ function fwRenderNeighbours(bodyEl) {
   const dv = L.diversity || [0.05, 0.10, 0.15];
   cols.append(el('div', { className: 'fw-nb-box' },
     el('div', { className: 'fw-nb-head' }, '🌱 Pary i różnorodność'),
-    el('div', { className: 'fw-nb-muted' }, 'Para działa, gdy obie rośliny rosną na TWOICH polach w chwili zbioru. Różnorodność: 3 / 4 / 5+ gatunków naraz = +'
-      + dv.map(v => Math.round(v * 100)).join(' / +') + '%. Teraz uprawiasz: ',
-      el('b', {}, mySpecies.size + (divPlus ? ' (+' + divPlus + ' z talentu)' : '')), '.'),
+    el('div', { className: 'fw-nb-muted' }, 'Uprawiasz gatunków: ',
+      el('b', {}, mySpecies.size + (divPlus ? ' (+' + divPlus + ' z talentu)' : '')), '. ',
+      fwHelp(null, 'Para działa, gdy obie rośliny rosną na TWOICH polach w chwili zbioru. Różnorodność: 3 / 4 / 5+ gatunków naraz = +'
+        + dv.map(v => Math.round(v * 100)).join(' / +') + '%.')),
     pairList));
 
   // ── Talents ──
@@ -931,9 +985,9 @@ function fwRenderNeighbours(bodyEl) {
   const idle = minePart.filter(t => !active.has(t.species)).length;
   const talentBox = el('div', { className: 'fw-nb-box' },
     el('div', { className: 'fw-nb-head' }, '💎 Talenty NFT'),
-    el('div', { className: 'fw-nb-muted' }, 'Działają, dopóki NFT jest ZASADZONE na twoim polu. Te same talenty się nie sumują. Nowe kolekcje bez własnego talentu dają +'
-      + Math.round((L.default_talent || 0.03) * 100) + '% na wszystkie pola.'
-      + (idle ? ' 💤 = masz, ale nie zasadziłeś — talent śpi.' : '')),
+    el('div', { className: 'fw-nb-muted' }, idle ? '💤 = masz, ale nie zasadziłeś — talent śpi. ' : 'Działa, dopóki NFT jest zasadzone. ',
+      fwHelp(null, 'Talent działa, dopóki NFT jest ZASADZONE na twoim polu. Te same talenty się nie sumują. Nowe kolekcje bez własnego talentu dają +'
+        + Math.round((L.default_talent || 0.03) * 100) + '% na wszystkie pola.')),
     minePart.length ? tl : el('div', { className: 'fw-nb-muted' }, 'Nie masz jeszcze żadnej karty NFT.'));
   if (rest.length) {
     const ul = el('ul', { className: 'fw-nb-list' });
