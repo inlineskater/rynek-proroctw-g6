@@ -49,12 +49,25 @@ async function loadPokerState(showSpinner = true) {
   }
 }
 
+let pokerBusy = false;
 async function pokerAction(payload, opts = {}) {
+  // One action in flight at a time: a double-click on Call/Raise/Siądź used to
+  // send two, and the second always failed with an error toast.
+  if (pokerBusy) return;
+  pokerBusy = true;
+  const activationId = _tabActivationId;
+  const btns = opts.silent ? [] : [...pokerWrap.querySelectorAll('button:not(:disabled)')];
+  btns.forEach(b => { b.disabled = true; });
   try {
     const data = await invokePoker(payload);
+    // A late reply must not re-render a tab the player left (or a logged-out session).
+    if (!me || activeTab !== 'poker' || activationId !== _tabActivationId) return;
     applyPokerState(data);
   } catch (err) {
-    if (!opts.silent) showToast('❌ ' + err.message);
+    if (!opts.silent && me) showToast('❌ ' + err.message);
+  } finally {
+    pokerBusy = false;
+    btns.forEach(b => { if (b.isConnected) b.disabled = false; });
   }
 }
 

@@ -371,19 +371,30 @@ function beginFlappyPantsRound(round) {
 }
 
 async function startFlappyPantsRound() {
+  if (!flappyPantsRuntime) stopFlappyPantsRound();   // gives the double-tap guard a runtime to live on
   const rt = flappyPantsRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => flappyPantsRuntime !== rt;
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   if (fpStartBtn) { fpStartBtn.disabled = true; fpStartBtn.textContent = 'Ładuję...'; }
   if (fpStatus) fpStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeFlappyPants({ action: 'start' });
+    if (stale()) return;
     renderFlappyPantsState(data);
+    if (rt) rt.starting = false;
     beginFlappyPantsRound(data.round);
     if (allGamesMode && flappyPantsRuntime) flappyPantsRuntime.archiveMode = true;
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (fpStatus) fpStatus.textContent = 'Nie udało się wystartować rundy.';
     if (fpStartBtn) { fpStartBtn.disabled = false; fpStartBtn.textContent = 'Start rundy'; }
@@ -441,7 +452,7 @@ async function finishFlappyPantsRound() {
 if (fpStartBtn) fpStartBtn.addEventListener('click', startFlappyPantsRound);
 
 document.addEventListener('keydown', evt => {
-  if (!flappyPantsRuntime?.playing) return;
+  if (!flappyPantsRuntime?.playing || isTypingTarget(evt.target)) return;
   if (evt.key === ' ' || evt.code === 'Space' || evt.key === 'ArrowUp') {
     evt.preventDefault(); fpFlap();
   }

@@ -704,10 +704,17 @@ function prepareInvoiceHordeAdminTest() {
 }
 
 async function startInvoiceHordeRound() {
+  if (!invoiceHordeRuntime) stopInvoiceHordeRound();   // gives the double-tap guard a runtime to live on
   const rt = invoiceHordeRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => invoiceHordeRuntime !== rt;
   if (activeTab === 'invoice-horde-test') {
     const now = new Date().toISOString();
+    if (rt) rt.starting = false;
     beginInvoiceHordeRound({
       id: 'admin-test-' + Date.now(),
       seed: Math.floor(Math.random() * 2147483647) + 1,
@@ -719,15 +726,20 @@ async function startInvoiceHordeRound() {
     return;
   }
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   if (ihStartBtn) { ihStartBtn.disabled = true; ihStartBtn.textContent = 'Ładuję...'; }
   if (ihStatus) ihStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeInvoiceHorde({ action: 'start' });
+    if (stale()) return;
     renderInvoiceHordeState(data);
+    if (rt) rt.starting = false;
     beginInvoiceHordeRound(data.round, allGamesMode ? { archiveMode: true } : {});
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (ihStatus) ihStatus.textContent = 'Nie udało się wystartować rundy.';
     if (ihStartBtn) { ihStartBtn.disabled = false; ihStartBtn.textContent = 'Start rundy'; }
@@ -788,7 +800,7 @@ async function finishInvoiceHordeRound() {
 if (ihStartBtn) ihStartBtn.addEventListener('click', startInvoiceHordeRound);
 
 document.addEventListener('keydown', evt => {
-  if (!invoiceHordeRuntime?.playing) return;
+  if (!invoiceHordeRuntime?.playing || isTypingTarget(evt.target)) return;
   const key = evt.key.toLowerCase();
   const code = evt.key === 'ArrowUp' || key === 'w' ? 'U'
     : evt.key === 'ArrowDown' || key === 's' ? 'D'
@@ -800,6 +812,13 @@ document.addEventListener('keydown', evt => {
   if (ihKeys[code]) return;
   ihKeys[code] = true;
   ihSetInput(ihDirCode((ihKeys.R ? 1 : 0) - (ihKeys.L ? 1 : 0), (ihKeys.D ? 1 : 0) - (ihKeys.U ? 1 : 0)));
+});
+
+// Alt-Tab swallows the keyup, so a held key would keep the player drifting.
+window.addEventListener('blur', () => {
+  if (!invoiceHordeRuntime?.playing || !(ihKeys.U || ihKeys.D || ihKeys.L || ihKeys.R)) return;
+  ihKeys.U = ihKeys.D = ihKeys.L = ihKeys.R = false;
+  ihSetInput(ihDirCode(0, 0));
 });
 
 document.addEventListener('keyup', evt => {

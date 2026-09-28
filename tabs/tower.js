@@ -392,7 +392,7 @@ function towerCelebrate(payout, floors, mult) {
   for (let i = 0; i < 26; i += 1) {
     A.coins.push({ x: TOWER_W / 2, y: 120, vx: (Math.random() - 0.5) * 320, vy: -120 - Math.random() * 180, t0: now + i * 18 });
   }
-  A.message = { title: '+' + towerCoins(payout) + ' 🪙', sub: floors + ' pięter · ' + towerMult(mult), color: '#fbbf24', until: now + 2200 };
+  A.message = { title: '+' + towerCoins(payout) + ' 🪙', sub: floors + ' ' + plCount(floors, 'piętro', 'piętra', 'pięter') + ' · ' + towerMult(mult), color: '#fbbf24', until: now + 2200 };
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
@@ -473,17 +473,23 @@ async function loadTowerBoards() {
       sb.from('tower_recent').select('*').limit(12),
       sb.from('tower_week_heights').select('*').order('floors', { ascending: false }).order('multiplier', { ascending: false }).limit(8),
     ]);
-    towerFeed = feed.data || [];
-    towerLeaders = week.data || [];
+    // supabase-js reports failures in .error rather than throwing, so a blip
+    // used to blank both lists until the next poll.
+    if (!feed.error) towerFeed = feed.data || [];
+    if (!week.error) towerLeaders = week.data || [];
   } catch (e) { /* keep what we had */ }
   renderTowerSide();
 }
 
 async function loadTower() {
+  const activationId = _tabActivationId;
+  const stale = () => !me || activeTab !== 'tower' || activationId !== _tabActivationId;
   try {
     towerState = await invokeTower('state');
+    if (stale()) return;   // left mid-load: don't re-arm the poll and the loop
     if (towerBet == null) towerBet = towerState.defaultBet;
   } catch (e) {
+    if (stale()) return;
     towerState = null;
     const host = document.getElementById('tower-controls');
     if (host) host.replaceChildren(el('div', { className: 'tw-empty' },

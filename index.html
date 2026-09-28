@@ -431,34 +431,13 @@
     .login-error { color: var(--no); font-size: 13px; margin-top: 12px; min-height: 18px; font-weight: 500; }
     
     /* Sleek interactive FAQ details */
-    .login-faq {
-      margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(226, 232, 240, 0.8);
-      display: flex; flex-direction: column; gap: 14px; text-align: left;
-    }
-    .login-faq h2 {
-      font-size: 11px; font-weight: 700; letter-spacing: .08em;
-      text-transform: uppercase; color: #475569; margin-bottom: 4px;
-    }
-    .faq-item {
-      background: rgba(248, 250, 252, 0.5); border: 1px solid #f1f5f9;
-      border-radius: 10px; padding: 12px 14px; transition: all 0.2s ease;
-    }
-    .faq-item:hover {
-      background: rgba(248, 250, 252, 1);
-      border-color: #e2e8f0;
-      transform: translateX(2px);
-    }
-    .faq-item h3 { 
-      font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text);
-      display: flex; align-items: center; gap: 6px;
-    }
-    .faq-item h3::before {
-      content: '•';
-      color: var(--accent);
-      font-size: 16px;
-      line-height: 1;
-    }
-    .faq-item p { color: #64748b; font-size: 12px; line-height: 1.5; }
+    
+    
+    
+    
+    
+    
+    
 
     /* Custom styles for Adam force PIN blame block */
     .force-blame {
@@ -1513,9 +1492,9 @@
     .tx-side-game { background: #f0f9ff; border-color: #bae6fd; color: #0284c7; }
 
     /* ── HAZARDISTA ── */
-    .hazardista-section { margin-top: 28px; }
-    .hazardista-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 600px) { .hazardista-grid { grid-template-columns: 1fr; } }
+    
+    
+    
     .hazardista-col-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
     .hazardista-list { list-style: none; padding: 0; margin: 0; }
     .hazardista-list li {
@@ -1523,11 +1502,11 @@
       padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px;
     }
     .hazardista-list li:last-child { border-bottom: none; }
-    .hazardista-list .hz-nick { font-weight: 600; }
-    .hazardista-list .hz-nick.me { color: var(--accent); }
-    .hazardista-list .hz-pl { font-weight: 800; }
-    .hz-pl-pos { color: var(--yes); }
-    .hz-pl-neg { color: var(--no); }
+    
+    
+    
+    
+    
     .tx-show-all { display: block; margin: 12px auto 0; }
 
     /* ── STATYSTYKI: własna pozycja ──
@@ -2426,13 +2405,7 @@
       --gold-hi: #f59e0b;
       --gold-line: rgba(184,134,11,.6);
     }
-    .casino-felt {
-      background: var(--felt);
-      border: 3px solid var(--gold);
-      border-radius: 14px;
-      box-shadow: inset 0 2px 22px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.04), 0 8px 28px rgba(0,0,0,.25);
-      position: relative;
-    }
+    
     /* Reusable 3D chip (roulette chips, slot stake, poker bets) */
     .casino-chip {
       width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
@@ -2696,11 +2669,7 @@
     .plinko-dist-cell .pd-count.empty { color: #cbd5e1; }
     .plinko-dist-cell .pd-mult { font-size: clamp(8px, 1.3vw, 10px); font-weight: 700; color: #94a3b8; line-height: 1; }
     .plinko-dist-cell.hit .pd-barwrap { animation: plinko-bucket-hit .56s ease both; }
-    .plinko-actions {
-      position: relative; z-index: 1;
-      display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap;
-      margin-top: 12px;
-    }
+    
     .plinko-current {
       display: grid; gap: 2px; min-width: 180px;
       padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.78);
@@ -3732,8 +3701,8 @@
     .roulette-out-black { background: linear-gradient(180deg, rgba(51,65,85,.7), rgba(15,23,42,.85)); }
 
     /* Actions row */
-    .roulette-actions { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; justify-content: center; }
-    .roulette-actions .btn-ghost { min-height: 44px; }
+    
+    
 
     /* Result */
     .roulette-result {
@@ -4280,7 +4249,7 @@
       /* Wide 56:32 board (~16:9, fits a fullscreen 1920x1080 monitor): drive
          size off height (capped to fit the viewport alongside the rest of
          the panel) and let width follow the ratio. */
-      aspect-ratio: 56 / 32; height: min(56vh, 620px); width: auto; max-width: 100%;
+      aspect-ratio: 56 / 32; width: min(100%, calc(min(56vh, 620px) * 1.75)); height: auto;
       margin: 0 auto;
       user-select: none; touch-action: none;
       box-shadow: 0 0 15px rgba(34,211,238,0.3), inset 0 0 10px rgba(34,211,238,0.1);
@@ -4309,7 +4278,7 @@
     }
     .bj-game-panel:fullscreen .bj-arena,
     .bj-game-panel:-webkit-full-screen .bj-arena {
-      height: 80vh; max-width: 96vw;
+      width: min(96vw, calc(80vh * 1.75));
     }
     .bj-status { font-size: 12px; color: var(--muted); flex: 1; }
     .bj-board-panel { display: grid; gap: 16px; }
@@ -5829,24 +5798,13 @@
     .acc-tool-actions { display: flex; gap: 6px; margin-top: 8px; }
     .acc-tool-actions .btn-ghost { flex: 1; font-size: 11px; padding: 6px 8px; }
     .acc-tool-actions .btn-remove { color: #b91c1c; }
-    .garden-admin-panel {
-      margin-top: 12px; padding: 10px;
-      background: rgba(255,255,255,.7);
-      border: 1px dashed rgba(109,76,44,.35);
-      border-radius: 10px;
-    }
-    .garden-admin-row {
-      display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-      font-size: 11px; margin-bottom: 7px;
-    }
-    .garden-admin-label { font-weight: 800; color: #3d2810; }
-    .garden-admin-select {
-      font-size: 11px; padding: 4px 7px; border-radius: 6px;
-      border: 1px solid #c89760; background: #f4e8d2; font-family: inherit;
-    }
-    .garden-admin-actions { display: flex; gap: 7px; flex-wrap: wrap; }
-    .garden-admin-actions .btn-ghost { font-size: 11px; padding: 5px 10px; }
-    .garden-admin-delete { color: var(--no); }
+    
+    
+    
+    
+    
+    
+    
 
     /* ── GARDEN (Ogródek) ── */
     #tab-garden {
@@ -5882,33 +5840,10 @@
       align-items: start;
     }
     /* ── Tabliczka — wooden sign on two posts ── */
-    .garden-sign {
-      position: sticky; top: 80px; align-self: start;
-      display: flex; flex-direction: column; align-items: stretch;
-      padding-top: 6px; padding-bottom: 6px;
-    }
-    .sign-board {
-      position: relative;
-      background:
-        repeating-linear-gradient(0deg,
-          transparent 0px, transparent 13px,
-          rgba(60,30,10,.075) 13px, rgba(60,30,10,.075) 14px),
-        repeating-linear-gradient(90deg,
-          rgba(255,255,255,.04) 0px, rgba(255,255,255,.04) 60px,
-          rgba(60,30,10,.04) 60px, rgba(60,30,10,.04) 61px),
-        linear-gradient(180deg, #efd3a7 0%, #dfb77f 54%, #c9955f 100%);
-      border: 3px solid #765438;
-      border-radius: 8px;
-      padding: 18px 18px 16px;
-      font-size: 12px;
-      color: #3d2810; line-height: 1.55;
-      box-shadow:
-        0 8px 16px rgba(60,30,10,.16),
-        inset 0 1px 0 rgba(255,255,255,.45),
-        inset 0 -2px 5px rgba(60,30,10,.14);
-    }
+    
+    
     /* 4 nails in corners */
-    .sign-board::before, .sign-board::after,
+    
     .sign-nails::before, .sign-nails::after {
       content: '';
       position: absolute;
@@ -5917,29 +5852,19 @@
       border-radius: 50%;
       box-shadow: inset 0 -1px 0 rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.15);
     }
-    .sign-board::before { top: 6px; left: 6px; }
-    .sign-board::after  { top: 6px; right: 6px; }
+    
+    
     .sign-nails { position: absolute; left: 0; right: 0; bottom: 6px; height: 0; }
     .sign-nails::before { bottom: 0; left: 6px; }
     .sign-nails::after  { bottom: 0; right: 6px; }
 
-    .sign-board h3 {
-      font-size: 14px; margin-bottom: 8px; color: #14532d;
-      display: flex; align-items: center; gap: 6px;
-      text-shadow: 0 1px 0 rgba(255,255,255,.35);
-    }
-    .sign-board ul { padding-left: 18px; margin: 6px 0 0; }
-    .sign-board li { margin-bottom: 5px; }
-    .sign-board b  { color: #14532d; }
-    .sign-board .my-summary {
-      margin-top: 6px; padding: 0;
-      background: none;
-      border: none;
-      border-radius: 0; font-size: 12px; color: #3d2810;
-      box-shadow: none;
-    }
-    .sign-board .my-summary div { margin: 3px 0; }
-    .sign-board .my-summary strong { font-size: 13px; color: #166534; }
+    
+    
+    
+    
+    
+    
+    
     .my-plant-preview {
       text-align: center; font-size: 48px; line-height: 1;
       margin: 8px 0 4px;
@@ -5964,80 +5889,16 @@
     .my-plant-type-select:disabled { opacity: .6; cursor: wait; }
 
     /* Posts under the board */
-    .sign-posts {
-      display: flex; justify-content: space-between;
-      padding: 0 26px; height: 46px;
-      position: relative; margin-top: -2px;
-    }
-    .sign-post {
-      width: 14px; height: 46px;
-      position: relative;
-      background:
-        linear-gradient(90deg,
-          #4a2f15 0%, #6f4220 20%, #9a6d40 50%, #6f4220 80%, #4a2f15 100%);
-      border-radius: 0 0 4px 4px;
-      box-shadow: 0 4px 6px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.2);
-    }
-    .sign-post::before {
-      /* Knot in the wood */
-      content: ''; position: absolute;
-      top: 16px; left: 4px;
-      width: 6px; height: 4px;
-      background: radial-gradient(ellipse, #2f1a08 0%, transparent 70%);
-      border-radius: 50%;
-    }
+    
+    
+    
 
     /* ── Main garden area ── */
-    .garden-area {
-      position: relative;
-      padding: 16px 18px 18px;
-      border-radius: 12px;
-      border: 1px solid rgba(62,95,55,.28);
-      background:
-        radial-gradient(ellipse at 18% 12%, rgba(255,255,255,.44) 0%, transparent 32%),
-        radial-gradient(ellipse 70% 22% at 50% 96%, rgba(96,64,34,.10) 0%, transparent 68%),
-        linear-gradient(180deg, #dcefd8 0%, #c8e4bd 46%, #b7d7a8 100%);
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.7),
-        0 10px 26px rgba(45,72,38,.12);
-      overflow: visible;
-    }
-    .garden-area::before {
-      content: '';
-      position: absolute;
-      inset: 48px 18px 18px;
-      border-radius: 46% 54% 49% 51% / 12% 16% 84% 88%;
-      background:
-        radial-gradient(ellipse at 18% 70%, rgba(239,226,190,.72) 0%, transparent 28%),
-        radial-gradient(ellipse at 62% 42%, rgba(239,226,190,.62) 0%, transparent 34%),
-        repeating-linear-gradient(8deg,
-          rgba(117,90,55,.075) 0px, rgba(117,90,55,.075) 1px,
-          transparent 1px, transparent 12px);
-      opacity: .88;
-      pointer-events: none;
-    }
-    .garden-area::after {
-      content: '';
-      position: absolute;
-      left: 9%; right: 8%; top: 92px; height: 42px;
-      border-radius: 50%;
-      background:
-        radial-gradient(circle at 8% 52%, rgba(105,87,60,.28) 0 4px, transparent 5px),
-        radial-gradient(circle at 22% 35%, rgba(105,87,60,.24) 0 3px, transparent 4px),
-        radial-gradient(circle at 36% 58%, rgba(105,87,60,.22) 0 5px, transparent 6px),
-        radial-gradient(circle at 52% 44%, rgba(105,87,60,.25) 0 3px, transparent 4px),
-        radial-gradient(circle at 70% 60%, rgba(105,87,60,.22) 0 4px, transparent 5px),
-        radial-gradient(circle at 86% 38%, rgba(105,87,60,.24) 0 3px, transparent 4px);
-      opacity: .55;
-      pointer-events: none;
-    }
+    
+    
+    
     /* ── Dynamic sky & weather (Wrocław time-of-day + Open-Meteo) ── */
-    .garden-area.garden-dyn {
-      background:
-        radial-gradient(ellipse at 18% 12%, rgba(255,255,255,.22) 0%, transparent 34%),
-        radial-gradient(ellipse 70% 22% at 50% 96%, rgba(96,64,34,.10) 0%, transparent 68%),
-        linear-gradient(180deg, var(--g-grass-a, #cbe9bf) 0%, var(--g-grass-b, #b7d7a8) 100%);
-    }
+    
     /* Sky is its own band at the top — a horizon, not a backdrop the pots float in. */
     .garden-sky {
       position: relative;
@@ -6050,7 +5911,7 @@
       box-shadow: inset 0 -9px 16px -8px rgba(0,0,0,.14);
     }
     /* Hide the daytime grass pebble dots — they read as litter in the sky scene. */
-    .garden-area.garden-dyn::after { display: none; }
+    
     /* Distant rolling hills, just behind the horizon line. */
     .garden-sky::before {
       content: ''; position: absolute; left: -4%; right: -4%; bottom: 20px; height: 64px;
@@ -6109,7 +5970,7 @@
       opacity: .92;
       animation: gardenCloudDrift linear infinite;
     }
-    .garden-area.night .garden-cloud,
+    
     .farm-stage.night .garden-cloud {
       filter: blur(3px) brightness(.62) saturate(.5);
       opacity: .55;
@@ -6159,27 +6020,9 @@
       .garden-cloud, .gw-rain, .gw-snow, .gw-fog, .gw-flash, .garden-stars { animation: none !important; }
     }
 
-    .garden-title {
-      position: relative; z-index: 1;
-      text-align: center; font-size: 15px; font-weight: 800; color: #225c35;
-      margin-bottom: 12px; letter-spacing: 0;
-      text-shadow: 0 1px 0 rgba(255,255,255,.5);
-      transition: color 1.5s linear, text-shadow 1.5s linear;
-    }
-    .garden-area.night .garden-title {
-      color: #eaf2ff;
-      text-shadow: 0 1px 4px rgba(0,0,0,.45);
-    }
-    .garden-shelf {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      align-items: flex-start;
-      gap: 18px 16px;
-      padding: 10px 0 2px;
-    }
+    
+    
+    
     /* Plant islands: organic placement without the hard grid-card feel. */
     .garden-pot {
       --resting-offset: 0px;
@@ -6343,21 +6186,9 @@
       opacity: 1;
       transform: translate(-50%, 0);
     }
-    .garden-shelf .garden-pot:nth-child(-n+5) .gp-details-popover {
-      top: calc(100% + 8px);
-      bottom: auto;
-      transform: translate(-50%, -4px);
-    }
-    .garden-shelf .garden-pot:nth-child(-n+5) .gp-details-popover::after {
-      top: auto; bottom: 100%;
-      border-top-color: transparent;
-      border-bottom-color: rgba(15,23,42,.94);
-    }
-    .garden-shelf .garden-pot:nth-child(-n+5):hover .gp-details-popover,
-    .garden-shelf .garden-pot:nth-child(-n+5):focus .gp-details-popover,
-    .garden-shelf .garden-pot:nth-child(-n+5):focus-within .gp-details-popover {
-      transform: translate(-50%, 0);
-    }
+    
+    
+    
     .gp-details-title {
       min-width: 0;
       font-size: 12px; font-weight: 800;
@@ -6501,11 +6332,11 @@
     .gp-cancel-btn:hover { color: #ef4444; }
     @media (max-width: 700px) {
       .garden-wrap { grid-template-columns: 1fr; gap: 14px; }
-      .garden-sign { position: static; }
-      .garden-shelf { gap: 12px 10px; padding-top: 8px; }
-      .garden-area { padding: 12px 10px 14px; }
-      .garden-area::before { inset: 44px 10px 14px; }
-      .garden-area::after { left: 8%; right: 8%; top: 82px; }
+      
+      
+      
+      
+      
       .garden-pot {
         flex-basis: clamp(104px, calc((100% - 20px) / 3), 150px);
         min-width: 0; min-height: 144px; padding: 6px 5px 28px;
@@ -6524,8 +6355,8 @@
     }
 
     @media (max-width: 420px) {
-      .garden-shelf { gap: 10px 8px; }
-      .garden-title { font-size: 14px; }
+      
+      
       .garden-pot::before { width: 64px; height: 26px; }
       .gp-plant-area { height: 78px; }
       .gp-empty-text { font-size: 10px; }
@@ -6604,10 +6435,10 @@
     #cv-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
     @media (max-width: 640px) { .cv-wrap { height: calc(100dvh - 130px); padding: 8px; } .cv-hint { display: none; } .cv-bar-actions { margin-left: 0; } }
     /* ── Farma (farm grid + card economy) ── */
-    .garden-subtabs { display: flex; gap: 8px; margin-bottom: 14px; }
-    .garden-subtab { flex: 0 0 auto; padding: 8px 18px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-weight: 700; font-size: 14px; cursor: pointer; }
-    .garden-subtab:hover { border-color: var(--border-hi); color: var(--text); }
-    .garden-subtab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    
+    
+    
+    
     .farm-wrap { display: flex; flex-direction: column; gap: 12px; }
     .farm-hint { font-size: 11px; color: var(--muted); line-height: 1.35; }
     .farm-body { display: flex; flex-direction: column; gap: 12px; }
@@ -7502,19 +7333,19 @@
     /* Zysk/doba headline + full stat sheet under the trading card. The NPC price
        swings 30-100% of the catalog max, so income is always a RANGE; the meter
        shows where today's price sits inside that band. */
-    .nftm-income { margin-top: 12px; padding: 12px 14px 11px; border-radius: 14px; text-align: center; color: #3a2a06; background: linear-gradient(165deg, #fffdf5, #fff1cf); border: 1px solid rgba(180,83,9,.28); }
-    .nftm-income-head { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: #92600c; }
-    .nftm-income-val { font-size: 23px; font-weight: 700; color: #5a3a0a; line-height: 1.2; margin-top: 1px; }
-    .nftm-income-sub { font-size: 11px; color: #7a5a1a; margin-top: 1px; }
-    .nftm-meter { position: relative; height: 7px; border-radius: 999px; margin: 11px 2px 7px; background: linear-gradient(90deg, #f5e3bd, #f0b429); }
-    .nftm-meter-pin { position: absolute; top: -4px; width: 3px; height: 15px; border-radius: 2px; background: #5a3a0a; box-shadow: 0 0 0 2px rgba(255,255,255,.8); transform: translateX(-50%); }
-    .nftm-now { font-size: 12.5px; font-weight: 700; color: #5a3a0a; }
-    .nftm-note { font-size: 11px; color: #7a5a1a; line-height: 1.4; margin-top: 6px; }
-    .nftm-sec { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--muted); margin: 15px 0 1px; }
-    .nftm-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 1px; border-top: 1px solid var(--border); font-size: 13px; }
-    .nftm-row > span { color: var(--muted); white-space: nowrap; }
-    .nftm-row > b { font-weight: 700; text-align: right; }
-    .nftm-row.money > b { color: var(--accent); }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     .farm-cat-foot, .farm-inv-foot { margin-top: 12px; font-size: 11px; color: var(--muted); line-height: 1.4; }
     .farm-inv-section-title { font-weight: 700; font-size: 13px; color: var(--text); margin: 16px 0 5px; }
     .farm-inv-section-title:first-child { margin-top: 2px; }
@@ -13176,7 +13007,8 @@ async function doLogout() {
   teardownRealtime();
   await sb.auth.signOut();
   me = null; markets = []; tradesByMarket = {}; myPositionsByMarket = {}; marketsDirty = false;
-  pokerState = null; pokerRealtimeReady = false; stopPokerClock();
+  pokerState = null; pokerRealtimeReady = false; wheelRealtimeReady = false; fmRealtimeReady = false; stopPokerClock();
+  if (typeof lotteryRtReady !== 'undefined') lotteryRtReady = false;
   stopPlinkoAnimation(); stopWheelAnimation(); stopBankTimer(); stopHiloTimer(); stopTowerTimer(); stopCoinPusher(true);
   stopLotteryAnimation(); stopShopTimer();
   rouletteState = null; rouletteRealtimeReady = false; rouletteLastResultId = null; stopRouletteHeartbeat();
@@ -13184,14 +13016,10 @@ async function doLogout() {
   minesState = null; minesViewRound = null; minesBusy = false; minesLastTile = null; minesLastOutcome = '';
   crashState = null; crashActiveRoundId = null; crashCashoutPending = null; crashExplodedNo = null;
   crashCountdownEnd = 0; crashLaunching = false; stopCrash();
-  stopWhackBossRound();
-  stopSnakeRound();
-  stopInvoiceHordeRound();
-  stopTetrisRound(); // also drops handheld fullscreen + the body scroll lock
-  stopHealerDungeonRound();
-  stopBubbleBreakerRound();
-  stopSaperRound();
-  stopArkanoidRound(); stopRpsRound();
+  leaveAllGamesTab();   // every arcade round (tetris also drops fullscreen) + picker previews
+  if (typeof healerExitView === 'function') healerExitView();
+  stopFootballCountdown(); stopFarmTimer(); stopFarmAtmosphere(); stopGardenHeartbeat();
+  crashUnsubscribeBustNudge(); if (activityModalOpen()) closeActivityModal();
   resetGardenState();
   resetHeroState();
   hide(screenApp);
@@ -13509,9 +13337,21 @@ function loadAllGamesTab() {
   loadArcadePickerScores();
 }
 
+// Game key handlers ignore keys typed into a field: the chat input sits beside
+// every game on desktop, and WASD/space used to steer the game instead of typing.
+function isTypingTarget(t) {
+  const tag = t?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!t?.isContentEditable;
+}
+
+// Every arcade runtime, in one place: the tab switch, the picker, its back
+// button and logout all need the same list, and four hand-kept copies drifted.
+function stopAllArcadeRounds() {
+  stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
+}
+
 function leaveAllGamesTab() {
-  stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
+  stopAllArcadeRounds();
   stopAgPreviews();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesMode = false;
@@ -13535,8 +13375,7 @@ function agRequestFullscreen() {
 function selectAllGame(gameType) {
   if (gameType === 'healer_dungeon') agRequestFullscreen();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
-  stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
+  stopAllArcadeRounds();
   stopAgPreviews();   // the picker's previews borrow the same canvas globals
 
   allGamesSelectedGame = gameType;
@@ -13877,8 +13716,7 @@ document.querySelectorAll('.ag-card').forEach(card => {
   });
 });
 document.getElementById('ag-back').addEventListener('click', () => {
-  stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
+  stopAllArcadeRounds();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesSelectedGame = null;
   allGamesMode = false;
@@ -13893,13 +13731,14 @@ function switchTab(tab) {
   if (tab === 'invoice-horde-test' && !isAdmin()) tab = 'markets';
   if (tab === 'garden') tab = 'farm';
   const previousTab = activeTab;
-  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound(); if (typeof healerExitView === 'function') healerExitView(); }
+  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopAllArcadeRounds(); if (typeof healerExitView === 'function') healerExitView(); }
   if (previousTab === 'all-games' && tab !== 'all-games') leaveAllGamesTab();
   if (previousTab === 'flappy-test' && tab !== 'flappy-test') { stopFlappyPantsRound(); restoreFlappyPanelHome(); }
   if (previousTab === 'bug-jumper-test' && tab !== 'bug-jumper-test') { stopBugJumperRound(); restoreBugJumperPanelHome(); }
   if (previousTab === 'invoice-horde-test' && tab !== 'invoice-horde-test') { stopInvoiceHordeRound(); restoreInvoiceHordePanelHome(); }
   if (previousTab === 'football' && tab !== 'football') stopFootballCountdown();
   if (previousTab === 'farm' && tab !== 'farm') { stopFarmTimer(); stopFarmAtmosphere(); closeFarmPlantModal(); stopGardenHeartbeat(); }
+  if (previousTab === 'poker' && tab !== 'poker') stopPokerClock();
   if (previousTab === 'plinko' && tab !== 'plinko') stopPlinkoAnimation();
   if (previousTab === 'crash' && tab !== 'crash') stopCrash();
   if (previousTab === 'wheel' && tab !== 'wheel') stopWheelAnimation();
@@ -14002,9 +13841,6 @@ function switchTab(tab) {
   } else if (tab === 'shop') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); show(tS); hide(tG);
     withTabModule('shop', () => loadShop(), 'shop');
-  } else if (tab === 'garden') {
-    hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); show(tG);
-    loadGarden();
   } else if (tab === 'farm') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tFa);
@@ -14754,7 +14590,9 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'markets' }, async payload => {
       if (payload.eventType === 'INSERT') {
         if (!markets.find(m => m.id === payload.new.id)) {
-          markets.push(payload.new);
+          // The realtime row has no join, so name the author from the roster.
+          const by = payload.new.created_by;
+          markets.push({ ...payload.new, creator_nick: sidePeople.find(p => p.id === by)?.nick || (by === me?.id ? me.nick : 'Nieznany') });
           if (activeTab === 'markets') await renderMarkets(); else marketsDirty = true;
         }
       } else if (payload.eventType === 'UPDATE') {
@@ -15609,7 +15447,7 @@ function resetChatState() {
 
 // ── Bet modal ─────────────────────────────────────────────────────────────
 function openBetModal(marketId, side) {
-  if (me.coins < 1) return;
+  if (me.coins < 1) { showToast('❌ Nie masz monet, żeby obstawić.'); return; }
   activeMarket = markets.find(m => m.id === marketId);
   if (!activeMarket) return;
   if (isBettingClosed(activeMarket)) {
@@ -21146,21 +20984,6 @@ function resetGardenState() {
   resetFarmState();
 }
 
-function setupGardenRealtime() {
-  if (gardenRealtimeReady) return;
-  gardenRealtimeReady = true;
-  const ch = sb.channel('garden-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'gardens' }, payload => {
-      if (activeTab !== 'garden') return;
-      if (payload?.new?.user_id === me?.id && Date.now() < gardenSuppressOwnSizeReloadUntil) return;
-      // Debounce: many users may water around the same time.
-      if (gardenReloadDebounce) clearTimeout(gardenReloadDebounce);
-      gardenReloadDebounce = setTimeout(() => { gardenReloadDebounce = null; loadGarden(); }, 250);
-    })
-    .subscribe();
-  realtimeChannels.push(ch);
-}
-
 // ── Farma (farm grid + collectible plant-card economy) ──────────────────────
 // Grid bounds mirror supabase/farm.sql (FARM_W/FARM_H) — keep in sync.
 const FARM_W = 13, FARM_H = 4;
@@ -22246,7 +22069,7 @@ async function loadFarm() {
 // buildEmptyPot) are shared with the hidden garden tab; on the farm we must
 // refresh the farm (which re-renders the zen panel), not the old garden tab.
 function reloadGardenView() {
-  if (activeTab === 'farm') loadFarm(); else loadGarden();
+  if (activeTab === 'farm') loadFarm();
 }
 
 // 🧘 Ogród Zen — the left-hand panel of the Ogródek tab. Driven directly by the
@@ -29246,33 +29069,6 @@ function renderGardenWeather(container, category) {
   }
 }
 
-function applyGardenAtmosphere() {
-  const area = document.querySelector('#tab-garden .garden-area');
-  if (!area) return;
-  const w = gardenWeather;
-  let pal = gardenSkyPalette(getWarsawClock(), w && w.sunrise, w && w.sunset);
-  const category = (w && w.category) || 'clear';
-  pal = dampPalette(pal, category);
-  area.classList.add('garden-dyn');
-  area.classList.toggle('night', pal.night);
-  area.style.setProperty('--g-sky-a', pal.skyA);
-  area.style.setProperty('--g-sky-b', pal.skyB);
-  area.style.setProperty('--g-grass-a', pal.grassA);
-  area.style.setProperty('--g-grass-b', pal.grassB);
-  area.style.setProperty('--g-glow', pal.glow);
-  area.style.setProperty('--g-glow-op', pal.glowOp.toFixed(2));
-  area.style.setProperty('--g-star-op', pal.starOp.toFixed(2));
-  const sky = area.querySelector('.garden-sky');
-  if (sky) {
-    const glow = sky.querySelector('.garden-glow');
-    if (glow) glow.classList.toggle('is-moon', pal.night);
-    renderGardenClouds(sky, category, w && w.cloud);
-  }
-  const weather = area.querySelector('.garden-weather');
-  if (weather) renderGardenWeather(weather, category);
-}
-
-// Mirror the Ogródek atmosphere onto the Farma board.
 function applyFarmAtmosphere() {
   const stage = document.querySelector('#tab-farm .farm-stage');
   if (!stage) return;
@@ -29309,168 +29105,6 @@ function startFarmAtmosphere() {
 function stopFarmAtmosphere() {
   if (fmAtmoTimer) { clearInterval(fmAtmoTimer); fmAtmoTimer = null; }
   if (fmWxTimer) { clearInterval(fmWxTimer); fmWxTimer = null; }
-}
-
-async function loadGarden() {
-  setupGardenRealtime();
-  const wrap = document.getElementById('garden-content');
-  if (!wrap.children.length || !wrap.querySelector('.garden-shelf')) wrap.replaceChildren(makeSpinner());
-
-  const { data: gardens, error: gErr } = await sb.from('gardens').select('*, profiles(nick,is_admin)');
-
-  if (gErr) {
-    wrap.replaceChildren(el('div', { style: { color: 'var(--muted)', textAlign: 'center', padding: '32px' } }, DB_ERROR_MESSAGE));
-    return;
-  }
-
-  // Sort: my pot first, then by stage desc, then by streak desc, then by created_at asc
-  allGardens = (gardens || []).slice().sort((a, b) => {
-    if (a.user_id === me.id && b.user_id !== me.id) return -1;
-    if (b.user_id === me.id && a.user_id !== me.id) return  1;
-    if (b.stage !== a.stage) return b.stage - a.stage;
-    if ((b.streak_days || 0) !== (a.streak_days || 0)) return (b.streak_days || 0) - (a.streak_days || 0);
-    return (a.created_at || '').localeCompare(b.created_at || '');
-  });
-  myGarden  = allGardens.find(g => g.user_id === me.id && (g.slot_index || 1) === 1) || null;
-  myGarden2 = allGardens.find(g => g.user_id === me.id && g.slot_index === 2) || null;
-
-  // Refresh own coins and second-slot unlock flag in parallel.
-  const [, { data: profData }] = await Promise.all([
-    refreshMeCoins(),
-    sb.from('profiles').select('second_garden_unlocked').eq('id', me.id).maybeSingle(),
-  ]);
-  secondGardenUnlocked = profData?.second_garden_unlocked || false;
-
-  try { renderZenGarden(); } catch(e) {
-    console.error('Garden render error:', e);
-    wrap.replaceChildren(el('div', { style: { color:'var(--no)', textAlign:'center', padding:'32px' } }, 'Błąd renderowania: ' + e.message));
-  }
-}
-
-function renderZenGarden() {
-  const wrap = document.getElementById('garden-content');
-  wrap.replaceChildren();
-  clearGardenTimers();
-
-  // ── Tabliczka — wooden sign on two posts ──
-  const sign = el('div', { className: 'garden-sign' });
-
-  // Board 1: Rules
-  const boardRules = el('div', { className: 'sign-board' });
-  boardRules.innerHTML = `<h3>🪧 Zasady</h3>
-<ul>
-<li>💧 <b>Podlewaj</b> co 5h (maks. 3×/dzień)</li>
-<li>🔥 <b>Seria</b> — codziennie = rośnie!</li>
-<li>📏 Im więcej <b>podlań łącznie</b>, tym większa roślinka</li>
-<li>💰 <b>10–20 coinów</b> za podlanie</li>
-<li>⚠️ Pominiesz dzień roboczy = reset serii</li>
-<li>📅 Weekend nie liczy się — możesz odpocząć</li>
-</ul>`;
-  boardRules.appendChild(el('div', { className: 'sign-nails' }));
-  sign.appendChild(boardRules);
-
-  function buildPlantBoard(garden, label) {
-    const board = el('div', { className: 'sign-board', style: { marginTop: '12px' } });
-    const today = warsawCalendarDateStr();
-    const watersToday = (garden.last_water_date === today) ? (garden.waters_today || 0) : 0;
-    const streak = garden.streak_days || 0;
-    const emoji = getPlantEmoji(garden.plant_type, garden.stage);
-    board.innerHTML = `<h3>${escapeHtmlText(label)}</h3>
-<div class="my-plant-preview">${escapeHtmlText(emoji)}</div>
-<div class="my-plant-details">
-<div class="my-plant-name">${escapeHtmlText(garden.plant_name)}</div>
-<div class="my-plant-type">${escapeHtmlText(PLANT_LABELS[canonicalPlantType(garden.plant_type)] || '')}</div>
-</div>
-<div class="my-summary">
-<div>🔥 Seria: <b>${Number(streak) || 0} ${streak === 1 ? 'dzień' : 'dni'} z rzędu</b></div>
-<div>💧 Podlano łącznie: <b>${Number(garden.total_waters) || 0}×</b></div>
-<div>⭐ Etap: <b>${Number(garden.stage) || 0}/6</b></div>
-<div>💧 Dziś: <b>${Number(watersToday) || 0}/3</b></div>
-<div>💰 Nagroda: <b>${Number(nextRewardCoins(streak)) || 0} 🪙</b></div>
-</div>`;
-    board.appendChild(buildPlantTypeChanger(garden));
-    board.appendChild(el('div', { className: 'sign-nails' }));
-    return board;
-  }
-
-  // Board 2: My first plant
-  if (myGarden) sign.appendChild(buildPlantBoard(myGarden, '🌱 Twoja roślinka'));
-
-  // Board 3: My second plant (or unlock teaser)
-  if (myGarden2) {
-    sign.appendChild(buildPlantBoard(myGarden2, '🌱 Drugi kwiatek'));
-  } else if (secondGardenUnlocked && myGarden) {
-    const board2 = el('div', { className: 'sign-board', style: { marginTop: '12px' } });
-    board2.innerHTML = `<h3>🌱 Drugi slot — gotowy!</h3>
-<div class="my-plant-preview" style="font-size:48px;opacity:.5">🪴</div>
-<div class="my-summary"><div>Certyfikat aktywny — zasadź drugą roślinę w ogródku poniżej.</div></div>`;
-    board2.appendChild(el('div', { className: 'sign-nails' }));
-    sign.appendChild(board2);
-  } else if (!myGarden) {
-    // no-op — user has no first garden yet
-  } else if (!secondGardenUnlocked) {
-    const board2 = el('div', { className: 'sign-board', style: { marginTop: '12px' } });
-    board2.innerHTML = `<h3>🔒 Drugi slot</h3>
-<div class="my-plant-preview" style="font-size:48px;opacity:.35">🪴</div>
-<div class="my-summary"><div>Odblokuj drugi kwiatek kupując <b>Certyfikat Drugiego Ogródka</b> w Sklepie (🎒 Przedmioty specjalne).</div></div>`;
-    const shopBtn = el('button', { className: 'btn-ghost', type: 'button', style: { marginTop: '8px', width: '100%' } }, '🛒 Przejdź do sklepu');
-    shopBtn.addEventListener('click', () => switchTab('shop'));
-    board2.appendChild(shopBtn);
-    board2.appendChild(el('div', { className: 'sign-nails' }));
-    sign.appendChild(board2);
-  }
-
-  // Two posts under the board
-  const posts = el('div', { className: 'sign-posts' });
-  posts.appendChild(el('span', { className: 'sign-post' }));
-  posts.appendChild(el('span', { className: 'sign-post' }));
-  sign.appendChild(posts);
-
-  if (myGarden) {
-    sign.appendChild(buildDecorateCard(myGarden));
-    if (isAdmin()) sign.appendChild(buildGardenAdminPanel());
-  }
-  if (myGarden2) sign.appendChild(buildDecorateCard(myGarden2));
-
-  wrap.appendChild(sign);
-
-  // ── Garden area: zen tiles ──
-  const area = el('div', { className: 'garden-area' });
-  // Dynamic Wrocław sky (behind pots) + live weather overlay (in front of pots)
-  const sky = el('div', { className: 'garden-sky' });
-  sky.appendChild(el('div', { className: 'garden-glow' }));
-  sky.appendChild(el('div', { className: 'garden-stars' }));
-  area.appendChild(sky);
-  area.appendChild(el('div', { className: 'garden-weather' }));
-  area.appendChild(el('div', { className: 'garden-title' }, '🌿 Ogródek Zen 🌿'));
-
-  const shelf = el('div', { className: 'garden-shelf' });
-  const TOTAL_SPOTS = 15;
-  allGardens.forEach(g => {
-    if (g.profiles?.is_admin && !isAdmin()) return;
-    const isMine = g.user_id === me.id;
-    shelf.appendChild(buildPot(g, isMine));
-  });
-  // Fill remaining spots with empty pots (plantable if user has no garden or has unlocked slot 2)
-  const emptyCount = Math.max(0, TOTAL_SPOTS - allGardens.length);
-  for (let i = 0; i < emptyCount; i++) {
-    if (i === 0 && !myGarden) {
-      shelf.appendChild(buildEmptyPot(1));
-    } else if (i === 0 && myGarden && secondGardenUnlocked && !myGarden2) {
-      shelf.appendChild(buildEmptyPot(2));
-    } else {
-      shelf.appendChild(buildPlaceholderPot());
-    }
-  }
-
-  area.appendChild(shelf);
-  wrap.appendChild(area);
-
-  // Drive the sky immediately from Warsaw time, then refine once weather arrives.
-  applyGardenAtmosphere();
-  fetchWroclawWeather().then(applyGardenAtmosphere);
-  gardenAtmosphereTimer = setInterval(applyGardenAtmosphere, 60000);
-  gardenWeatherTimer = setInterval(() => fetchWroclawWeather().then(applyGardenAtmosphere), 15 * 60 * 1000);
 }
 
 function buildPlantTypeChanger(garden) {
@@ -29798,7 +29432,7 @@ function openAccessoryEditor(garden, onChange) {
         if (error) {
           gardenSuppressOwnSizeReloadUntil = 0;
           showToast('❌ ' + gardenErr(error));
-          loadGarden();
+          reloadGardenView();
           return;
         }
         showToast('✅ Rozmiar zapisany: ' + newSize + ' px');
@@ -29945,7 +29579,7 @@ function openAccessoryEditor(garden, onChange) {
     clearSelection();
     selectedSlot = slotId; // auto-select the freshly placed accessory so size slider is ready
     rerender();
-    loadGarden();
+    reloadGardenView();
   }
 
   async function removePlaced(slotId) {
@@ -29969,7 +29603,7 @@ function openAccessoryEditor(garden, onChange) {
     showToast('✅ Zdjęto ' + (item ? item.emoji + ' ' + item.name : 'ozdobę'));
     clearSelection();
     rerender();
-    loadGarden();
+    reloadGardenView();
   }
 
   // ── Lifecycle ──
@@ -29987,56 +29621,6 @@ function openAccessoryEditor(garden, onChange) {
   document.addEventListener('keydown', onKey);
 
   rerender();
-}
-
-function buildGardenAdminPanel() {
-  const adminDiv = el('div', { className: 'garden-admin-panel' });
-  adminDiv.appendChild(el('div', { className: 'garden-panel-title' }, el('span', {}, '⚙️ Admin')));
-
-  const sizeRow = el('div', { className: 'garden-admin-row' });
-  sizeRow.appendChild(el('span', { className: 'garden-admin-label' }, 'Etap:'));
-  const sizeSelect = el('select', { className: 'garden-admin-select' });
-  for (let s = 1; s <= 6; s++) {
-    const o = el('option', { value: String(s) }, String(s));
-    if (s === myGarden.stage) o.selected = true;
-    sizeSelect.appendChild(o);
-  }
-  sizeSelect.addEventListener('change', async () => {
-    sizeSelect.disabled = true;
-    const nextStage = parseInt(sizeSelect.value, 10);
-    const { error } = await sb.from('gardens').update({ stage: nextStage }).eq('user_id', me.id).eq('slot_index', 1);
-    sizeSelect.disabled = false;
-    if (error) { showToast('❌ ' + error.message); sizeSelect.value = String(myGarden.stage); return; }
-    myGarden.stage = nextStage;
-    loadGarden();
-  });
-  sizeRow.appendChild(sizeSelect);
-  adminDiv.appendChild(sizeRow);
-
-  const resetBtn = el('button', { className: 'btn-ghost', type: 'button' }, 'Reset serii');
-  resetBtn.addEventListener('click', async () => {
-    resetBtn.disabled = true;
-    const { error } = await sb.from('gardens').update({ streak_days: 0, stage: 1 }).eq('user_id', me.id).eq('slot_index', 1);
-    resetBtn.disabled = false;
-    if (error) { showToast('❌ ' + error.message); return; }
-    myGarden.streak_days = 0; myGarden.stage = 1;
-    loadGarden();
-    showToast('🔄 Seria zresetowana');
-  });
-
-  const delBtn = el('button', { className: 'btn-ghost garden-admin-delete', type: 'button' }, 'Usuń roślinę');
-  delBtn.addEventListener('click', async () => {
-    if (!confirm('Na pewno usunąć roślinę?')) return;
-    delBtn.disabled = true;
-    const { error } = await sb.from('gardens').delete().eq('user_id', me.id).eq('slot_index', 1);
-    delBtn.disabled = false;
-    if (error) { showToast('❌ ' + error.message); return; }
-    myGarden = null;
-    loadGarden();
-    showToast('🗑️ Roślina usunięta');
-  });
-  adminDiv.appendChild(el('div', { className: 'garden-admin-actions' }, resetBtn, delBtn));
-  return adminDiv;
 }
 
 function renderAccEmoji(item) {
@@ -30170,7 +29754,7 @@ function buildPot(g, isMine) {
         plant.classList.add('watered');
         setTimeout(() => {
           can.remove(); drops.remove(); plant.classList.remove('watered');
-          if (activeTab === 'farm') loadFarm(); else loadGarden();
+          reloadGardenView();
         }, 2500);
       };
       timeline.appendChild(btn);
@@ -30331,6 +29915,8 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
+// tabs/*.js call toast(); without this the name resolved to <div id="toast"> and threw.
+function toast(msg) { showToast(msg); }
 
 // ── Auto-update nudge ───────────────────────────────────────────────────────
 // GitHub Pages serves index.html with a fixed 10-minute cache, and — more to the

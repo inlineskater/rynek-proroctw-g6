@@ -599,12 +599,15 @@ function smTick() {
   if (!rt?.playing) return;
   const st = rt.sim;
   const nextTick = st.tick + 1;
-  if (rt.heldKeys !== rt.loggedKeys) {
+  // The server replays the log from tick 0 and rejects more than SM_MAX_MOVES
+  // entries, so at the cap input freezes instead of dropping the oldest entries
+  // (which made the replay diverge). The sim runs on the LOGGED keys so it can
+  // never differ from what the server will replay.
+  if (rt.heldKeys !== rt.loggedKeys && rt.moveLog.length < SM_MAX_MOVES) {
     rt.moveLog.push({ tick: nextTick, keys: rt.heldKeys });
     rt.loggedKeys = rt.heldKeys;
-    if (rt.moveLog.length > SM_MAX_MOVES) rt.moveLog.shift();
   }
-  const ev = smAdvanceTick(st, rt.heldKeys);
+  const ev = smAdvanceTick(st, rt.loggedKeys);
   smSetStats();
   smDraw();
   if (ev.died) {
@@ -626,19 +629,30 @@ function smTick() {
 }
 
 async function startSuperMariuszRound() {
+  if (!superMariuszRuntime) stopSuperMariuszRound();   // gives the double-tap guard a runtime to live on
   const rt = superMariuszRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => superMariuszRuntime !== rt;
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   if (smStartBtn) { smStartBtn.disabled = true; smStartBtn.textContent = 'Ładuję...'; }
   if (smStatus) smStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeSuperMariusz({ action: 'start' });
+    if (stale()) return;
     renderSuperMariuszState(data);
+    if (rt) rt.starting = false;
     beginSuperMariuszRound(data.round);
     if (allGamesMode) superMariuszRuntime.archiveMode = true;
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (smStatus) smStatus.textContent = 'Nie udało się wystartować rundy.';
     if (smStartBtn) { smStartBtn.disabled = false; smStartBtn.textContent = 'Start rundy'; }
@@ -706,7 +720,7 @@ if (smStartBtn) smStartBtn.addEventListener('click', startSuperMariuszRound);
 
 document.addEventListener('keydown', evt => {
   const rt = superMariuszRuntime;
-  if (!rt?.playing) return;
+  if (!rt?.playing || isTypingTarget(evt.target)) return;
   let bit = 0;
   const key = evt.key.toLowerCase();
   if (key === 'arrowleft' || key === 'a') bit = 1;
@@ -716,6 +730,9 @@ document.addEventListener('keydown', evt => {
   evt.preventDefault();
   rt.heldKeys |= bit;
 });
+// Alt-Tab swallows the keyup, so a held arrow would run Mariusz into a pit.
+window.addEventListener('blur', () => { if (superMariuszRuntime) superMariuszRuntime.heldKeys = 0; });
+
 document.addEventListener('keyup', evt => {
   const rt = superMariuszRuntime;
   if (!rt) return;

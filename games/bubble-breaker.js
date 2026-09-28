@@ -463,14 +463,22 @@ function beginBubbleBreakerRound(seed, options = {}) {
 }
 
 async function startBubbleBreakerRound() {
+  if (!bubbleBreakerRuntime) stopBubbleBreakerRound();   // gives the double-tap guard a runtime to live on
   const rt = bubbleBreakerRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => bubbleBreakerRuntime !== rt;
 
   // Arcade path (unchanged from launch): a purely local round. No server round
   // row is burned for a run that can never enter the weekly ranking.
   if (allGamesMode) {
     try { await payArcadeEntry(allGamesSelectedGame); }
-    catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
+    if (rt) rt.starting = false;
     beginBubbleBreakerRound((Math.floor(Math.random() * 0xfffffff) + 1) >>> 0, { archiveMode: true });
     return;
   }
@@ -480,9 +488,13 @@ async function startBubbleBreakerRound() {
   if (bbStatus) bbStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeBubbleBreaker({ action: 'start' });
+    if (stale()) return;
     renderBubbleBreakerState(data);
+    if (rt) rt.starting = false;
     beginBubbleBreakerRound(Number(data.round.seed) || 1, { roundId: data.round.id });
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (bbStatus) bbStatus.textContent = 'Nie udało się wystartować rundy.';
     if (bbStartBtn) { bbStartBtn.disabled = false; bbStartBtn.textContent = 'Start rundy'; }

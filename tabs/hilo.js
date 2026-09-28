@@ -243,4 +243,6 @@ function renderHiloFeed() {
 }
 
 // Teardown stub in index.html is overwritten by this.
-function stopHiloTimer() { hiloFlash = null; hiloBusy = false; }
+// hiloBusy is left alone: the request that set it clears it in its own finally,
+// and clearing it here let a quick leave-and-return fire a second pick.
+function stopHiloTimer() { hiloFlash = null; }

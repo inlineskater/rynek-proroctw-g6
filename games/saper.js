@@ -620,14 +620,22 @@ function beginSaperRound(seed, options = {}) {
 }
 
 async function startSaperRound() {
+  if (!saperRuntime) stopSaperRound();   // gives the double-tap guard a runtime to live on
   const rt = saperRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => saperRuntime !== rt;
 
   // Arcade path: a purely local round. No server round row is burned for a run
   // that can never enter the weekly ranking.
   if (allGamesMode) {
     try { await payArcadeEntry(allGamesSelectedGame); }
-    catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
+    if (rt) rt.starting = false;
     beginSaperRound((Math.floor(Math.random() * 0xfffffff) + 1) >>> 0, { archiveMode: true });
     return;
   }
@@ -637,9 +645,13 @@ async function startSaperRound() {
   if (spStatus) spStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeSaper({ action: 'start' });
+    if (stale()) return;
     renderSaperState(data);
+    if (rt) rt.starting = false;
     beginSaperRound(Number(data.round.seed) || 1, { roundId: data.round.id });
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (spStatus) spStatus.textContent = 'Nie udało się wystartować rundy.';
     if (spStartBtn) { spStartBtn.disabled = false; spStartBtn.textContent = 'Start rundy'; }

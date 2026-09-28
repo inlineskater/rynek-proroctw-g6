@@ -681,7 +681,7 @@ function bankShareSection(panel, p) {
       ['Wynik kasyna, średnia 7 dni', bankCoins(sh.house_net_avg), 'podstawa najbliższej wypłaty'],
       ['Wynik kasyna, średnia 30 dni', bankCoins(sh.house_net_avg_30), 'dłuższy horyzont'],
       ['Dywidenda na udział', bankCoins(perShare), 'dziennie, szacunek'],
-      ['Okres zwrotu', perShare > 0 ? `${Math.ceil(Number(sh.price) / perShare)} dni` : 'nieokreślony',
+      ['Okres zwrotu', perShare > 0 ? (d => `${d} ${d === 1 ? 'dzień' : 'dni'}`)(Math.ceil(Number(sh.price) / perShare)) : 'nieokreślony',
         perShare > 0 ? 'przy utrzymaniu obecnych obrotów' : 'kasyno nie generuje obecnie wyniku'],
     ]
   ));
@@ -841,7 +841,7 @@ function bankRateSection(panel) {
       `${sh.supply || 0} szt.`, 'zbywalny'],
     ['💍 Sygnet Bankiera', 'bezterminowo', bankPct(bankSignetPct() * 100) + ' / dz.',
       bankCoins(bankSignetDaily(bankSignetCap())) + ' / dz. maks.',
-      bankCoins(bankSignetCap()) + ' 🪙 podstawy', 'niezbywalny'],
+      bankCoins(bankSignetCap()) + ' podstawy', 'niezbywalny'],
   ];
 
   sec.appendChild(bankTable(
@@ -888,7 +888,7 @@ function bankRateSection(panel) {
   ));
   sec.appendChild(bankFootnotes([
     'Skarbonka, lokata i obligacja ODDAJĄ kapitał — zaangażowanie wraca do Ciebie. Udział i Sygnet to zakup: monety znikają, ale dochód jest bezterminowy.',
-    `Sygnet liczy od Twojej podstawy (${bankCoins(myBase)}), ale najwyżej od ${bankCoins(bankSignetCap())} 🪙 — powyżej tego progu wypłata nie rośnie i wynosi stałe ${bankCoins(bankSignetDaily(bankSignetCap()))} 🪙 dziennie.`,
+    `Sygnet liczy od Twojej podstawy (${bankCoins(myBase)}), ale najwyżej od ${bankCoins(bankSignetCap())} — powyżej tego progu wypłata nie rośnie i wynosi stałe ${bankCoins(bankSignetDaily(bankSignetCap()))} dziennie.`,
     'Udział w kasynie jest zmienny: w tygodniu bez gry zapłaci zero.',
   ]));
 
@@ -896,7 +896,7 @@ function bankRateSection(panel) {
   sec.appendChild(bankFootnotes([
     'Odsetki lokaty i skarbonki są proste — nie podlegają kapitalizacji.',
     'Sygnet Bankiera nalicza od gotówki ORAZ od kapitału na lokacie i w skarbonce, więc korzystanie z Banku nigdy nie obniża jego wypłaty.',
-    `Od 28.08.2026 podstawa Sygnetu i Pierścienia jest ograniczona do ${bankCoins(bankSignetCap())} 🪙. Wcześniej odsetki naliczały się od całego salda i rosły od salda, które same tworzyły — była to jedyna taka pętla w grze. Po zmianie wypłata jest stała, nie kapitalizuje się.`,
+    `Od 28.08.2026 podstawa Sygnetu i Pierścienia jest ograniczona do ${bankCoins(bankSignetCap())}. Wcześniej odsetki naliczały się od całego salda i rosły od salda, które same tworzyły — była to jedyna taka pętla w grze. Po zmianie wypłata jest stała, nie kapitalizuje się.`,
     'Stopa udziału w kasynie jest zmienna i może wynieść zero. Nie jest gwarantowana.',
     'Limity są dynamiczne — Bank przelicza je codziennie na podstawie podaży pieniądza i tempa przyrostu monet w grze. Szczegóły w zakładce „Limity i budżet".',
     'Limity dotyczą sumy otwartych pozycji jednego gracza; zamknięcie pozycji zwalnia limit.',
@@ -919,15 +919,15 @@ function bankSignetSection() {
   const maxDay = bankSignetDaily(cap);
   const sec = bankSection_('💍 Sygnet Bankiera',
     `Ten sam instrument, który posiada legendarny Pierścień Bankiera, na tych samych warunkach: `
-    + `${bankSignetPct()}% dziennie, naliczane od pierwszych ${bankCoins(cap)} 🪙 podstawy — `
-    + `czyli najwyżej ${bankCoins(maxDay)} 🪙 dziennie. `
+    + `${bankSignetPct()}% dziennie, naliczane od pierwszych ${bankCoins(cap)} podstawy — `
+    + `czyli najwyżej ${bankCoins(maxDay)} dziennie. `
     + 'Podstawę stanowi gotówka ORAZ kapitał ulokowany w Banku, więc lokata i skarbonka nie zabierają '
     + 'Ci ani grosza odsetek — dokładają się do nich. Nie liczą się natomiast monety wydane na skrzynki '
     + 'czy stojące w pozycji rynkowej.');
 
   sec.appendChild(bankTermsBlock([
     ['Cena', bankCoins(BANK_SIGNET_PRICE), 'jednorazowo, bezzwrotnie'],
-    ['Oprocentowanie', bankSignetPct() + ',00% / dz.', `od podstawy do ${bankCoins(cap)} 🪙`],
+    ['Oprocentowanie', bankPct(bankSignetPct() * 100) + ' / dz.', `od podstawy do ${bankCoins(cap)}`],
     ['Wypłata maksymalna', bankCoins(maxDay) + ' / dz.', 'po osiągnięciu limitu podstawy'],
     ['Twoja wypłata dziś', bankCoins(perDay),
       cash >= cap ? `podstawa ${bankCoins(cash)} — powyżej limitu` : `przy podstawie ${bankCoins(cash)}`],
@@ -936,8 +936,8 @@ function bankSignetSection() {
   ]));
 
   sec.appendChild(el('p', { className: 'bk-lede' },
-    `Wypłata rośnie razem z podstawą, ale tylko do ${bankCoins(cap)} 🪙 — powyżej tego progu `
-    + `wynosi stałe ${bankCoins(maxDay)} 🪙 dziennie. Do 28.08.2026 limitu nie było i odsetki `
+    `Wypłata rośnie razem z podstawą, ale tylko do ${bankCoins(cap)} — powyżej tego progu `
+    + `wynosi stałe ${bankCoins(maxDay)} dziennie. Do 28.08.2026 limitu nie było i odsetki `
     + 'naliczały się od salda, które same powiększały; był to jedyny produkt w grze bez ograniczenia '
     + 'i jedyny, który się kapitalizował. Poniżej okres zwrotu przy różnych podstawach.'));
 
@@ -1072,7 +1072,7 @@ function bankLimitsSection(panel) {
       ['Mnożnik kondycji', health.toFixed(1).replace('.', ',') + '%', 'cel: 1,00% dziennie = 100%'],
       ['Budżet Banku', el('b', {}, bankCoins(L.budget_day) + ' / dz.'), 'budżet bazowy × kondycja'],
       ['Sygnety i Pierścień', bankCoins(L.signet_draw) + ' / dz.',
-        `poza budżetem, ale od 28.08.2026 z limitem ${bankCoins(bankSignetCap())} 🪙 podstawy na gracza`],
+        `poza budżetem, ale od 28.08.2026 z limitem ${bankCoins(bankSignetCap())} podstawy na gracza`],
     ]
   ));
 

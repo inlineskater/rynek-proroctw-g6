@@ -959,9 +959,17 @@ function beginVarPatrolRound(round) {
 }
 
 async function startVarPatrolRound() {
-  if (varPatrolRuntime?.playing || varPatrolRuntime?.submitting) return;
+  if (!varPatrolRuntime) stopVarPatrolRound();   // gives the double-tap guard a runtime to live on
+  const rt = varPatrolRuntime;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => varPatrolRuntime !== rt;
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   const startBtn = document.getElementById('vp-start-btn');
   const status = document.getElementById('vp-status');
@@ -969,10 +977,14 @@ async function startVarPatrolRound() {
   if (status) status.textContent = 'Przygotowuję rundę.';
   try {
     const data = await invokeVarPatrol({ action: 'start' });
+    if (stale()) return;
     renderVarPatrolState(data);
+    if (rt) rt.starting = false;
     beginVarPatrolRound(data.round);
     if (allGamesMode) varPatrolRuntime.archiveMode = true;
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (status) status.textContent = 'Nie udało się wystartować rundy.';
     if (startBtn) { startBtn.disabled = false; startBtn.textContent = 'Start rundy'; }
@@ -1030,10 +1042,7 @@ async function finishVarPatrolRound() {
   }
 }
 
-function vpIsTypingTarget(target) {
-  const tag = target?.tagName?.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
-}
+const vpIsTypingTarget = isTypingTarget;   // shared helper, index.html
 
 (function wireVarPatrol() {
   const startBtn = document.getElementById('vp-start-btn');

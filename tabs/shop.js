@@ -660,7 +660,7 @@ function buildBuyOrderFillControls(order, remaining) {
       const qty = Math.max(1, Math.min(max, Math.trunc(Number(input.value) || 1)));
       fillBuyOrder(order, qty, null, btn);
     });
-    wrap.appendChild(el('div', { className: 'mlc-desc' }, 'Masz ' + free + ' wolnych duplikatów.'));
+    wrap.appendChild(el('div', { className: 'mlc-desc' }, 'Masz ' + free + ' ' + plCount(free, 'wolny duplikat', 'wolne duplikaty', 'wolnych duplikatów') + '.'));
     wrap.appendChild(el('div', { className: 'mlc-bid-row' }, input, btn));
   } else if (order.item_kind === 'farm_nft') {
     const mine = fmNft.filter(n => n.owner_id === me?.id && !n.listed && n.species === order.card_species);
@@ -1189,8 +1189,8 @@ function renderHeroShopGrid() {
         disabled: !itemCanAfford,
         title: itemCanAfford ? '' : 'Za mało coinów',
       }, !itemCanAfford ? `Potrzebujesz ${itemPrice.toLocaleString('pl-PL')} 🪙`
-        : activeUntil ? `Przedłuż o ${days} dni za ${itemPrice.toLocaleString('pl-PL')} 🪙`
-        : `Kup ${days} dni${isCommunal ? ' dla wszystkich' : ''} za ${itemPrice.toLocaleString('pl-PL')} 🪙`);
+        : activeUntil ? `Przedłuż o ${days} ${days === 1 ? 'dzień' : 'dni'} za ${itemPrice.toLocaleString('pl-PL')} 🪙`
+        : `Kup ${days} ${days === 1 ? 'dzień' : 'dni'}${isCommunal ? ' dla wszystkich' : ''} za ${itemPrice.toLocaleString('pl-PL')} 🪙`);
       buyBtn.addEventListener('click', () => purchaseHeroItem(item.slug, itemPrice, buyBtn));
       itemCard.appendChild(buyBtn);
     } else if (owned) {
@@ -1594,7 +1594,7 @@ function mlUpdateQtyMax() {
   input.max = Math.max(1, free);
   input.disabled = free < 1;
   if ((parseInt(input.value, 10) || 1) > free) input.value = String(Math.max(1, free));
-  hint.textContent = free > 1 ? ('Masz ' + free + ' wolnych duplikatów tej karty do sprzedaży (jako jeden pakiet).')
+  hint.textContent = free > 1 ? ('Masz ' + free + ' ' + plCount(free, 'wolny duplikat', 'wolne duplikaty', 'wolnych duplikatów') + ' tej karty do sprzedaży (jako jeden pakiet).')
                    : free === 1 ? 'Masz 1 wolny duplikat tej karty.'
                    : 'Brak wolnego duplikatu tej karty.';
 }
@@ -1684,7 +1684,7 @@ document.getElementById('ml-submit').addEventListener('click', () => {
       qty = parseInt(document.getElementById('ml-qty').value, 10) || 1;
       const free = mlFreeCardCount(ref);
       if (qty < 1) { showToast('❌ Podaj liczbę sztuk większą od 0.'); return; }
-      if (qty > free) { showToast('❌ Masz tylko ' + free + ' wolnych duplikatów tej karty.'); return; }
+      if (qty > free) { showToast('❌ Masz tylko ' + free + ' ' + plCount(free, 'wolny duplikat', 'wolne duplikaty', 'wolnych duplikatów') + ' tej karty.'); return; }
     }
     createFarmListing(mlSellKind, listingRef, mlListingType, price, hours, incr, btn, qty);
   }

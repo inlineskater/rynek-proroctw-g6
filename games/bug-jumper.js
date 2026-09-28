@@ -767,11 +767,18 @@ function prepareBugJumperAdminTest() {
 }
 
 async function startBugJumperRound() {
+  if (!bugJumperRuntime) stopBugJumperRound();   // gives the double-tap guard a runtime to live on
   const rt = bugJumperRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => bugJumperRuntime !== rt;
   if (activeTab === 'bug-jumper-test') {
     const now = new Date().toISOString();
     const seed = Math.floor(Math.random() * 2147483647) + 1;
+    if (rt) rt.starting = false;
     beginBugJumperRound({
       id: 'admin-test-' + Date.now(),
       courseId: BUG_JUMPER_DYNAMIC_COURSE_ID,
@@ -783,15 +790,20 @@ async function startBugJumperRound() {
     return;
   }
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   if (bjStartBtn) { bjStartBtn.disabled = true; bjStartBtn.textContent = 'Ładuję...'; }
   if (bjStatus) bjStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeBugJumper({ action: 'start' });
+    if (stale()) return;
     renderBugJumperState(data);
+    if (rt) rt.starting = false;
     beginBugJumperRound(data.round, allGamesMode ? { archiveMode: true } : {});
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (bjStatus) bjStatus.textContent = 'Nie udało się wystartować rundy.';
     if (bjStartBtn) { bjStartBtn.disabled = false; bjStartBtn.textContent = 'Start rundy'; }
@@ -927,12 +939,34 @@ if (bjFullscreenBtn) bjFullscreenBtn.addEventListener('click', bjToggleFullscree
 document.addEventListener('fullscreenchange', bjOnFullscreenChange);
 document.addEventListener('webkitfullscreenchange', bjOnFullscreenChange);
 
-// Arrow keys only — no WASD, no touch
+// Arrow keys only — no WASD. Touch: swipe to hop, tap to hop forward.
 document.addEventListener('keydown', evt => {
-  if (!bugJumperRuntime?.playing) return;
+  if (!bugJumperRuntime?.playing || isTypingTarget(evt.target)) return;
   if (evt.key === 'ArrowUp')    { evt.preventDefault(); bjQueueMove(1, 0); }
   if (evt.key === 'ArrowDown')  { evt.preventDefault(); bjQueueMove(-1, 0); }
   if (evt.key === 'ArrowLeft')  { evt.preventDefault(); bjQueueMove(0, -1); }
   if (evt.key === 'ArrowRight') { evt.preventDefault(); bjQueueMove(0, 1); }
 });
+
+// Phones had no way to move at all. A swipe hops in its direction; a tap hops
+// forward (up), the move a runner needs most. The arena is touch-action:none.
+if (bjArena) {
+  let bjSwipe = null;
+  bjArena.addEventListener('pointerdown', evt => {
+    if (evt.pointerType === 'mouse') return;
+    if (!bugJumperRuntime?.playing) return;
+    evt.preventDefault();
+    bjSwipe = { x: evt.clientX, y: evt.clientY };
+  });
+  bjArena.addEventListener('pointerup', evt => {
+    const start = bjSwipe;
+    bjSwipe = null;
+    if (!start || !bugJumperRuntime?.playing) return;
+    const dx = evt.clientX - start.x, dy = evt.clientY - start.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) { bjQueueMove(1, 0); return; }
+    if (Math.abs(dx) > Math.abs(dy)) bjQueueMove(0, dx > 0 ? 1 : -1);
+    else bjQueueMove(dy < 0 ? 1 : -1, 0);
+  });
+  bjArena.addEventListener('pointercancel', () => { bjSwipe = null; });
+}
 

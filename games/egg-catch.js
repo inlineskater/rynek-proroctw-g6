@@ -475,19 +475,30 @@ function eggCatchTick() {
 }
 
 async function startEggCatchRound() {
+  if (!eggCatchRuntime) stopEggCatchRound();   // gives the double-tap guard a runtime to live on
   const rt = eggCatchRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => eggCatchRuntime !== rt;
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   if (ecStartBtn) { ecStartBtn.disabled = true; ecStartBtn.textContent = 'Ładuję...'; }
   if (ecStatus) ecStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeEggCatch({ action: 'start' });
+    if (stale()) return;
     renderEggCatchState(data);
+    if (rt) rt.starting = false;
     beginEggCatchRound(data.round);
     if (allGamesMode) eggCatchRuntime.archiveMode = true;
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (ecStatus) ecStatus.textContent = 'Nie udało się wystartować rundy.';
     if (ecStartBtn) { ecStartBtn.disabled = false; ecStartBtn.textContent = 'Start rundy'; }
@@ -549,7 +560,7 @@ if (ecStartBtn) ecStartBtn.addEventListener('click', startEggCatchRound);
 
 document.addEventListener('keydown', evt => {
   const rt = eggCatchRuntime;
-  if (!rt?.playing) return;
+  if (!rt?.playing || isTypingTarget(evt.target)) return;
   const key = evt.key.toLowerCase();
   const st = rt.sim;
   const effective = rt.queuedPos != null ? rt.queuedPos : st.wolfPos;

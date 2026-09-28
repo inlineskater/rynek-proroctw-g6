@@ -688,22 +688,33 @@ function renderTetrisAwards(wrap, awards) {
 }
 
 async function startTetrisRound() {
+  if (!tetrisRuntime) stopTetrisRound();   // gives the double-tap guard a runtime to live on
   const rt = tetrisRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => tetrisRuntime !== rt;
   // Must run BEFORE the first await — requestFullscreen() is only granted
   // while the click that got us here still counts as a user gesture.
   if (tetrisIsHandheld()) tetrisEnterFullscreen();
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; tetrisExitFullscreen(); return; }
+    if (stale()) { tetrisExitFullscreen(); return; }
   }
   if (ttStartBtn) { ttStartBtn.disabled = true; ttStartBtn.textContent = 'Ładuję...'; }
   if (ttStatus) ttStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeTetris({ action: 'start' });
+    if (stale()) return;
     renderTetrisState(data);
+    if (rt) rt.starting = false;
     beginTetrisRound(data.round);
     if (allGamesMode) tetrisRuntime.archiveMode = true;
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (ttStatus) ttStatus.textContent = 'Nie udało się wystartować rundy.';
     if (ttStartBtn) { ttStartBtn.disabled = false; ttStartBtn.textContent = 'Start rundy'; }
@@ -783,7 +794,7 @@ const TT_KEY_ROTATE = {
 
 document.addEventListener('keydown', evt => {
   const rt = tetrisRuntime;
-  if (!rt?.playing) return;
+  if (!rt?.playing || isTypingTarget(evt.target)) return;
   const key = evt.key.length === 1 ? evt.key.toLowerCase() : evt.key;
 
   if (key in TT_KEY_ACTIONS) {

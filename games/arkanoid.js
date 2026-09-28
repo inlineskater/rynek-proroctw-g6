@@ -985,12 +985,20 @@ function beginArkanoidRound(seed, options = {}) {
 }
 
 async function startArkanoidRound() {
+  if (!arkanoidRuntime) stopArkanoidRound();   // gives the double-tap guard a runtime to live on
   const rt = arkanoidRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => arkanoidRuntime !== rt;
 
   if (allGamesMode) {
     try { await payArcadeEntry(allGamesSelectedGame); }
-    catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
+    if (rt) rt.starting = false;
     beginArkanoidRound((Math.floor(Math.random() * 0xfffffff) + 1) >>> 0, { archiveMode: true });
     return;
   }
@@ -999,9 +1007,13 @@ async function startArkanoidRound() {
   if (akStatus) akStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeArkanoid({ action: 'start' });
+    if (stale()) return;
     renderArkanoidState(data);
+    if (rt) rt.starting = false;
     beginArkanoidRound(Number(data.round.seed) || 1, { roundId: data.round.id });
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (akStatus) akStatus.textContent = 'Nie udało się wystartować rundy.';
     if (akStartBtn) { akStartBtn.disabled = false; akStartBtn.textContent = 'Start rundy'; }
@@ -1201,11 +1213,19 @@ if (akArena) {
 
 document.addEventListener('keydown', evt => {
   const rt = arkanoidRuntime;
-  if (!rt?.playing || !akGameVisible()) return;
+  if (!rt?.playing || !akGameVisible() || isTypingTarget(evt.target)) return;
   if (evt.key === 'ArrowLeft' || evt.key === 'a' || evt.key === 'A') { rt.keys.left = true; rt.pendingTarget = null; evt.preventDefault(); }
   else if (evt.key === 'ArrowRight' || evt.key === 'd' || evt.key === 'D') { rt.keys.right = true; rt.pendingTarget = null; evt.preventDefault(); }
   else if (evt.key === ' ' || evt.key === 'ArrowUp') { rt.pendingLaunch = true; evt.preventDefault(); }
 });
+// Alt-Tab swallows the keyup, so a held arrow would slide the paddle into the wall.
+window.addEventListener('blur', () => {
+  const rt = arkanoidRuntime;
+  if (!rt || !(rt.keys.left || rt.keys.right)) return;
+  rt.keys.left = rt.keys.right = false;
+  if (rt.sim) rt.pendingTarget = Math.round(rt.sim.pc / AK_FP);
+});
+
 document.addEventListener('keyup', evt => {
   const rt = arkanoidRuntime;
   if (!rt) return;

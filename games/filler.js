@@ -81,6 +81,9 @@ async function loadFillerState(showSpinner = false) {
   if (showSpinner && status) status.textContent = 'Wczytywanie…';
   try {
     const data = await invokeFiller({ action: 'state' });
+    // Left while the request was in flight: rendering now would re-subscribe
+    // realtime and restart the timer for a panel nobody is looking at.
+    if (!rt.mounted || fillerRuntime !== rt) return;
     rt.data = data;
     renderFillerPanel(data);
     fillerSyncRealtime(data.match);

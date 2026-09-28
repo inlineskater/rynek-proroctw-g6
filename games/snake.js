@@ -420,18 +420,29 @@ function snakeTick() {
 }
 
 async function startSnakeRound() {
+  if (!snakeRuntime) stopSnakeRound();   // gives the double-tap guard a runtime to live on
   const rt = snakeRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => snakeRuntime !== rt;
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch(e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   if (snStartBtn) { snStartBtn.disabled = true; snStartBtn.textContent = 'Ładuję...'; }
   if (snStatus) snStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokeSnake({ action: 'start' });
+    if (stale()) return;
     renderSnakeState(data);
+    if (rt) rt.starting = false;
     beginSnakeRound(data.round, allGamesMode ? { archiveMode: true } : {});
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (snStatus) snStatus.textContent = 'Nie udało się wystartować rundy.';
     if (snStartBtn) { snStartBtn.disabled = false; snStartBtn.textContent = 'Start rundy'; }
@@ -491,7 +502,7 @@ async function finishSnakeRound() {
 if (snStartBtn) snStartBtn.addEventListener('click', startSnakeRound);
 
 document.addEventListener('keydown', evt => {
-  if (!snakeRuntime?.playing) return;
+  if (!snakeRuntime?.playing || isTypingTarget(evt.target)) return;
   const key = evt.key.toLowerCase();
   const dir = evt.key === 'ArrowUp' || key === 'w' ? 'U'
     : evt.key === 'ArrowDown' || key === 's' ? 'D'

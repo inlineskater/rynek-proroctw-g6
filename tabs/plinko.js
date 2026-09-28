@@ -889,6 +889,8 @@ function applyWheelState(data) {
     me.coins = data.coins;
     setText(headerCoins, me.coins);
   }
+  // A reply that lands after the player left must not restart the 60 fps loop.
+  if (activeTab !== 'wheel') { stopWheelRaf(); return; }
   renderWheel();
 }
 
@@ -1427,6 +1429,7 @@ function updateWheelCountdownUI() {
 
 function wheelFrame(nowP) {
   if (!wheelRafActive) return;
+  if (activeTab !== 'wheel') { stopWheelRaf(); return; }
   const dt = Math.min(0.1, (nowP - (wheelLastFrameAt || nowP)) / 1000);
   wheelLastFrameAt = nowP;
   wheelUpdateAnimState(nowP, dt);
@@ -1530,7 +1533,7 @@ async function markWheelReady() {
     if (waiting === 0) {
       setWheelResult('⚡ Wszyscy gotowi — przyspieszamy losowanie!', '');
     } else {
-      setWheelResult(`Gotowy — czekamy jeszcze na ${waiting} ${waiting === 1 ? 'osobę' : 'osoby'}…`, '');
+      setWheelResult(`Gotowy — czekamy jeszcze na ${waiting} ${plCount(waiting, 'osobę', 'osoby', 'osób')}…`, '');
     }
   } catch (err) {
     showToast('❌ ' + err.message);

@@ -367,19 +367,30 @@ function renderPopupPanicAwards(wrap, awards) {
 }
 
 async function startPopupPanicRound() {
+  if (!popupPanicRuntime) stopPopupPanicRound();   // gives the double-tap guard a runtime to live on
   const rt = popupPanicRuntime;
-  if (rt?.playing || rt?.submitting) return;
+  if (rt?.playing || rt?.submitting || rt?.starting) return;
+  // A second tap while the first start is still awaiting must not start a second
+  // round, and a stop (tab switch, another game, logout) replaces the runtime, so
+  // a start that outlived it bails instead of playing on a hidden panel.
+  if (rt) rt.starting = true;
+  const stale = () => popupPanicRuntime !== rt;
   if (allGamesMode) {
-    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); return; }
+    try { await payArcadeEntry(allGamesSelectedGame); } catch (e) { showToast('❌ Nie udało się wejść do gry.'); if (rt) rt.starting = false; return; }
+    if (stale()) return;
   }
   if (ppStartBtn) { ppStartBtn.disabled = true; ppStartBtn.textContent = 'Ładuję...'; }
   if (ppStatus) ppStatus.textContent = 'Przygotowuję rundę...';
   try {
     const data = await invokePopupPanic({ action: 'start' });
+    if (stale()) return;
     renderPopupPanicState(data);
+    if (rt) rt.starting = false;
     beginPopupPanicRound(data.round);
     if (allGamesMode) popupPanicRuntime.archiveMode = true;
   } catch (err) {
+    if (stale()) return;
+    if (rt) rt.starting = false;
     showToast('❌ ' + err.message);
     if (ppStatus) ppStatus.textContent = 'Nie udało się wystartować rundy.';
     if (ppStartBtn) { ppStartBtn.disabled = false; ppStartBtn.textContent = 'Start rundy'; }

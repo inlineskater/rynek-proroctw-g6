@@ -158,7 +158,7 @@ function buildLotteryPanel(d) {
       ),
       el('div', { className: 'lot-mine-total' },
         el('span', { className: 'lot-mine-num' }, String(myTotal)),
-        el('span', { className: 'lot-mine-lbl' }, myTotal === 1 ? 'bilet' : 'biletów'),
+        el('span', { className: 'lot-mine-lbl' }, plCount(myTotal, 'bilet', 'bilety', 'biletów')),
         myRoom > 0 ? el('span', { className: 'lot-mine-room' }, '+' + myRoom + ' do zdobycia') : '',
       ),
       el('div', { className: 'lot-tick' }, ...catRows),
@@ -1949,7 +1949,7 @@ function lotAppendDrawHistory(sec, list) {
 function setupLotteryRealtime() {
   if (lotteryRtReady) return;
   lotteryRtReady = true;
-  sb.channel('lottery-draws')
+  const ch = sb.channel('lottery-draws')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'lottery_draws' }, payload => {
       const r = payload.new;
       if (!r || !r.id) return;
@@ -1966,4 +1966,5 @@ function setupLotteryRealtime() {
       renderLottery(true);
     })
     .subscribe();
+  realtimeChannels.push(ch);   // torn down with the rest on logout (doLogout resets the flag)
 }
