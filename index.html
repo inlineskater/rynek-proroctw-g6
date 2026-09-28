@@ -10874,6 +10874,9 @@
         </div>
       </div>
 
+      <!-- rps: games/rps.js builds this panel -->
+      <div id="seasonal-game-rps" class="hidden"></div>
+
       <!-- Uzdrowiciel G6 panel (WoW Classic resto-druid healer; gameType healer_dungeon).
            PHASE 1: arcade-only. Unlike every other seasonal panel this one is a
            FIT-TO-VIEWPORT TAKEOVER (.hd-fit is position:fixed and covers the app
@@ -11372,12 +11375,24 @@
           </div>
           <div class="ag-card-scores" data-scores="bubble_breaker"></div>
         </div>
+        <div class="ag-card" role="button" tabindex="0" data-game="rps">
+          <div class="ag-card-media"><span class="ag-card-emoji" aria-hidden="true">✂️</span></div>
+          <div class="ag-card-main">
+            <div class="ag-card-head">
+              <span class="ag-card-name">„Papier, Kamień, Biuro G6”</span>
+              <span class="ag-card-tag">NOWOŚĆ · STRATEGIA</span>
+            </div>
+            <div class="ag-card-desc">RPS Online z ICQ wraca: ukryte pionki, flaga i pułapka. Zdobądź flagę bota.</div>
+            <div class="ag-card-cta">Za darmo — kliknij, aby zagrać</div>
+          </div>
+          <div class="ag-card-scores" data-scores="rps"></div>
+        </div>
         <div class="ag-card" role="button" tabindex="0" data-game="arkanoid">
           <div class="ag-card-media"><span class="ag-card-emoji" aria-hidden="true">🏓</span></div>
           <div class="ag-card-main">
             <div class="ag-card-head">
               <span class="ag-card-name">„Arkanoid G6”</span>
-              <span class="ag-card-tag">NOWOŚĆ · ZRĘCZNOŚĆ</span>
+              <span class="ag-card-tag">ZRĘCZNOŚĆ</span>
             </div>
             <div class="ag-card-desc">Klawiatura, piłka i sześć pięter biura do rozbicia — od Open Space po Sejf Prezesa. Celujesz krawędzią klawiatury, łapiesz kapsułki, pilnujesz trzech żyć.</div>
             <div class="ag-card-cta">Za darmo — kliknij, aby zagrać</div>
@@ -12308,6 +12323,7 @@ let fillerRuntime = null;
 let bubbleBreakerRuntime = null;
 let saperRuntime = null;
 let arkanoidRuntime = null;
+let rpsRuntime = null;
 let allGamesMode = false;
 let allGamesSelectedGame = null;
 
@@ -12334,6 +12350,7 @@ const LAZY_GAME_SCRIPTS = {
   bubble_breaker:'games/bubble-breaker.js',
   saper:         'games/saper.js',
   arkanoid:      'games/arkanoid.js',
+  rps:           'games/rps.js',
 };
 // ── Lazy-loaded tab modules ────────────────────────────────────────────────
 // Same idea as ensureGameScript below, applied to whole tabs. A tab listed here
@@ -12438,6 +12455,7 @@ function stopFillerRound() {}
 function stopBubbleBreakerRound() {}
 function stopSaperRound() {}
 function stopArkanoidRound() {}
+function stopRpsRound() {}
 
 // Same safety net for the lazy TAB modules (see TAB_MODULES above). doLogout()
 // and switchTab() tear down every tab unconditionally, whether or not its
@@ -12480,7 +12498,7 @@ const HERO_ITEM_SLOTS = [
 const HERO_ITEM_SLOT_LABELS = Object.fromEntries(HERO_ITEM_SLOTS.map(s => [s.id, s.label]));
 // Masculine forms (przedmiot), unlike FARM_RARITY_PL's feminine forms (karta).
 const HERO_ITEM_RARITY_PL = { common: 'zwykły', rare: 'rzadki', epic: 'epicki', legendary: 'legendarny' };
-const SEASONAL_SCORE_GAMES = new Set(['whack_boss', 'bug_jumper', 'flappy_pants', 'snake', 'invoice_horde', 'var_patrol', 'egg_catch', 'popup_panic', 'tetris', 'bubble_breaker', 'saper', 'arkanoid']);
+const SEASONAL_SCORE_GAMES = new Set(['whack_boss', 'bug_jumper', 'flappy_pants', 'snake', 'invoice_horde', 'var_patrol', 'egg_catch', 'popup_panic', 'tetris', 'bubble_breaker', 'saper', 'arkanoid', 'rps']);
 let heroItemDefs = [];
 let casinoLuckGlobalUntil = null; // shared „Amulet Bezwstydnego Fartu" buff end (casino_luck_status view)
 let casinoLuckStatusLoadedAt = 0;
@@ -13094,7 +13112,7 @@ async function doLogout() {
   stopHealerDungeonRound();
   stopBubbleBreakerRound();
   stopSaperRound();
-  stopArkanoidRound();
+  stopArkanoidRound(); stopRpsRound();
   resetGardenState();
   resetHeroState();
   hide(screenApp);
@@ -13362,6 +13380,7 @@ const AG_PANEL_IDS = {
   bubble_breaker:'seasonal-game-bubble-breaker',
   saper:         'seasonal-game-saper',
   arkanoid:      'seasonal-game-arkanoid',
+  rps:           'seasonal-game-rps',
 };
 let agPanelHome = {};
 
@@ -13413,7 +13432,7 @@ function loadAllGamesTab() {
 
 function leaveAllGamesTab() {
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
   stopAgPreviews();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesMode = false;
@@ -13438,7 +13457,7 @@ function selectAllGame(gameType) {
   if (gameType === 'healer_dungeon') agRequestFullscreen();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
   stopAgPreviews();   // the picker's previews borrow the same canvas globals
 
   allGamesSelectedGame = gameType;
@@ -13467,6 +13486,7 @@ function selectAllGame(gameType) {
     if (gameType === 'bubble_breaker') requestAnimationFrame(() => { bubbleBreakerInitCanvas(); bubbleBreakerDraw(); });
     if (gameType === 'saper') requestAnimationFrame(() => { saperInitCanvas(); saperSyncFlagBtn(); saperDraw(); });
     if (gameType === 'arkanoid') requestAnimationFrame(() => { arkanoidInitCanvas(); arkanoidDraw(); });
+    if (gameType === 'rps') loadRpsState(false);
     // Takeover game: build the idle party, then size the console to the viewport.
     if (gameType === 'healer_dungeon') requestAnimationFrame(() => {
       stopHealerDungeonRound();
@@ -13779,7 +13799,7 @@ document.querySelectorAll('.ag-card').forEach(card => {
 });
 document.getElementById('ag-back').addEventListener('click', () => {
   stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound();
-  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound();
+  stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
   if (allGamesSelectedGame) returnAgPanelHome(allGamesSelectedGame);
   allGamesSelectedGame = null;
   allGamesMode = false;
@@ -13794,7 +13814,7 @@ function switchTab(tab) {
   if (tab === 'invoice-horde-test' && !isAdmin()) tab = 'markets';
   if (tab === 'garden') tab = 'farm';
   const previousTab = activeTab;
-  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); if (typeof healerExitView === 'function') healerExitView(); }
+  if (previousTab === 'whack-boss' && tab !== 'whack-boss') { stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound(); if (typeof healerExitView === 'function') healerExitView(); }
   if (previousTab === 'all-games' && tab !== 'all-games') leaveAllGamesTab();
   if (previousTab === 'flappy-test' && tab !== 'flappy-test') { stopFlappyPantsRound(); restoreFlappyPanelHome(); }
   if (previousTab === 'bug-jumper-test' && tab !== 'bug-jumper-test') { stopBugJumperRound(); restoreBugJumperPanelHome(); }
@@ -14199,7 +14219,7 @@ const ACT_GAME_LABELS = {
   invoice_horde: '🎫 Najazd Ticketów', var_patrol: '📺 VAR Patrol',
   egg_catch: '🥚 Łap Jajka', super_mariusz: '🧢 Super Mariusz',
   popup_panic: '🖱️ Zamknij Popupy', tetris: '🧱 Tetris G6',
-  bubble_breaker: '🔵 Kulki G6', saper: '💣 Saper Maraton', arkanoid: '🏓 Arkanoid G6',
+  bubble_breaker: '🔵 Kulki G6', saper: '💣 Saper Maraton', arkanoid: '🏓 Arkanoid G6', rps: '✂️ Papier, Kamień, Biuro',
   arcade: '🕹️ Arkada',
 };
 // Casino games whose rapid plays are collapsed into one session row; an idle gap
@@ -14284,7 +14304,7 @@ async function buildActivityFeed() {
   const [
     profRes, tradesRes, gameRes, footballRes, coinTxRes,
     whackRes, snakeRes, flappyRes, bugRes, invoiceRes, varPatrolRes, eggCatchRes,
-    superMariuszRes, popupPanicRes, tetrisRes, bubbleBreakerRes, saperRes, arkanoidRes, arcadeRes, nftRes,
+    superMariuszRes, popupPanicRes, tetrisRes, bubbleBreakerRes, saperRes, arkanoidRes, rpsRes, arcadeRes, nftRes,
   ] = await Promise.all([
     sb.from('profiles').select('id,nick'),
     ranged(sb.from('trades').select('nick_snapshot,side,amount,market_id,created_at'), 'created_at'),
@@ -14304,6 +14324,7 @@ async function buildActivityFeed() {
     ranged(sb.from('bubble_breaker_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('saper_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('arkanoid_scores').select(scoreSel), 'submitted_at'),
+    ranged(sb.from('rps_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('arcade_scores').select('user_id,game_type,score,created_at'), 'created_at'),
     ranged(sb.from('farm_nft_transfers').select('from_owner,to_owner,species,serial_no,price,kind,created_at'), 'created_at'),
   ]);
@@ -14395,6 +14416,7 @@ async function buildActivityFeed() {
   pushScores(bubbleBreakerRes.data, 'bubble_breaker');
   pushScores(saperRes.data, 'saper');
   pushScores(arkanoidRes.data, 'arkanoid');
+  pushScores(rpsRes.data, 'rps');
   (superMariuszRes.data || []).forEach(s => {
     const tail = s.completed ? 'ukończył trasę w ' + smFormatTime(s.completion_ms) : 'DNF — ' + smProgressPct(s.score) + '% trasy';
     entries.push({ nick: nickOf(s), ts: s.submitted_at, cat: 'game',
@@ -14754,6 +14776,7 @@ const SEASONAL_STATE_LOADERS = {
   bubble_breaker: () => loadBubbleBreakerState(false),
   saper:          () => loadSaperState(false),
   arkanoid:       () => loadArkanoidState(false),
+  rps:            () => loadRpsState(false),
 };
 
 function subscribeSeasonalRealtime(ch) {
@@ -15688,6 +15711,7 @@ function startActivityLive() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bubble_breaker_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'saper_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'arkanoid_scores' }, scheduleActivityRebuild)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rps_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'gardens' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_listings' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'farm_nft_transfers' }, scheduleActivityRebuild)
@@ -18214,6 +18238,7 @@ const SEASONAL_ROTATION = [
   { gameType: 'bubble_breaker', displayName: '„Kulki G6" 🔵' },
   { gameType: 'saper', displayName: '„Saper Maraton" 💣' },
   { gameType: 'arkanoid', displayName: '„Arkanoid G6" 🏓' },
+  { gameType: 'rps', displayName: '„Papier, Kamień, Biuro G6" ✂️' },
 ];
 // ⚠️ Every entry here is mirrored in seasonal_game_for_week()
 // (supabase/season-award-gating.sql) — that SQL function gates the Monday
@@ -18259,6 +18284,7 @@ const SEASONAL_OVERRIDES = {
   '2026-09-14': { gameType: 'snake', displayName: 'Snake 🐍' },  // pinned
   '2026-09-21': { gameType: 'invoice_horde', displayName: 'Najazd Ticketów 🎫' },  // pinned (in season)
   '2026-09-28': { gameType: 'arkanoid', displayName: '„Arkanoid G6" 🏓' },  // debut
+  '2026-10-05': { gameType: 'rps', displayName: '„Papier, Kamień, Biuro G6" ✂️' },  // debut
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -18803,6 +18829,7 @@ function loadSeasonalTab(showSpinner = true) {
   const bbPanel       = document.getElementById('seasonal-game-bubble-breaker');
   const spPanel       = document.getElementById('seasonal-game-saper');
   const akPanel       = document.getElementById('seasonal-game-arkanoid');
+  const rpsPanel      = document.getElementById('seasonal-game-rps');
   const archiveBanner = document.getElementById('seasonal-archive-banner');
 
   const isWB = current.gameType === 'whack_boss';
@@ -18820,6 +18847,7 @@ function loadSeasonalTab(showSpinner = true) {
   const isBB = current.gameType === 'bubble_breaker';
   const isSP = current.gameType === 'saper';
   const isAK = current.gameType === 'arkanoid';
+  const isRPS = current.gameType === 'rps';
   if (wbPanel) { if (isWB) show(wbPanel); else hide(wbPanel); }
   if (bjPanel) { if (isBJ) show(bjPanel); else hide(bjPanel); }
   if (fpPanel) { if (isFP) show(fpPanel); else hide(fpPanel); }
@@ -18835,6 +18863,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (bbPanel) { if (isBB) show(bbPanel); else hide(bbPanel); }
   if (spPanel) { if (isSP) show(spPanel); else hide(spPanel); }
   if (akPanel) { if (isAK) show(akPanel); else hide(akPanel); }
+  if (rpsPanel) { if (isRPS) show(rpsPanel); else hide(rpsPanel); }
   if (archiveBanner) hide(archiveBanner);
   if (!isWB && whackBossRuntime?.playing) stopWhackBossRound();
   if (!isBJ && bugJumperRuntime?.playing) stopBugJumperRound();
@@ -18849,6 +18878,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (!isBB && bubbleBreakerRuntime?.playing) stopBubbleBreakerRound();
   if (!isSP && saperRuntime?.playing) stopSaperRound();
   if (!isAK && arkanoidRuntime?.playing) stopArkanoidRound();
+  if (!isRPS && rpsRuntime?.playing) stopRpsRound();
   if (!isHD && healerRuntime?.playing) stopHealerDungeonRound();
   if (!isHD && typeof healerExitView === 'function') healerExitView();
   // Filler has no runtime-level archiveMode flag to reset (see below) — it
@@ -18889,6 +18919,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (isBB) ensureGameScript('bubble_breaker').then(() => loadBubbleBreakerState(showSpinner));
   if (isSP) ensureGameScript('saper').then(() => loadSaperState(showSpinner));
   if (isAK) ensureGameScript('arkanoid').then(() => loadArkanoidState(showSpinner));
+  if (isRPS) ensureGameScript('rps').then(() => loadRpsState(showSpinner));
   if (isHD) ensureGameScript('healer_dungeon').then(() => {
     if (!healerRuntime) stopHealerDungeonRound();
     healerEnterView();

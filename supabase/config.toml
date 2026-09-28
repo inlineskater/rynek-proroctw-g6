@@ -70,6 +70,9 @@ verify_jwt = true
 [functions.arkanoid-action]
 verify_jwt = true
 
+[functions.rps-action]
+verify_jwt = true
+
 [functions.garden-action]
 verify_jwt = true
 

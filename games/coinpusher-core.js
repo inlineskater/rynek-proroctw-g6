@@ -802,8 +802,12 @@
       const missing = [];
       for (const c of serverCoins) {
         const row = known.get(String(c.id));
+        // On the beds (below 20 cm), or mid-fall in the pin board's slot — a
+        // host taking over mid-play sees coins there too, and dropping them on
+        // the pile instead knocks others off.
+        const inPins = !!row && PN.enabled && Math.abs(row[3] - PN.z) < 1.2 && row[2] < cfg.drop.y + 2;
         const ok = row && row.slice(1).every(Number.isFinite) &&
-          row[2] > -0.5 && row[2] < 20 && Math.abs(row[1]) < M.halfWidth;
+          row[2] > -0.5 && (row[2] < 20 || inPins) && Math.abs(row[1]) < M.halfWidth;
         if (ok) {
           const q = { x: row[4], y: row[5], z: row[6], w: row[7] };
           const n = Math.hypot(q.x, q.y, q.z, q.w) || 1;
