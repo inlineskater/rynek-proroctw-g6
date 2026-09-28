@@ -6706,6 +6706,19 @@
     /* Zen renders with the SAME grid as the crop board (.farm-board/.fb-seg + the
        .farm-cell/.farm-plant-cell rules below), so both halves look identical. */
     .zen-board { flex: 0 0 auto; overflow: visible; justify-content: flex-start; gap: 0; padding: 0; }
+    .zen-sign-row { display: flex; align-items: flex-start; gap: 6px; }
+    .zen-fold-btn { margin-left: auto; border: 0; background: rgba(255,255,255,.55); color: #3d2810; font: inherit; font-weight: 800;
+      font-size: 12px; line-height: 1; padding: 4px 7px; border-radius: 6px; cursor: pointer; }
+    .zen-fold-btn:hover { background: #fff; }
+    /* Folded: a vertical wooden tab, the full height of the field. */
+    .zen-zone.zen-folded { padding: 0; background: none; align-self: stretch; }
+    .zen-fold-tab { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px;
+      width: 34px; margin: 0; padding: 10px 0; cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; color: #3d2810; }
+    .zen-fold-tab:hover { filter: brightness(1.06); }
+    .zen-fold-label { writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: .04em; }
+    .zen-fold-water { font-size: 12px; animation: zenThirst 1.6s ease-in-out infinite; }
+    @keyframes zenThirst { 50% { transform: translateY(-2px); } }
+    @media (prefers-reduced-motion: reduce) { .zen-fold-water { animation: none; } }
     .farm-cell.zen-invite { flex-direction: column; gap: 1px; background: rgba(120,165,80,.22); border-style: dashed; border-color: rgba(80,110,45,.4); text-align: center; }
     .farm-cell.zen-invite:hover { outline: 2px dashed var(--accent); outline-offset: -2px; }
     .zen-invite-emoji { font-size: clamp(15px, 4.2vmin, 26px); line-height: 1; }
@@ -6722,6 +6735,9 @@
       /* Stacked mobile layout: three same-size grid parts (zen + two farm halves). */
       .farm-split { flex-direction: column; align-items: center; }
       .zen-zone { flex: 0 0 auto; max-height: none; align-items: center; }
+      /* Stacked: the folded tab is a single bar above the farm, not a column. */
+      .zen-fold-tab { flex-direction: row; width: auto; padding: 6px 14px; }
+      .zen-fold-label { writing-mode: horizontal-tb; transform: none; }
       .farm-divider { display: none; }
       .farm-split .farm-field { flex: 0 0 auto; align-items: center; overflow: visible; }
     }
@@ -21295,6 +21311,16 @@ let fmProfiles = [];            // [{id,nick,is_admin}] — active users, for re
 let fmZenReloadTimer = null;    // debounces farm reload on gardens realtime changes
 let farmCellPx = 60;            // last cell size scaleFarmPots computed — scaleZenBoard reuses it so both grids match
 let zenSlotCount = 0;           // slots rendered in the zen grid (users×2) — drives zenColsFor()
+// Ogródek Zen folds to a slim tab (2026-09-28): a few legacy pots were taking
+// ~40% of the field. Folded by default, remembered per device; the tab shows 💧
+// when one of MY zen plants can be watered, so folding never hides a chore.
+const ZEN_FOLD_KEY = 'rp_zen_folded', ZEN_FOLD_W = 40;
+let zenFolded = (() => { try { return localStorage.getItem(ZEN_FOLD_KEY) !== '0'; } catch (e) { return true; } })();
+function setZenFolded(v) {
+  zenFolded = v;
+  try { localStorage.setItem(ZEN_FOLD_KEY, v ? '1' : '0'); } catch (e) {}
+  renderZenZone(); scaleFarmPots();
+}
 let fmCollection = [];          // [{species,count,level}]
 let fmInventory = new Map();    // crop_type -> qty (sum of non-expired lots)
 let fmInventoryExp = new Map(); // crop_type -> soonest expires_at (ISO) of its lots (rot countdown)
@@ -22253,7 +22279,21 @@ function renderZenZone() {
   users.forEach(p => { for (let s = 1; s <= 2; s++) slots.push({ p, slot: s, g: bySlot.get(p.id + ':' + s), hasFirst: bySlot.has(p.id + ':1') }); });
 
   host.replaceChildren();
-  host.appendChild(el('div', { className: 'plot-sign' }, '🧘 Ogródek Zen'));
+  host.classList.toggle('zen-folded', zenFolded);
+  if (zenFolded) {
+    const thirsty = slots.filter(x => x.g && x.p.id === me?.id && farmPlantSnapshot(x.g).canWater).length;
+    const tab = el('button', { className: 'zen-fold-tab plot-sign', type: 'button', title: 'Pokaż Ogródek Zen' },
+      el('span', {}, '🧘'), el('span', { className: 'zen-fold-label' }, 'Ogródek Zen'),
+      thirsty ? el('span', { className: 'zen-fold-water', title: 'Możesz podlać' }, '💧' + (thirsty > 1 ? thirsty : '')) : '');
+    tab.addEventListener('click', () => setZenFolded(false));
+    host.style.flex = '';   // scaleZenBoard's inline width is for the open grid
+    host.appendChild(tab);
+    zenSlotCount = slots.length;
+    return;
+  }
+  const foldBtn = el('button', { className: 'zen-fold-btn', type: 'button', title: 'Zwiń Ogródek Zen', 'aria-label': 'Zwiń Ogródek Zen' }, '«');
+  foldBtn.addEventListener('click', () => setZenFolded(true));
+  host.appendChild(el('div', { className: 'zen-sign-row' }, el('div', { className: 'plot-sign' }, '🧘 Ogródek Zen'), foldBtn));
 
   // Same grid stack as the crop board: a .farm-board with one .fb-seg; auto-flow
   // fills row-by-row, so we don't set explicit grid positions (scaleZenBoard picks
@@ -22778,8 +22818,9 @@ function scaleFarmPots() {
       // exact-fit width overflows by 1px at fractional browser zoom (e.g. 90%,
       // where Chrome rounds CSS px to 1.8 device px), summoning a horizontal
       // scrollbar on the field.
-      const zc = zenColsFor();
-      const usable = split.clientWidth - 74 - 8 - (zc - 1) * gap - (maxCols - 1) * gap;
+      // A folded zen is a ZEN_FOLD_W tab instead of zc columns.
+      const zc = zenFolded ? 0 : zenColsFor();
+      const usable = split.clientWidth - 74 - 8 - (zenFolded ? ZEN_FOLD_W : (zc - 1) * gap) - (maxCols - 1) * gap;
       byW = usable / (zc + maxCols);
     } else {
       // Stacked mobile layout: budget from the split container, NOT the field —

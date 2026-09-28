@@ -49,6 +49,44 @@
     .fw-foot .farm-mini-btn { margin-left: auto; }
     .fw-fills { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
     .fw-empty { padding: 18px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+
+    /* Paper notes pinned to a cork board (2026-09-28). The notes keep their own
+       ink colours on purpose: paper is paper in dark mode too. */
+    .fw-grid { padding: 18px 14px 14px; border-radius: 12px; gap: 16px;
+      background-color: #c9a06b;
+      background-image: radial-gradient(rgba(92,58,24,.28) 1px, transparent 1.4px), radial-gradient(rgba(255,240,210,.22) 1px, transparent 1.4px);
+      background-size: 9px 9px, 13px 13px; background-position: 0 0, 4px 6px;
+      box-shadow: inset 0 0 0 6px #8a5a2b, inset 0 0 0 7px rgba(0,0,0,.18), inset 0 3px 10px rgba(0,0,0,.25); }
+    .fw-card { position: relative; border: 0; border-radius: 2px; background: #fffdf3; color: #2b2317;
+      box-shadow: 0 1px 1px rgba(0,0,0,.12), 0 6px 14px rgba(60,35,10,.28); transform: rotate(var(--tilt, -1deg));
+      transition: transform .18s ease, box-shadow .18s ease; padding-top: 16px; }
+    .fw-card:nth-child(3n+2) { --tilt: 1.2deg; }
+    .fw-card:nth-child(3n) { --tilt: -.4deg; }
+    .fw-card:hover { transform: rotate(0) translateY(-2px); box-shadow: 0 2px 2px rgba(0,0,0,.12), 0 12px 22px rgba(60,35,10,.32); }
+    .fw-card::before { content: ''; position: absolute; top: -6px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ff8a80, #d32f2f 60%, #8e1b1b); box-shadow: 0 2px 3px rgba(0,0,0,.35); }
+    .fw-card .fw-cust-sub, .fw-card .fw-fills { color: #7a6a52; }
+    .fw-card .fw-line-bar { background: rgba(60,40,15,.12); }
+    .fw-card.is-collector { background: #f6f0ff; }
+    .fw-card.is-collector::before { background: radial-gradient(circle at 35% 35%, #d8b4fe, #7e22ce 60%, #3b0764); }
+    .fw-card.is-done { opacity: 1; }
+    .fw-card.is-done > * { opacity: .55; }
+    .fw-card.is-done::after { content: 'ZREALIZOWANE'; position: absolute; right: 10px; top: 42%; padding: 3px 8px;
+      border: 2px solid #15803d; border-radius: 4px; color: #15803d; font-weight: 900; font-size: 13px; letter-spacing: .08em;
+      transform: rotate(-12deg); opacity: .85; pointer-events: none; }
+
+    /* One-shot effects over a board plot, in a fixed layer so a board re-render
+       (which replaces every cell) cannot cut them short. */
+    .fw-fx { position: fixed; z-index: 90; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+    .fw-fx .fw-drop { position: absolute; top: 0; font-size: 14px; animation: fwDrop .9s ease-in forwards; opacity: 0; }
+    .fw-fx .fw-drop:nth-child(2) { left: 30%; animation-delay: .15s; }
+    .fw-fx .fw-drop:nth-child(3) { left: 60%; animation-delay: .3s; }
+    @keyframes fwDrop { 0% { opacity: 0; transform: translateY(-14px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(26px) scale(.7); } }
+    .fw-fx .fw-crow { display: flex; align-items: center; gap: 1px; font-size: 18px; animation: fwCrow 1.7s cubic-bezier(.4,.1,.6,1) forwards; }
+    .fw-fx .fw-crow .farm-ico { width: 26px; height: 26px; }
+    .fw-fx .fw-crow .fw-loot { font-size: 13px; margin-top: 12px; }
+    @keyframes fwCrow { 0% { transform: translate(0, 0) scale(.6); opacity: 0; } 15% { opacity: 1; transform: translate(0, -6px) scale(1); }
+      100% { transform: translate(160px, -140px) scale(.8); opacity: 0; } }
   `;
   document.head.appendChild(s);
 })();
@@ -61,6 +99,27 @@ Object.assign(FARM_ERR, {
   order_already_filled: 'To zamówienie już zrealizowałeś.',
   not_enough_crops: FARM_ERR.not_enough_crops || 'Masz za mało plonów.',
 });
+
+// Drops or a crow over plot (x, y). Everyone watching the board sees them —
+// the realtime handler fires one for every watering and theft — which is what
+// makes the shared field feel inhabited. No-op off the farm tab or with
+// reduced motion.
+function fwFxAt(x, y, kind, cropType) {
+  if (activeTab !== 'farm' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cell = document.querySelector('#farm-board .farm-cell[data-xy="' + x + ',' + y + '"]');
+  if (!cell) return;
+  const r = cell.getBoundingClientRect();
+  if (r.bottom < 0 || r.top > innerHeight) return;
+  const fx = el('div', { className: 'fw-fx', style: 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px' });
+  if (kind === 'water') {
+    fx.append(el('span', { className: 'fw-drop' }, '💧'), el('span', { className: 'fw-drop' }, '💧'), el('span', { className: 'fw-drop' }, '💧'));
+  } else {
+    fx.append(el('span', { className: 'fw-crow' }, farmIcon('🐦‍⬛'),
+      el('span', { className: 'fw-loot' }, cropType ? farmCropIdentity(cropType).emoji : '🌾')));
+  }
+  document.body.append(fx);
+  setTimeout(() => fx.remove(), kind === 'water' ? 1400 : 1800);
+}
 
 const FW_ORDERS_STALE_MS = 20000;
 let fwOrders = null;          // last farm_orders_state() payload
@@ -607,6 +666,8 @@ function fwEnsureNbRealtime() {
   fwNbChannel = sb.channel('farm-neighbours')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'farm_tile_events' }, (payload) => {
       const e = payload.new || {};
+      // My own actions already animated locally when the RPC returned.
+      if (e.user_id !== me?.id) fwFxAt(e.x, e.y, e.kind === 'steal' ? 'steal' : 'water', e.crop_type);
       if (e.owner_id === me?.id && e.user_id !== me?.id) {
         const who = (typeof sidePeople !== 'undefined' && sidePeople?.find?.(p => p.id === e.user_id)?.nick) || 'Ktoś';
         const crop = e.crop_type ? farmCropIdentity(e.crop_type) : null;
@@ -620,13 +681,16 @@ function fwEnsureNbRealtime() {
     .subscribe();
 }
 
-function fwTileStealable(tile, now) {
+// ⚠️ Plots are addressed by their fmTiles KEY ('x,y'): the tile rows loadFarm()
+// keeps do not carry x/y themselves, so `tile.x + ',' + tile.y` is
+// 'undefined,undefined' (that shipped once and hid every badge).
+function fwTileStealable(tile, key, now) {
   if (!fwNb || !tile?.planted_species || !tile.ready_at || tile.owner_id === me?.id) return false;
   const launch = fwNb.limits?.steal_launch_at ? new Date(fwNb.limits.steal_launch_at).getTime() : 0;
   const ripeFor = now - Math.max(new Date(tile.ready_at).getTime(), launch);
   if (ripeFor < (fwNb.limits?.steal_grace_hours || 12) * 3600000) return false;
   if (fwNb.protectedSet.has(tile.owner_id)) return false;
-  const ev = fwNb.tileMap.get(tile.x + ',' + tile.y);
+  const ev = fwNb.tileMap.get(key);
   if (ev?.stolen_by_me) return false;
   if ((ev?.thieves || 0) >= (fwNb.limits?.steal_thieves_per_cycle || 3)) return false;
   return true;
@@ -635,14 +699,15 @@ function fwTileStealable(tile, now) {
 // index.html hook, end of buildFarmDisplayCell() for every owned plot.
 function farmWorldDecorateCell(cell, tile, now) {
   if (!fwNb || !tile?.planted_species) return;
-  const ev = fwNb.tileMap.get(tile.x + ',' + tile.y);
+  const key = cell.dataset.xy;
+  const ev = fwNb.tileMap.get(key);
   const badges = [];
   if (ev?.waters) badges.push(el('span', { title: 'Podlana ' + ev.waters + '×' }, '💧' + (ev.waters > 1 ? ev.waters : '')));
   if (ev?.stolen) badges.push(el('span', { title: 'Podebrano ' + ev.stolen + ' szt.' }, '🧺'));
   if (fwNb.protectedSet.has(tile.owner_id) && tile.ready_at && now >= new Date(tile.ready_at).getTime()) {
     badges.push(el('span', { title: 'Pilnuje strach na wróble' }, '🧑‍🌾'));
   }
-  if (fwTileStealable(tile, now)) badges.push(el('span', { className: 'fw-steal', title: 'Dojrzała i zapomniana — można podebrać' }, '🥷'));
+  if (fwTileStealable(tile, key, now)) badges.push(el('span', { className: 'fw-steal', title: 'Dojrzała i zapomniana — można podebrać' }, '🥷'));
   if (badges.length) cell.append(el('span', { className: 'fw-cell-badges' }, ...badges));
 }
 
@@ -672,7 +737,7 @@ function farmWorldTileActions(tile, x, y, actions, close) {
     btn.title = ev.watered_by_me ? 'Już podlałeś' : left <= 0 ? 'Brak podlewań na dziś' : 'Zostało dziś: ' + left;
     btn.addEventListener('click', () => fwWater(x, y, btn, close));
     box.append(el('div', { className: 'fw-nb-row' }, 'Podlewania dziś: ' + Math.max(0, left) + '/' + (L.water_per_day || 3), btn));
-  } else if (fwTileStealable(tile, now)) {
+  } else if (fwTileStealable(tile, x + ',' + y, now)) {
     const left = (L.steal_per_day || 5) - (fwNb.me?.steal_used || 0);
     const btn = el('button', { className: 'farm-mini-btn', type: 'button' }, '🥷 Podbierz ' + Math.round((L.steal_share || 0.1) * 100) + '%');
     btn.disabled = left <= 0;
@@ -738,6 +803,7 @@ async function fwWater(x, y, btn, close) {
     if (error) { showToast('❌ ' + fmErr(error)); return; }
     showToast('💧 Podlane! Zostało dziś: ' + data.left_today + '.');
     if (close) close();
+    fwFxAt(x, y, 'water');
     await fwNbRefresh(true);
   } finally { fwNbBusy = false; }
 }
@@ -751,6 +817,7 @@ async function fwSteal(x, y, tile, btn, close) {
     if (error) { showToast('❌ ' + fmErr(error)); return; }
     showToast('🥷 Podebrano ' + data.qty + ' ' + farmCropIdentity(data.crop_type).emoji + ' — trafiło do twoich plonów.');
     if (close) close();
+    fwFxAt(x, y, 'steal', data.crop_type);
     scheduleFarmInventoryReconcile();
     await fwNbRefresh(true);
   } finally { fwNbBusy = false; }
