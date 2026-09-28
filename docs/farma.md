@@ -202,6 +202,32 @@ Nagrody tygodnia:
 
 Nagrody są rozliczane w poniedziałek dokładnie o **00:00 Europe/Warsaw**. Harmonogram próbuje oba możliwe przesunięcia UTC i wykonuje wypłatę tylko wtedy, gdy lokalna godzina Warszawy wynosi 00, więc zmiana czasu letni/zimowy nie przesuwa wypłaty.
 
+## 📋 Tablica Zamówień (od 2026-09-28)
+
+`supabase/farm-orders.sql`, UI w `tabs/farm-world.js` (zakładka hubu **📋 Zamówienia**).
+
+**Po co.** Pomiar z 2026-09-28: każdy gracz sadził na wszystkich polach jedną roślinę — tę z kontraktu tygodnia (kukurydza). Ceny skupu stały przy podłodze (demand 51%), więc poza kontraktem nic nie nagradzało uprawy czegokolwiek innego i jedyną decyzją był poziom karty. Kontrakt udowodnił, że rotująca zachęta zmienia to, co ludzie sadzą — tylko że spycha wszystkich na JEDNĄ roślinę. Zamówienia to przeciwwaga: klient chce **zestawu** kilku roślin, losowanego spośród tych, których biuro NIE sprzedaje.
+
+**Generowanie** — leniwie przy pierwszym odczycie dnia (`farm_ensure_daily_orders`, jak `bank_settle_due`, bez crona):
+
+```text
+2 zamówienia „mix" dziennie + 1 „💎 Kolekcjoner", każde wisi 72 h od północy (≈ 6-9 otwartych naraz)
+mix: 1 linia 50% · 2 linie 35% · 3 linie 15%
+kandydaci: zwykłe (nie-NFT) karty, które ma ≥ 2 graczy, NIGDY roślina z kontraktu tygodnia
+waga       = 1 / (udział w przychodzie ze skupu z 7 dni + 0.03)      -- niesprzedawane częściej
+ilość      = ceil(base_yield × (1 + (L_ref − 1) × 0.5) × k),  k = 1..(4 − liczba_linii) zbiorów
+L_ref      = 35. percentyl poziomów posiadaczy karty (celowo poniżej mediany)
+nagroda    = Σ ilość × base_price × demand × premia,   premia 1.00 / 1.15 / 1.30 za 1 / 2 / 3 linie
+```
+
+Kotwica rynku to średnio ~0.57 × base × demand, więc premia 1.0–1.3 to w praktyce **~1.75–2.3× skupu**: płaci się za różnorodność, nie za wolumen.
+
+**💎 Kolekcjoner** — jedno zamówienie dziennie na plon z kart NFT (`seasonal_bloom` albo plon legendarny), trzymany przez ≥ 2 graczy. Ilość = 0.8 × średni zbiór egzemplarzy, które go dają (`stat_yield` hybrydy albo `base_yield`, × poziom), premia 1.40. Pomiar z 2026-09-28: z 54 NFT zasadzonych było 12 — reszta leżała jako trofea, bo wylewelowana zwykła karta zarabia na polu więcej. To drugi kupiec na to, co rodzi NFT.
+
+**Realizacja** (`fill_farm_order`): wszystko albo nic, każda linia zdejmowana FIFO (najpierw partie najbliższe zgnicia, jak w `sell_crop_to_npc`), raz na gracza na zamówienie — nikt nikomu zamówienia nie zabiera. Wypłata `farm_order_payout` przechodzi przez autospłatę podatku gruntowego. **Nie liczy się do kontraktu tygodnia.**
+
+**Inflacja.** `farm_order_payout` jest na liście `farm_revenue_per_day()` (anti-inflation.sql) obok `farm_crop_sale`, więc każda moneta z zamówienia podnosi zmierzoną presję i obniża mnożnik popytu na skupie. Budżet NPC się nie zmienia — zamówienia decydują tylko, ZA KTÓRE plony jest płacony. Pokrętła: `farm_orders_per_day()`, `farm_order_ttl_hours()`, `farm_order_premium(linie)`, `farm_order_level_percentile()`, `farm_order_collector_premium()`, `farm_order_collector_harvest_share()`.
+
 ## Karty NFT (legendarne, numerowane)
 
 Karty z `edition_size` to limitowane NFT. Wypadają z tej samej skrzynki; przy trafieniu serwer mintuje unikalny numer seryjny + zabawne imię-personę do `farm_nft_instances` (kolejny serial pochodzi z monotonicznego `minted_count`, nie z liczby żywych egzemplarzy).

@@ -250,6 +250,7 @@ AS $$
          WHERE ct.delta > 0
            AND ct.reason IN ('garden_water','admin_grant','zapps_topup','daily_interest',
                              'farm_crop_sale','farm_seasonal_contract_bonus',
+                             'farm_order_payout',
                              'farm_seasonal_rank_award',
                              'lottery_prize','lottery_dividend',
                              -- Bank G6 yields. bank_deposit_close /

@@ -12364,6 +12364,7 @@ const TAB_MODULES = {
   tower:       'tabs/tower.js',  // Wieżowiec G6
   coinpusher:  'tabs/coinpusher.js', // Automat Monet G6 (imports three + Rapier itself)
   chatfx:      'tabs/chat-reactions.js', // not a tab: Czat G6 reactions + naklejki, fetched by initChat()
+  farmworld:   'tabs/farm-world.js', // not a tab: Ogródek orders board (📋 Zamówienia hub tab)
 };
 const _tabModulePromises = {};
 let _tabActivationId = 0;
@@ -14219,6 +14220,7 @@ const ACT_COIN_REASONS = {
   farm_box_buy:               '📦 kupił skrzynkę z kartami',
   lootbox_open:               '🎁 otworzył skrzynkę z kartami',
   card_levelup:               '⭐ ulepszył kartę roślinną',
+  farm_order_payout:          '📋 zrealizował zamówienie z Ogródka',
   // Sklep / przedmioty specjalne
   store_purchase:             '🛒 kupił nagrodę w Sklepie',
   hero_item_purchase:         '🎒 kupił przedmiot specjalny',
@@ -25325,6 +25327,7 @@ const FARM_HUB_TABS = [
   { id: 'inventory', label: '🎒 Mój Majątek' },
   { id: 'collections', label: '🏅 Osiągnięcia' },
   { id: 'seasonal',  label: '🏆 Wyzwanie' },
+  { id: 'orders',    label: '📋 Zamówienia' },
   { id: 'catalog',   label: '📖 Katalog' },
   { id: 'market',    label: '📈 Cennik' },
   { id: 'help',      label: '❓ Pomoc' },
@@ -25343,6 +25346,7 @@ function renderFarmHubBody() {
   if (farmHubTab === 'inventory') buildFarmInventoryBody(bodyEl);
   else if (farmHubTab === 'collections') buildFarmCollectionsBody(bodyEl);
   else if (farmHubTab === 'seasonal') buildFarmSeasonalBody(bodyEl);
+  else if (farmHubTab === 'orders') withTabModule('farmworld', () => buildFarmOrdersBody(bodyEl));
   else if (farmHubTab === 'catalog') buildFarmCatalogBody(bodyEl);
   else if (farmHubTab === 'market') buildFarmMarketBody(bodyEl);
   else if (farmHubTab === 'help') buildFarmHelpBody(bodyEl);

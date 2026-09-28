@@ -644,7 +644,9 @@ AS $fn$
     FROM public.coin_transactions ct
    WHERE ct.created_at > now() - interval '7 days'
      AND ct.delta > 0
-     AND ct.reason IN ('farm_crop_sale','farm_seasonal_contract_bonus');
+     -- farm_order_payout (farm-orders.sql): orders are paid out of the same NPC
+     -- budget, so they must raise the measured pressure like a crop sale does.
+     AND ct.reason IN ('farm_crop_sale','farm_seasonal_contract_bonus','farm_order_payout');
 $fn$;
 
 REVOKE ALL ON FUNCTION public.farm_revenue_per_day() FROM PUBLIC, anon;

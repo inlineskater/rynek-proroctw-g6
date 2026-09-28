@@ -1711,6 +1711,8 @@ function buildBalancePoints({ userId, coins, createdAt, trades = [], games = [],
       // net-worth loss, not a move from cash into an asset.
       : t.reason === 'office_goal_contribution'
       ? '🎯 Wspólny cel: ' + (t.meta?.title || 'wpłata')
+      : t.reason === 'farm_order_payout'
+      ? '📋 Zamówienie: ' + (t.meta?.customer || 'NPC')
       : t.reason === 'daily_interest'
       ? '💍 Odsetki dzienne'
       : t.reason === 'hero_item_purchase'
