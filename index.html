@@ -22123,7 +22123,9 @@ async function loadFarm() {
     (mktRes.data || []).forEach(m => fmMarket.set(m.crop_type, normalizeFarmMarket(m)));
     await refreshFarmSeasonalState();
     refreshOfficeGoal();
-    withTabModule('farmworld', fwRefresh);   // weather banner + neighbour badges (tabs/farm-world.js)
+    // An arrow, not a bare `fwRefresh`: the name only exists once the module has
+    // loaded, and a ReferenceError here aborted the rest of loadFarm (the board).
+    withTabModule('farmworld', () => fwRefresh());   // weather banner + neighbour badges
     renderFarmPanels();
     renderFarmBoard();
     renderZenZone();
