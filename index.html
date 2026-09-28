@@ -6,7 +6,7 @@
   <title>Rynek Proroctw G6</title>
   <meta name="description" content="Firmowy rynek predykcji z wirtualnymi coinami.">
   <meta name="theme-color" content="#f8fafc">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://rjovhmepanwbdgdkvylr.supabase.co wss://rjovhmepanwbdgdkvylr.supabase.co https://challenges.cloudflare.com https://api.open-meteo.com; frame-src https://challenges.cloudflare.com; base-uri 'none'; object-src 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://rjovhmepanwbdgdkvylr.supabase.co wss://rjovhmepanwbdgdkvylr.supabase.co https://challenges.cloudflare.com https://api.open-meteo.com; frame-src https://challenges.cloudflare.com; base-uri 'none'; object-src 'none'; form-action 'self'">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='8' width='48' height='48' rx='10' fill='%236366f1'/%3E%3Ccircle cx='22' cy='22' r='5' fill='white'/%3E%3Ccircle cx='32' cy='32' r='5' fill='white'/%3E%3Ccircle cx='42' cy='42' r='5' fill='white'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -6754,6 +6754,32 @@
     .farm-cell-bar.ready .farm-cell-bar-fill { background: linear-gradient(90deg, #34d399, #16a34a); }
     .farm-cell-ready { position: absolute; top: 2px; right: 4px; color: #16a34a; font-weight: 800; font-size: 13px; }
     .farm-cell-level { flex: 0 0 auto; font-weight: 800; opacity: .85; }
+    /* ── Field redesign (2026-09-28): art first, owner colour, level badge ──
+       A plot is ~45px wide: „K… lvl17 Yurii" was the only thing it could say.
+       Now the icon names the plant, the owner's colour (--own, farmOwnerColor)
+       rings the plot and fills the nick pill, the level is a corner badge, and
+       the full text is the tooltip / the tap popup. My plots keep the gold
+       ring from .farm-cell.mine below (source order). */
+    .farm-cell.other { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--own, #94a3b8) 85%, transparent); }
+    .farm-cell-owner { left: 50%; right: auto; bottom: 2px; transform: translateX(-50%); max-width: calc(100% - 4px);
+      padding: 0 4px; border-radius: 4px; background: var(--own, #64748b); color: #fff; text-shadow: none;
+      box-shadow: 0 1px 2px rgba(0,0,0,.25); box-sizing: border-box; }
+    .farm-cell.mine .farm-cell-owner { background: #c98a12; }
+    .farm-cell-lvl { position: absolute; top: 2px; left: 2px; z-index: 9; min-width: 15px; height: 15px; padding: 0 3px;
+      box-sizing: border-box; border-radius: 8px; background: rgba(20,32,14,.72); color: #fff; font-size: 9px; font-weight: 800;
+      line-height: 15px; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none; }
+    @media (max-width: 520px) { .farm-cell-lvl { min-width: 12px; height: 12px; line-height: 12px; font-size: 7px; } }
+    .farm-cell .farm-cell-bar { height: 3px; bottom: 17px; left: 14%; right: 14%; }
+    .farm-cell .farm-cell-bar.ready, .farm-cell-ready { display: none; }
+    /* Ripe: a warm pulsing halo behind the plant (opacity-only animation, so it
+       stays on the compositor — see the mobile note on farmCropBob below). */
+    .farm-cell.crop.ready::before { content: ''; position: absolute; left: 50%; top: 44%; width: 78%; aspect-ratio: 1;
+      transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 0;
+      background: radial-gradient(circle, rgba(253,224,71,.75) 0%, rgba(253,224,71,.25) 45%, rgba(253,224,71,0) 70%);
+      animation: farmRipeGlow 2.4s ease-in-out infinite; }
+    .farm-cell.crop .farm-cell-emoji { position: relative; z-index: 1; }
+    @keyframes farmRipeGlow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .farm-cell.crop.ready::before { animation: none; opacity: .8; } }
     .farm-sale-sign { position: absolute; top: 5px; right: 5px; z-index: 9; display: flex; flex-direction: column; align-items: center; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); transform: rotate(-4deg); }
     .farm-sale-sign::after { content: ""; width: 2px; height: 12px; background: #7c3f13; border-radius: 2px; margin-top: -1px; }
     .farm-sale-sign span { display: block; padding: 2px 4px; border: 1px solid #7c2d12; border-radius: 2px; background: #fff7ed; color: #9a3412; font-size: 7px; line-height: 1; font-weight: 900; letter-spacing: 0; box-shadow: inset 0 0 0 1px rgba(251,146,60,.35); white-space: nowrap; }
@@ -21459,12 +21485,17 @@ function emojiToTwemojiCode(str) {
   for (const ch of base) cps.push(ch.codePointAt(0).toString(16));
   return cps.join('-');
 }
+// Pinned, not @latest: a new twemoji release can redraw every plant overnight.
+// The CSP's img-src must list cdn.jsdelivr.net — until 2026-09-28 it did not, so
+// every icon silently fell back to the device's own emoji font (and logged a
+// CSP error per plot per render).
+const FARM_TWEMOJI_BASE = 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@16.0.1/assets/svg/';
 function farmIcon(emoji, extraCls) {
   const code = emojiToTwemojiCode(emoji);
   if (!code) return el('span', { className: 'farm-ico-emoji' + (extraCls ? ' ' + extraCls : '') }, emoji || '🌱');
   const img = el('img', {
     className: 'farm-ico' + (extraCls ? ' ' + extraCls : ''),
-    src: 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/' + code + '.svg',
+    src: FARM_TWEMOJI_BASE + code + '.svg',
     alt: emoji || '', loading: 'lazy', draggable: false,
   });
   img.addEventListener('error', () => {
@@ -22634,6 +22665,7 @@ function buildFarmDisplayCell(cx, cy, now = Date.now()) {
     cell.title = 'Wolna działka — kliknij, by kupić';
   } else {
     cell.classList.add(tile.owner_id === me?.id ? 'mine' : 'other');
+    cell.style.setProperty('--own', farmOwnerColor(tile.owner_id));
     if (tile.listed) {
       cell.classList.add('listed');
       cell.title = 'Działka wystawiona na sprzedaż';
@@ -22641,11 +22673,14 @@ function buildFarmDisplayCell(cx, cy, now = Date.now()) {
     if (tile.planted_species) {
       cell.classList.add('crop');
       const def = fmDefs.get(tile.planted_species);
-      cell.appendChild(el('span', { className: 'farm-cell-name' },
-        el('span', { className: 'farm-cell-name-text' }, def ? def.name : tile.planted_species),
-        el('span', { className: 'farm-cell-level' }, 'lvl ' + (tile.planted_level || 1))
-      ));
-      cell.appendChild(el('span', { className: 'farm-cell-owner' }, tile.nick || '?'));
+      // Art first (2026-09-28): the plant name no longer fits a plot at real
+      // size („K… lvl17"), so the icon names the plant, the corner badge carries
+      // the level, the owner's colour carries whose it is, and the full text is
+      // the tooltip and the tap popup.
+      const lvl = tile.planted_level || 1;
+      cell.title = (def ? def.name : tile.planted_species) + ' · poziom ' + lvl + ' · ' + (tile.owner_id === me?.id ? 'Twoja' : (tile.nick || '?'));
+      cell.appendChild(el('span', { className: 'farm-cell-lvl', 'aria-label': 'poziom ' + lvl }, String(lvl)));
+      cell.appendChild(el('span', { className: 'farm-cell-owner' }, tile.owner_id === me?.id ? 'Ty' : (tile.nick || '?')));
       cell.appendChild(el('span', { className: 'farm-cell-emoji' }));
       const ready = tile.ready_at && now >= new Date(tile.ready_at).getTime();
       let pct = 1;
@@ -22812,6 +22847,23 @@ function farmCropStageIcon(ripeEmoji, pct, ready) {
   const stage = ready ? 2 : (pct < 0.34 ? 0 : (pct < 0.7 ? 1 : 2));
   return stage === 0 ? '🌱' : (stage === 1 ? '🌿' : (ripeEmoji || '🌱'));
 }
+// One colour per owner, so the shared board reads as „whose land is whose" at a
+// glance. Indexed by the owner's position in the sorted id list of everyone who
+// holds land, so every viewer sees the same colour for the same player (a hash
+// would collide among eleven people). My own plots keep the gold ring on top.
+const FARM_OWNER_PALETTE = ['#3b82f6', '#ef4444', '#10b981', '#a855f7', '#f97316', '#06b6d4',
+  '#ec4899', '#84cc16', '#6366f1', '#14b8a6', '#e11d48', '#0ea5e9', '#d946ef', '#65a30d'];
+let fmOwnerColorKey = '', fmOwnerColorMap = new Map();
+function farmOwnerColor(ownerId) {
+  const ids = [...new Set([...fmTiles.values()].map(t => t.owner_id).filter(Boolean))].sort();
+  const key = ids.join(',');
+  if (key !== fmOwnerColorKey) {
+    fmOwnerColorMap = new Map(ids.map((id, i) => [id, FARM_OWNER_PALETTE[i % FARM_OWNER_PALETTE.length]]));
+    fmOwnerColorKey = key;
+  }
+  return fmOwnerColorMap.get(ownerId) || '#94a3b8';
+}
+
 // Child-node lookups for one farm cell, memoised on the cell element itself.
 // Every path that changes a plot replaces the whole cell node
 // (patchFarmTileViews / renderFarmBoard), so a stale cache is impossible: the

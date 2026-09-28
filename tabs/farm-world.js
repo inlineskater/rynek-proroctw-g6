@@ -528,7 +528,7 @@ function fwWxDetails(crops) {
   const s = document.createElement('style');
   s.id = 'farm-nb-css';
   s.textContent = `
-    .fw-cell-badges { position: absolute; top: 1px; left: 2px; z-index: 9; display: flex; gap: 1px; font-size: 10px; line-height: 1;
+    .fw-cell-badges { position: absolute; top: 1px; right: 2px; z-index: 9; display: flex; gap: 1px; font-size: 10px; line-height: 1;
       pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
     .fw-cell-badges .fw-steal { animation: fw-pulse 1.6s ease-in-out infinite; }
     @keyframes fw-pulse { 50% { transform: scale(1.3); } }
