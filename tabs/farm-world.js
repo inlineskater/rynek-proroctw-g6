@@ -238,3 +238,249 @@ async function fwFillOrder(o, btn) {
     if (fwOrdersVisible()) renderFarmHubBody();
   }
 }
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  🌦️ Pogoda z Wrocławia — real weather drives yield (supabase/farm-weather.sql)
+// ════════════════════════════════════════════════════════════════════════════
+//  The server logs Open-Meteo's hourly Wrocław weather itself and harvest_crop()
+//  multiplies the yield by the crop's AVERAGE affinity over the real hours it
+//  grew. Here we only render that and PREVIEW it: past hours come from the same
+//  log the server will use, forecast hours from Open-Meteo's forecast, and hours
+//  beyond the forecast are assumed to look like the recent past.
+
+(function farmWeatherInjectCss() {
+  if (document.getElementById('farm-weather-css')) return;
+  const s = document.createElement('style');
+  s.id = 'farm-weather-css';
+  s.textContent = `
+    #fw-banner { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; margin: 0 0 10px;
+      padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); color: var(--text); }
+    #fw-banner.hidden { display: none; }
+    .fw-wx-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+    .fw-wx-ic { font-size: 26px; line-height: 1; flex: 0 0 auto; }
+    .fw-wx-main { flex: 1 1 220px; min-width: 0; }
+    .fw-wx-title { font-size: 13px; font-weight: 700; }
+    .fw-wx-sub { font-size: 12px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+    .fw-wx-sub b { color: var(--text); }
+    .fw-wx-good { color: #16a34a; font-weight: 700; }
+    .fw-wx-bad { color: #dc2626; font-weight: 700; }
+    .fw-wx-btn { flex: 0 0 auto; font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 4px 0; }
+    .fw-wx-strip { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+    .fw-wx-strip::-webkit-scrollbar { display: none; }
+    .fw-wx-cell { flex: 1 0 44px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px;
+      border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .fw-wx-cell b { font-size: 16px; line-height: 1.2; }
+    .fw-wx-cell.now { border-color: var(--accent); color: var(--text); }
+    .fw-wx-details { display: flex; flex-direction: column; gap: 6px; }
+    .fw-wx-note { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+    .fw-wx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .fw-wx-table th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+    .fw-wx-table td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .fw-wx-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
+    .fw-wx-table tr:last-child td { border-bottom: 0; }
+    @media (max-width: 560px) { .fw-wx-table .fw-hide-sm { display: none; } }
+  `;
+  document.head.appendChild(s);
+})();
+
+const FW_WX_LABELS = {
+  clear:   { ic: '☀️', name: 'Słonecznie' },
+  cloudy:  { ic: '☁️', name: 'Pochmurno' },
+  fog:     { ic: '🌫️', name: 'Mgła' },
+  rain:    { ic: '🌧️', name: 'Deszcz' },
+  snow:    { ic: '❄️', name: 'Śnieg' },
+  thunder: { ic: '⛈️', name: 'Burza' },
+  hot:     { ic: '🔥', name: 'Upał' },
+  frost:   { ic: '🥶', name: 'Przymrozek' },
+};
+const FW_WX_STALE_MS = 10 * 60 * 1000;
+let fwWx = null;            // { hours: [{ms, c, t}], byCrop: Map(crop -> Map(cat -> mult)), bounds, current }
+let fwWxAt = 0;
+let fwWxLoading = null;
+let fwWxOpen = false;
+
+function loadFarmWeather() {
+  if (fwWxLoading) return fwWxLoading;
+  fwWxLoading = (async () => {
+    try {
+      const { data, error } = await sb.rpc('farm_weather_state');
+      if (error) throw error;
+      const byCrop = new Map();
+      (data.affinity || []).forEach(a => {
+        if (!byCrop.has(a.crop_type)) byCrop.set(a.crop_type, new Map());
+        byCrop.get(a.crop_type).set(a.category, Number(a.mult));
+      });
+      fwWx = {
+        hours: (data.hours || []).map(h => ({ ms: new Date(h.h).getTime(), c: h.c, t: h.t })).sort((a, b) => a.ms - b.ms),
+        byCrop,
+        bounds: { lo: Number(data.bounds?.lo ?? 0.75), hi: Number(data.bounds?.hi ?? 1.35) },
+        current: data.current || null,
+      };
+      fwWxAt = Date.now();
+    } catch (e) {
+      // Not installed yet / offline: the banner stays hidden and every
+      // projection keeps the neutral multiplier.
+      console.warn('farm_weather_state', e);
+    } finally { fwWxLoading = null; }
+  })();
+  return fwWxLoading;
+}
+
+function fwWxMult(cropType, cat) {
+  return fwWx?.byCrop.get(cropType)?.get(cat) ?? 1;
+}
+
+// Mirror of farm_weather_yield_mult(): mean affinity over each whole hour of
+// [from, to), clamped. Unlike the server (which only ever sees the past), a
+// preview has to fill future hours: forecast where Open-Meteo has one, and past
+// that the average of what is known around now — tomorrow is most likely to
+// look like today, and that beats pretending it will be neutral.
+function fwWeatherMultWindow(cropType, fromMs, toMs) {
+  if (!fwWx || !fwWx.hours.length || !(toMs > fromMs)) return 1;
+  const H = 3600000;
+  const a = Math.floor(fromMs / H) * H;
+  const b = Math.max(a + H, Math.floor(toMs / H) * H);
+  const byHour = new Map(fwWx.hours.map(h => [h.ms, h.c]));
+  const now = Date.now();
+  const recent = fwWx.hours.filter(h => h.ms > now - 24 * H);
+  const persist = recent.length ? recent.reduce((s, h) => s + fwWxMult(cropType, h.c), 0) / recent.length : 1;
+  let sum = 0, n = 0;
+  for (let t = a; t < b; t += H) {
+    const c = byHour.get(t);
+    sum += c ? fwWxMult(cropType, c) : (t < now ? 1 : persist);
+    n++;
+  }
+  const m = n ? sum / n : 1;
+  return Math.min(fwWx.bounds.hi, Math.max(fwWx.bounds.lo, m));
+}
+
+// Overrides the index.html stub used by farmPlantIncomeCalc(). `over.wxFrom/
+// wxTo` is a planted tile's real window; otherwise it is "plant it now".
+function farmWeatherYieldMult(def, over, growMin) {
+  if (!fwWx || !def?.crop_type) return 1;
+  const from = over?.wxFrom ? new Date(over.wxFrom).getTime() : Date.now();
+  const to = over?.wxTo ? new Date(over.wxTo).getTime() : from + (growMin || 1440) * 60000;
+  return fwWeatherMultWindow(def.crop_type, from, to);
+}
+
+async function fwWeatherRefresh() {
+  const first = !fwWx;
+  if (!fwWx || Date.now() - fwWxAt > FW_WX_STALE_MS) await loadFarmWeather();
+  fwRenderWeatherBanner();
+  // Projections (Mój Majątek ranking, planting picker) read the multiplier
+  // lazily; repaint an open hub once so the first load shows up in them.
+  if (first && fwWx && farmModalEl && farmHubTab !== 'orders') refreshFarmHub();
+}
+
+// The crops worth naming: everything with a market row and a known plant.
+function fwWxCrops() {
+  const seen = new Set();
+  const out = [];
+  [...fmDefs.values()].forEach(d => {
+    if (!d.crop_type || seen.has(d.crop_type) || !fmMarket.has(d.crop_type)) return;
+    seen.add(d.crop_type);
+    out.push(d.crop_type);
+  });
+  return out;
+}
+
+function fwWxCropChip(ct, m) {
+  const id = farmCropIdentity(ct);
+  return el('span', { title: id.name + ' ×' + m.toFixed(2) }, id.emoji);
+}
+
+function fwRenderWeatherBanner() {
+  const host = document.getElementById('fw-banner');
+  if (!host) return;
+  const cur = fwWx?.current;
+  if (!fwWx || !cur) { host.classList.add('hidden'); return; }
+  host.classList.remove('hidden');
+  const lab = FW_WX_LABELS[cur.category] || FW_WX_LABELS.cloudy;
+
+  const crops = fwWxCrops();
+  const good = crops.map(ct => [ct, fwWxMult(ct, cur.category)]).filter(x => x[1] > 1).sort((a, b) => b[1] - a[1]);
+  const bad = crops.map(ct => [ct, fwWxMult(ct, cur.category)]).filter(x => x[1] < 1).sort((a, b) => a[1] - b[1]);
+
+  const sub = el('div', { className: 'fw-wx-sub' });
+  if (good.length) {
+    sub.append('Teraz rośnie lepiej: ');
+    good.forEach(([ct, m]) => sub.append(fwWxCropChip(ct, m), ' '));
+  }
+  if (bad.length) {
+    if (good.length) sub.append(' · ');
+    sub.append('gorzej: ');
+    bad.forEach(([ct, m]) => sub.append(fwWxCropChip(ct, m), ' '));
+  }
+  if (!good.length && !bad.length) sub.append('Ta pogoda nie sprzyja ani nie szkodzi żadnej uprawie.');
+
+  const btn = el('button', { className: 'fw-wx-btn', type: 'button' }, fwWxOpen ? 'Zwiń ▴' : 'Jak pogoda działa ▾');
+  btn.addEventListener('click', () => { fwWxOpen = !fwWxOpen; fwRenderWeatherBanner(); });
+
+  const temp = cur.temp_c != null ? ', ' + Math.round(cur.temp_c) + '°C' : '';
+  host.replaceChildren(
+    el('div', { className: 'fw-wx-row' },
+      el('span', { className: 'fw-wx-ic' }, lab.ic),
+      el('div', { className: 'fw-wx-main' },
+        el('div', { className: 'fw-wx-title' }, 'Pogoda we Wrocławiu: ' + lab.name + temp),
+        sub),
+      btn),
+    fwWxStrip());
+  if (fwWxOpen) host.append(fwWxDetails(crops));
+}
+
+// Next 48 h in 6-hour blocks, each shown as its most common condition.
+function fwWxStrip() {
+  const H = 3600000, now = Date.now();
+  const strip = el('div', { className: 'fw-wx-strip' });
+  const start = Math.floor(now / (6 * H)) * 6 * H;
+  for (let i = 0; i < 8; i++) {
+    const a = start + i * 6 * H, b = a + 6 * H;
+    const hs = fwWx.hours.filter(h => h.ms >= a && h.ms < b);
+    if (!hs.length) continue;
+    const counts = {};
+    hs.forEach(h => { counts[h.c] = (counts[h.c] || 0) + 1; });
+    const cat = Object.keys(counts).sort((x, y) => counts[y] - counts[x])[0];
+    const temps = hs.map(h => Number(h.t)).filter(Number.isFinite);
+    const d = new Date(a);
+    const label = i === 0 ? 'teraz' : String(d.getHours()).padStart(2, '0') + ':00';
+    strip.append(el('div', { className: 'fw-wx-cell' + (i === 0 ? ' now' : ''), title: (FW_WX_LABELS[cat] || {}).name || cat },
+      el('b', {}, (FW_WX_LABELS[cat] || FW_WX_LABELS.cloudy).ic),
+      temps.length ? Math.round(Math.max(...temps)) + '°' : '',
+      el('span', {}, label)));
+  }
+  return strip;
+}
+
+function fwWxDetails(crops) {
+  const H = 3600000, now = Date.now();
+  const wrap = el('div', { className: 'fw-wx-details' });
+  wrap.append(el('div', { className: 'fw-wx-note' },
+    'Pogoda jest prawdziwa — serwer co pół godziny pobiera ją dla Wrocławia z Open-Meteo. ',
+    'Każda roślina lubi inną pogodę. Przy zbiorze plon mnoży się przez ', el('b', {}, 'średnią z każdej godziny'),
+    ', którą roślina spędziła w ziemi (od ×' + fwWx.bounds.lo.toFixed(2) + ' do ×' + fwWx.bounds.hi.toFixed(2) + '). ',
+    'Kolumna „Zasadzone teraz" to prognoza na najbliższy dzień wzrostu — rzeczywisty mnożnik wyjdzie z tego, jaka pogoda naprawdę będzie.'));
+  const table = el('table', { className: 'fw-wx-table' });
+  table.append(el('thead', {}, el('tr', {},
+    el('th', {}, 'Uprawa'), el('th', {}, 'Lubi'), el('th', { className: 'fw-hide-sm' }, 'Nie lubi'),
+    el('th', {}, 'Ostatnie 3 dni'), el('th', {}, 'Zasadzone teraz'))));
+  const tb = el('tbody');
+  crops.map(ct => ({ ct, past: fwWeatherMultWindow(ct, now - 72 * H, now), next: fwWeatherMultWindow(ct, now, now + 24 * H) }))
+    .sort((a, b) => b.next - a.next)
+    .forEach(({ ct, past, next }) => {
+      const aff = fwWx.byCrop.get(ct) || new Map();
+      const likes = [...aff.entries()].filter(e => e[1] > 1).map(e => (FW_WX_LABELS[e[0]] || {}).ic || e[0]).join(' ');
+      const hates = [...aff.entries()].filter(e => e[1] < 1).map(e => (FW_WX_LABELS[e[0]] || {}).ic || e[0]).join(' ');
+      const id = farmCropIdentity(ct);
+      const cls = m => m > 1.005 ? 'num fw-wx-good' : m < 0.995 ? 'num fw-wx-bad' : 'num';
+      tb.append(el('tr', {},
+        el('td', {}, id.emoji + ' ' + id.name),
+        el('td', {}, likes || '—'),
+        el('td', { className: 'fw-hide-sm' }, hates || '—'),
+        el('td', { className: cls(past) }, '×' + past.toFixed(2)),
+        el('td', { className: cls(next) }, '×' + next.toFixed(2))));
+    });
+  table.append(tb);
+  wrap.append(table);
+  return wrap;
+}

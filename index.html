@@ -11579,6 +11579,7 @@
         <div class="og-goal hidden" id="og-goal" role="button" tabindex="0"
              onclick="openOfficeGoalModal()"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
+        <div class="hidden" id="fw-banner"></div>
         <div class="farm-stage">
           <div class="garden-sky">
             <div class="garden-glow"></div><div class="garden-stars"></div>
@@ -22090,6 +22091,7 @@ async function loadFarm() {
     (mktRes.data || []).forEach(m => fmMarket.set(m.crop_type, normalizeFarmMarket(m)));
     await refreshFarmSeasonalState();
     refreshOfficeGoal();
+    withTabModule('farmworld', fwWeatherRefresh);   // real Wrocław weather banner
     renderFarmPanels();
     renderFarmBoard();
     renderZenZone();
@@ -24136,6 +24138,9 @@ function farmPerDayIncome(d, price, level = 1) {
 // this is plant profitability, not a prediction of the player's debt schedule.
 // `over` substitutes ONE NFT instance's stored base stats (bred hybrids differ
 // per serial); fungible cards continue to derive them from the species def.
+// Real Wrocław weather over the growing window (supabase/farm-weather.sql);
+// tabs/farm-world.js replaces this neutral stub once the forecast is loaded.
+function farmWeatherYieldMult() { return 1; }
 function farmPlantIncomeCalc(def, level, over) {
   const mkt = def && fmMarket.get(def.crop_type);
   if (!mkt || mkt.base_price == null) return null;
@@ -24149,8 +24154,9 @@ function farmPlantIncomeCalc(def, level, over) {
     : Number(def.base_grow_minutes || 0) * Math.pow(0.92, L - 1);
   const yieldBonus = farmYieldBonus();
   const growthBonus = over?.growthBonus != null ? Number(over.growthBonus) : farmGrowthBonus();
-  const yld = Math.round(coreYield * (1 + yieldBonus));
   const growMin = Math.max(1440, coreGrow * (1 - growthBonus));
+  const weatherMult = farmWeatherYieldMult(def, over, growMin);
+  const yld = Math.round(coreYield * (1 + yieldBonus) * weatherMult);
   const growDays = Math.max(1, growMin / 1440);
   const activeBonus = farmActiveSeasonalBonus(def.crop_type);
   const eventBounds = activeBonus > 0 ? farmSeasonalEventBounds() : null;
@@ -24176,7 +24182,7 @@ function farmPlantIncomeCalc(def, level, over) {
   const totalHigh = (qHigh?.proceeds || 0) + seasonalTotal;
   const totalNow = (qNow?.proceeds || 0) + seasonalTotal;
   return {
-    base, yld, growMin, growDays, bonusPerUnit, seasonal: bonusPerUnit > 0,
+    base, yld, growMin, growDays, bonusPerUnit, seasonal: bonusPerUnit > 0, weatherMult,
     yieldBonusPct: Math.round(yieldBonus * 100), growthBonusPct: Math.round(growthBonus * 100),
     collectorPct: qNow?.collectorPct || 0, dropPct: qNow?.dropPct || 0,
     totalLow, totalHigh,
@@ -26466,6 +26472,7 @@ function openFarmPlantedModal(tile, x, y) {
       growCore: ((inst && inst.stat_grow_minutes != null) ? inst.stat_grow_minutes : def.base_grow_minutes)
         * Math.pow(0.92, level - 1),
       readyAt: projectedHarvestAt,
+      wxFrom: tile.planted_at, wxTo: tile.ready_at,
     });
   };
 

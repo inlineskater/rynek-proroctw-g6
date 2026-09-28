@@ -228,6 +228,30 @@ Kotwica rynku to średnio ~0.57 × base × demand, więc premia 1.0–1.3 to w p
 
 **Inflacja.** `farm_order_payout` jest na liście `farm_revenue_per_day()` (anti-inflation.sql) obok `farm_crop_sale`, więc każda moneta z zamówienia podnosi zmierzoną presję i obniża mnożnik popytu na skupie. Budżet NPC się nie zmienia — zamówienia decydują tylko, ZA KTÓRE plony jest płacony. Pokrętła: `farm_orders_per_day()`, `farm_order_ttl_hours()`, `farm_order_premium(linie)`, `farm_order_level_percentile()`, `farm_order_collector_premium()`, `farm_order_collector_harvest_share()`.
 
+## 🌦️ Pogoda z Wrocławia (od 2026-09-28)
+
+`supabase/farm-weather.sql`, baner nad polem w `tabs/farm-world.js`.
+
+Niebo w Ogródku od zawsze pokazywało prawdziwą pogodę we Wrocławiu (`fetchWroclawWeather`, Open-Meteo), ale tylko jako dekorację. Teraz to **warunki uprawy**: każda roślina lubi jedną pogodę i nie znosi innej, a zbiór dostaje **średni mnożnik z każdej prawdziwej godziny**, którą roślina spędziła w ziemi. Pory roku wychodzą same: szara wrocławska jesień sprzyja marchewce i ziemniakom, lipiec winogronom i papryczce — najlepsza uprawa zmienia się bez żadnego harmonogramu, a o to chodziło przy monokulturze zmierzonej 2026-09-28.
+
+```text
+kategoria godziny = kod WMO (jak wmoCategory() w index.html) → clear/cloudy/fog/rain/snow/thunder,
+                    a clear/cloudy/fog przy ≥ 27°C to „upał" (hot), przy ≤ 0°C „przymrozek" (frost)
+mnożnik zbioru    = średnia farm_weather_affinity(plon, kategoria) po każdej pełnej godzinie [planted_at, ready_at)
+                    godzina bez wpisu w logu = 1.0;  wynik przycięty do [0.75, 1.35]
+plon              = round(rdzeń × (1 + bonus_ziemi) × mnożnik_pogody)
+```
+
+**Zaufanie.** Przeglądarka nigdy nie podaje pogody. Baza sama pyta Open-Meteo (`pg_net`, jak `football.sql`) — `farm_weather_tick()` z crona `7,37 * * * *` najpierw zbiera odpowiedź poprzedniego zapytania (`pg_net` jest asynchroniczne), potem wysyła kolejne — i trzyma log godzinowy `farm_weather_hours`. `harvest_crop()` czyta wyłącznie ten log. Awaria pobierania ciągnie mnożnik ku 1.0, nigdy ku bonusowi.
+
+**Czas wzrostu się nie zmienia** — pogoda działa tylko na ilość, więc `plant_crop` jest nietknięte, a `ready_at` dalej jest znane w chwili sadzenia. `harvest_crop` liczy plon przez hak `farm_harvest_yield(tile, user, rdzeń, plon)`, żeby kolejne warstwy (sąsiedzi, talenty NFT) rozszerzały hak, a nie przepisywały RPC.
+
+**Tabela sympatii** (`farm_weather_affinity`, dane — UI czyta tę samą tabelę przez `farm_weather_state()`): marchewka/ziemniak/dynia — deszcz i chmury, nie znoszą upału/przymrozku; pomidor/kukurydza/winogrona/papryczka/ananas — słońce i upał, nie znoszą przymrozku (papryczka i winogrona także deszczu); truskawka — słońce i deszcz, nie znosi burzy. Plony NFT mają po jednej „swojej" pogodzie (słonecznik — słońce, lotos — deszcz, róża — mgła, banan — upał, kwiat sezonowy — mgła), żeby leżące trofeum miało tydzień, w którym opłaca się je zasadzić.
+
+**Inflacja.** Pogoda zmienia tylko ilość plonu, a ilość jest już wyceniana przez throttle popytu (powyżej presji 1 przychód jest asymptotycznie stały w ilości), mnożnik jest przycięty. Dobra pogoda to powód, żeby coś zasadzić, a nie nowy kran.
+
+**Podgląd w kliencie** (`farmWeatherYieldMult`, nadpisuje stub w index.html; używa go `farmPlantIncomeCalc`): przeszłe godziny z tego samego logu, przyszłe z prognozy Open-Meteo (3 dni), a dalej średnia z ostatnich 24 h + prognozy — jutro najpewniej wygląda jak dziś.
+
 ## Karty NFT (legendarne, numerowane)
 
 Karty z `edition_size` to limitowane NFT. Wypadają z tej samej skrzynki; przy trafieniu serwer mintuje unikalny numer seryjny + zabawne imię-personę do `farm_nft_instances` (kolejny serial pochodzi z monotonicznego `minted_count`, nie z liczby żywych egzemplarzy).
