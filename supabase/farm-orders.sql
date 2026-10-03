@@ -237,6 +237,10 @@ BEGIN
   -- seasonal_bloom (every weekly series + every hybrid) is already the most
   -- widely held. Qty is a share of the AVERAGE harvest of the instances that
   -- grow it (stat_yield for bred hybrids, else base_yield, times level).
+  -- ⚠️ "Grown only by limited-edition cards" is enforced by the NOT EXISTS:
+  -- the monthly PRL editions (farm-nft-monthly.sql) grow ordinary crops —
+  -- 🍍 pineapple, 🥕 carrot — and without it the Kolekcjoner would start
+  -- ordering carrots as a premium NFT crop once two players held the edition.
   SELECT c.crop_type, c.base_price, c.avg_harvest INTO v_pick
     FROM (
       SELECT d.crop_type, m.base_price,
@@ -246,6 +250,8 @@ BEGIN
         JOIN public.farm_card_defs d ON d.species = i.species AND d.edition_size IS NOT NULL
         JOIN public.farm_market m ON m.crop_type = d.crop_type
         JOIN public.profiles p ON p.id = i.owner_id AND NOT COALESCE(p.is_admin, false)
+       WHERE NOT EXISTS (SELECT 1 FROM public.farm_card_defs b
+                          WHERE b.crop_type = d.crop_type AND b.edition_size IS NULL)
        GROUP BY d.crop_type, m.base_price
     ) c
    WHERE c.holders >= 2

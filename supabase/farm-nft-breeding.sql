@@ -115,7 +115,7 @@ DO $$ BEGIN
   ALTER TABLE public.farm_nft_transfers DROP CONSTRAINT IF EXISTS farm_nft_transfers_kind_check;
   ALTER TABLE public.farm_nft_transfers
     ADD CONSTRAINT farm_nft_transfers_kind_check
-    CHECK (kind IN ('mint','sale','merge_fuel','merge_hero','breed_parent'));
+    CHECK (kind IN ('mint','sale','merge_fuel','merge_hero','breed_parent','altar'));   -- 'altar': farm-nft-social.sql
 EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
 -- ── RPC: breed_nft ─────────────────────────────────────────────────────────

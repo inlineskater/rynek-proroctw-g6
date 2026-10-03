@@ -842,7 +842,9 @@ function farmNeighbourYieldMult(def, over) {
   const water = (ev?.waters || 0) * (fwNb.limits?.water_bonus || 0.03) * (fwHasTalent('water_double') ? 2 : 1);
   const talent = tCrop > 0 || tAll > 0;
   const cap = talent ? (fwNb.limits?.bonus_cap_talent || 0.35) : (fwNb.limits?.bonus_cap || 0.25);
-  return 1 + Math.min(cap, combo + div + tCrop + tAll + water);
+  // 📖 Album sets (farm-nft-social.sql) sit inside the same cap.
+  const sets = typeof fnftSetBonus === 'function' ? fnftSetBonus() : 0;
+  return 1 + Math.min(cap, combo + div + tCrop + tAll + water + sets);
 }
 
 async function fwWater(x, y, btn, close) {

@@ -596,7 +596,7 @@ const BO_ERR = {
   order_not_found: 'Zlecenie nie istnieje.', order_not_open: 'Zlecenie już nieaktywne.', cannot_fill_own: 'Nie możesz zrealizować własnego zlecenia.',
   not_enough_remaining: 'Zbyt duża ilość — sprawdź ile jeszcze zostało.', not_enough_cards: 'Nie masz tylu wolnych duplikatów tej karty.',
   nft_not_found: 'Nie znaleziono karty NFT.', not_owner: 'To nie twój przedmiot.', already_listed: 'Ten przedmiot jest już wystawiony na Targowisku.',
-  species_mismatch: 'Ta karta NFT to inny gatunek niż w zleceniu.', tile_not_owned: 'To nie jest kupiona działka.',
+  species_mismatch: 'Ta karta NFT to inny gatunek niż w zleceniu.', nft_planted: 'Ta karta NFT jest zasadzona — najpierw zbierz plon.', tile_not_owned: 'To nie jest kupiona działka.',
   zen_tile: 'Roślinki z Ogródka nie można sprzedać jako działki.', tile_occupied: 'Ta działka nie jest pusta.',
   buyer_insufficient_funds: 'Kupujący nie ma już tylu coinów — spróbuj z mniejszą ilością.',
   land_tax_debt: 'Najpierw spłać podatek od działek.', bad_coords: 'Wybierz działkę.', bad_instance: 'Wybierz kartę NFT.',
@@ -666,8 +666,10 @@ function buildBuyOrderFillControls(order, remaining) {
     wrap.appendChild(el('div', { className: 'mlc-desc' }, 'Masz ' + free + ' ' + plCount(free, 'wolny duplikat', 'wolne duplikaty', 'wolnych duplikatów') + '.'));
     wrap.appendChild(el('div', { className: 'mlc-bid-row' }, input, btn));
   } else if (order.item_kind === 'farm_nft') {
-    const mine = fmNft.filter(n => n.owner_id === me?.id && !n.listed && n.species === order.card_species);
-    if (!mine.length) { wrap.appendChild(el('div', { className: 'mlc-note' }, 'Nie masz wolnej karty NFT tego gatunku.')); return wrap; }
+    // A planted NFT can't be sold (fill_buy_order raises nft_planted).
+    const planted = farmPlantedNftIds();
+    const mine = fmNft.filter(n => n.owner_id === me?.id && !n.listed && !planted.has(n.id) && n.species === order.card_species);
+    if (!mine.length) { wrap.appendChild(el('div', { className: 'mlc-note' }, 'Nie masz wolnej (niezasadzonej) karty NFT tego gatunku.')); return wrap; }
     const sel = el('select', { className: 'nick-select' });
     mine.sort((a, b) => a.serial_no - b.serial_no).forEach(n => {
       sel.append(el('option', { value: n.id }, farmNftEmoji(n) + ' ' + (n.nft_name || n.species) + ' #' + n.serial_no + '/' + n.edition_size + (n.level > 1 ? ' ' + '⭐'.repeat(n.level) : '')));
@@ -1614,7 +1616,8 @@ async function mlPopulateItemPicker(kind, preselect = '') {
   await ensureFarmData();
   sel.replaceChildren();
   if (kind === 'farm_nft') {
-    const mine = fmNft.filter(n => n.owner_id === me?.id && !n.listed);
+    const planted = farmPlantedNftIds();   // create_farm_nft_listing refuses planted NFTs
+    const mine = fmNft.filter(n => n.owner_id === me?.id && !n.listed && !planted.has(n.id));
     if (!mine.length) { sel.append(el('option', { value: '' }, 'Brak kart NFT')); hint.textContent = 'Zdobądź kartę NFT ze skrzynki, aby ją wystawić.'; return; }
     mine.sort((a, b) => a.species.localeCompare(b.species) || a.serial_no - b.serial_no).forEach(n => {
       const def = fmDefs.get(n.species);

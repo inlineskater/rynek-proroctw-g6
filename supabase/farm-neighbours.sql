@@ -119,7 +119,9 @@ CREATE POLICY "farm_nft_talents_select" ON public.farm_nft_talents FOR SELECT TO
 REVOKE ALL ON public.farm_nft_talents FROM anon, authenticated;
 GRANT SELECT ON public.farm_nft_talents TO authenticated;
 
-DELETE FROM public.farm_nft_talents;
+-- The monthly PRL editions own their talent rows in farm-nft-monthly.sql, so a
+-- re-run of this file must not wipe them.
+DELETE FROM public.farm_nft_talents WHERE species NOT LIKE 'prl\_%';
 INSERT INTO public.farm_nft_talents (species, kind, crop_type, value, label) VALUES
   ('aeae_banana',       'all_boost',      NULL,         0.08, 'Królewski dwór: +8% plonu na wszystkich twoich polach'),
   ('crystal_lotus',     'weather_shield', NULL,         0,    'Kryształowa osłona: zła pogoda nie obniża plonów na twoich polach'),

@@ -281,7 +281,7 @@ Karty z `edition_size` to limitowane NFT. Wypadają z tej samej skrzynki; przy t
 
 Pierwsza czwórka — 🌹 Diamentowa Róża (25 szt.), 🌻 Złoty Słonecznik (15), 🪷 Kryształowy Lotos (10), 🍌 Królewski Banan Ae Ae (8) — jest **w całości wyprzedana** (stan 27.07.2026), więc ze skrzynek lecą już tylko kolekcje tygodniowe opisane niżej. Hybrydy z krzyżowania też mają `edition_size`, ale `draw_weight = 0`, więc nigdy nie wypadają ze skrzynki.
 
-### Kolekcje tygodniowe (okno 3 edycji)
+### Kolekcje tygodniowe (okno 3 edycji) — ZAKOŃCZONE, zastąpione serią miesięczną od 2026-11-01
 
 `supabase/farm-weekly-nft-series.sql` + `supabase/farm-nft-series-window.sql`. Co poniedziałek 00:00 Europe/Warsaw startuje nowa limitowana kolekcja (`series_week`, nakład 5–10 sztuk, wszystkie zbierają wspólny plon `seasonal_bloom`). Edycja leci, aż wyczerpie się nakład.
 
@@ -291,11 +291,52 @@ Dlatego edycje aktywują się **2 tygodnie wcześniej** (`farm_nft_series_lead_w
 
 Gdyby pula mimo to kiedyś zeszła do zera NFT, aplikacja mówi to wprost zamiast pokazywać ciche „0.00%": `farmNftPoolStatus()`/`farmNftDroughtBanner()`/`farmBoxNftFeatText()` wstawiają bursztynowy baner na obie karty skrzynek i w tabelę szans, a linijka 💎 zmienia się na „brak — wszystkie edycje wyprzedane" wraz z nazwą kolekcji wchodzącej w poniedziałek.
 
+### 🗓️ „Złota Kolekcja PRL" — jedna edycja na miesiąc (od 2026-11-01)
+
+`supabase/farm-nft-monthly.sql`. Seria tygodniowa była zaseedowana tylko do 2026-10-12, a pomiar z 2026-10-03 pokazał, że NFT nie miały co robić: **182 wybite, 55 żywych, 17 zasadzonych, 0 wystawionych, 3 sprzedaże w historii**, 38 z 55 rosło na tym samym `seasonal_bloom`, a 23 gatunki po 1–5 sztuk sprawiały, że fuzja (ten sam gatunek + poziom) prawie nigdy nie była możliwa.
+
+Teraz **jedna** edycja na miesiąc — odpicowana wersja jednej z 9 zwykłych roślin, nazwana od polskiego święta danego miesiąca:
+
+| Miesiąc | Okazja | Karta | Plon | Talent |
+|---|---|---|---|---|
+| 2026-11 | Andrzejki | 🎃 Dynia z Andrzejkowych Wróżb | dynia | +1 gatunek (różnorodność) |
+| 2026-12 | Wigilia | 🍍 Ananas z Peweksu pod Choinkę | ananas | +5% na wszystkie pola |
+| 2027-01 | Zima | 🥕 Marchewka z Nosa Bałwana | marchew | tarcza pogodowa |
+| 2027-02 | Walentynki | 🌶️ Papryczka Teściowej na Walentynki | papryczka | strach na wróble |
+| 2027-03 | Dzień Kobiet | 🥔 Kartofel z Goździkiem na Dzień Kobiet | ziemniak | +15% ziemniaki |
+| 2027-04 | Śmigus-dyngus | 🍅 Pomidor ze Śmigusa-Dyngusa | pomidor | podlewanie ×2 |
+| 2027-05 | 1 Maja | 🌽 Kukurydza z Pochodu Pierwszomajowego | kukurydza | +15% kukurydza |
+| 2027-06 | Koniec roku szkolnego | 🍓 Truskawka na Świadectwo z Paskiem | truskawka | +15% truskawki |
+| 2027-07 | Wczasy FWP | 🍇 Wino Marki Wino z Wczasów pod Gruszą | winogrona | +15% winogrona |
+
+- **Rośnie WŁASNY plon zwykłej rośliny** (prawdziwy 🍍 ananas, nie `seasonal_bloom`), `base_yield` = zwykła × 6 (≈ karta poz. 11; średnia karta biura to poz. 8), ten sam czas wzrostu. Dzięki temu automatycznie: sprzedaje się na rynku tego plonu, pasuje do 📋 zamówień mieszanych i kontraktu tygodnia, dziedziczy sympatię pogodową tego plonu. **Nie jest inflacyjne**: przychód z plonów idzie przez rynek dławiony popytem (`anti-inflation.sql`), więc mocny ananas NFT bierze większy kawałek TEGO SAMEGO budżetu.
+- **Podaż**: nakład 50, waga losowania 2 **tylko w swoim miesiącu**, potem 0 — edycja się **zamyka** (`farm_nft_monthly_tick()`, cron 22:01/23:01 UTC = 00:01 Warszawa, data-driven i idempotentny). Jedna edycja przy wadze 2 to ~0,34% na zwykłą skrzynkę → 14–29 sztuk/mies. przy zmierzonych 4 000–8 600 otwarciach + ≤5 zwycięzców Wyzwania — **nigdy się nie wyprzedaje**, niewybite numery zostają „🔒 niewybita" na zawsze. 15–30 kopii JEDNEGO gatunku to też pierwszy raz, kiedy fuzja jest realna. Od startu serii tick zeruje wagę wszystkich starszych NFT — „jedno nowe NFT na miesiąc" znaczy jedno.
+- **Imiona sezonowe** (`farm_prl_persona()`): „tytuł z miesiąca + zdrobnienie z epoki" — „Karp Zdzisiek", „Bałwan Mietek", „Kaowiec Rysiek", „Wróżka Grażynka". 10 tytułów × 12 imion, parowane bijektywnie → 120 unikalnych na edycję. Każda edycja PRL to osobna pula (`farm_nft_pool` = `prl:<species>`), więc indeks mintu = `minted_count` gatunku.
+- **Wartość**: trigger `farm_nft_monthly_stamp_value` ustawia `stat_value = farm_nft_monthly_value()` (1 500/poz.) — bez tego `20000/50` = 400 wyglądałoby śmiesznie tanio obok tygodniowych (2 500).
+- **Kalendarz** czyta widok `farm_nft_monthly_schedule` (status upcoming/live/closed) — w kliencie nie ma już żadnej kopii rotacji (`NFT_SERIES_ROTATION` usunięte).
+
+**Wpływ na resztę gry** (audyt 2026-10-03, wszystko poprawione w tej samej zmianie):
+- 💎 Kolekcjoner w 📋 Zamówieniach (`farm-orders.sql`) wybiera tylko plony, których **nie rośnie żadna zwykła karta** — inaczej zamawiałby marchewkę jako „plon NFT".
+- `farm_mint_random_event_nft` (nagroda Wyzwania) woli edycję bieżącego **miesiąca**.
+- „Sezonowy Łowca" (`farm_seasonal_bonus`, `farm_achievements`, klient `farmSeasonalAchBonus`) liczy `series_week` LUB `series_month`.
+- `fill_buy_order` odmawia sprzedaży **zasadzonego** NFT (`nft_planted`) — wcześniej sprzedający zatrzymywał talent i plon, a kupujący nie mógł jej zasadzić; pickery Targowiska filtrują zasadzone.
+- Nazwa plonu: `farmCropIdentity()`/`farmCropGroups()` biorą reprezentanta spośród **zwykłych** kart, więc 🎃 kupka/karta w 📈 Cenniku to „Dynia", nie „Dynia z Andrzejkowych Wróżb", i nie skacze na pozycję legendarnej.
+
+### 💎 Kolekcja NFT: Album, Wystawa, Ołtarz, Wizytówka (od 2026-10-03)
+
+`supabase/farm-nft-social.sql` + `tabs/farm-nft.js` (zakładka huba **💎 NFT**). Żadna z tych rzeczy nie mintuje coinów.
+
+- **📖 Album** (`farm_nft_sets`, `farm_nft_album_state()`): zestawy gatunków — Klasyka, Lato 2026, Jesień 2026, Hybrydy z przepisu i trzy kwartały PRL („Złota Polska Jesień i Święta", „Przedwiośnie z Goździkiem", „Wczasy pod Gruszą") + „Pełny Rok PRL". Komplet = **trzymasz naraz** min. jedną żywą kartę każdego gatunku (jednorazowe dotknięcie nie liczy się, więc grupa nie przepchnie jednej karty po kolei). Każdy komplet = **+2% plonu na wszystkich polach, WEWNĄTRZ istniejącego sufitu bonusów** (+25%/+35%) — `farm_harvest_yield()` (przejęte z `farm-neighbours.sql`) dodaje `farm_nft_set_bonus()` do tej samej sumy przed `LEAST(cap, …)`. Klient: `fnftSetBonus()` w `farmNeighbourYieldMult`. Pierwsze ukończenia w `farm_nft_set_completions` („Skompletowali: …").
+- **🔥 Ołtarz** (`sacrifice_nft()`): spala NFT → ⭐ Złote Skrzynie = `max(1, ceil(wartość/1000))` (`farm_altar_boxes`). Poniżej wartości (skrzynia = 500 w Net Worth) celowo: to odpływ trofeów, nie kantor. Nie dla zasadzonych/wystawionych/z bieżącej Wystawy. Wiersz `farm_nft_transfers.kind = 'altar'` (cena = liczba skrzyń) → eksplorator pokazuje 🕯️; log w `farm_nft_altar_log`.
+- **🏛️ Wystawa** (`farm_expo_*`): jedna karta na gracza na tydzień (poniedziałek Warszawa), jeden głos na gracza (tajny, widać liczby, nie na siebie). Rozliczenie **lazy-on-read** (`farm_expo_settle_due()` na wejściu w każde RPC, advisory lock, PK `farm_nft_expo_winners` = ochrona przed podwójną wypłatą). Nagroda: 1 ⭐ Złota Skrzynia + 🏆 na karcie na zawsze, gdy min. 2 karty i 3 głosy; remis wygrywa wcześniej wystawiona.
+- **🖼️ Wizytówka** (`farm_nft_showcase`, `set_showcase_nft()`, widok `farm_nft_showcase_cards`): jedna karta przy nicku w Biurze, czacie i oknie gracza. **Osobna tabela bez FK, nie kolumna w `profiles`**: `ON DELETE SET NULL` blokowałby wiersz profilu INNEGO gracza przy spaleniu odsprzedanej karty — ten sam kształt blokady, przed którym ostrzega `last-active.sql`. Widok pokazuje kartę tylko, dopóki należy do pokazującego. Klient ładuje ją osobnym zapytaniem (`sideLoadShowcases`), nigdy w selekcie `sideLoadPeople`.
+- Akcje kolekcjonera są też w oknie karty NFT (hak `farmNftModalExtras`).
+
 **Poziom siedzi na egzemplarzu** (`farm_nft_instances.level`), nie na gatunku:
 
 - Ulepszanie przez **fuzję** (`level_up_nft`): dwa egzemplarze tego samego gatunku i poziomu → „bohater" awansuje, „paliwo" jest **spalane na zawsze** (edycja trwale się kurczy). Koszt: 50 × poziom² 🪙. Obie karty muszą być niewystawione i niezasadzone.
 - Sadzenie NFT wskazuje konkretny egzemplarz (`plant_crop(..., p_instance_id)`); rośnie według jego poziomu.
-- Historia każdego egzemplarza (mint / sprzedaże / fuzje) jest w `farm_nft_transfers` i w eksploratorze edycji (klik w NFT w Katalogu); spalone egzemplarze pokazują 🔥.
+- Historia każdego egzemplarza (mint / sprzedaże / fuzje / krzyżowania / ołtarz) jest w `farm_nft_transfers` i w eksploratorze edycji (klik w NFT w Katalogu lub Kalendarzu); brakujące numery pokazują, jak odeszły: 🔥 fuzja, 🧬 krzyżowanie, 🕯️ ołtarz. Kod eksploratora, fuzji i krzyżowania jest w `tabs/farm-nft.js`.
 
 Wycena w majątku (Net Worth): NFT = `round(20000 / edycja) × poziom` za egzemplarz; zwykłe karty = 20/50/150 🪙 wg rzadkości; do tego działki wg `asset_value`, skrzynki ×100, vouchery ×350, plony po cenie rynkowej. Wpięte w `economy-stats.sql` i `leaderboard-net-worth-items.sql`.
 

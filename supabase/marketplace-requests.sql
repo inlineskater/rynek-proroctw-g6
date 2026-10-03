@@ -206,6 +206,12 @@ BEGIN
     IF v_inst.owner_id <> v_user THEN RAISE EXCEPTION 'not_owner'; END IF;
     IF v_inst.listed THEN RAISE EXCEPTION 'already_listed'; END IF;
     IF v_inst.species <> v_order.card_species THEN RAISE EXCEPTION 'species_mismatch'; END IF;
+    -- A planted NFT can't change hands: the tile would keep pointing at it, so
+    -- the SELLER kept its talent and harvest while the buyer couldn't plant it
+    -- (create_farm_nft_listing already refuses planted NFTs; this path didn't).
+    IF EXISTS (SELECT 1 FROM public.farm_tiles WHERE planted_instance_id = v_inst.id) THEN
+      RAISE EXCEPTION 'nft_planted';
+    END IF;
 
     UPDATE public.farm_nft_instances
        SET owner_id = v_order.buyer_id, acquired_from = 'marketplace', acquired_at = now()
