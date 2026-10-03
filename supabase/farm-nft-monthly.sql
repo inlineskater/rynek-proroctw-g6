@@ -403,6 +403,8 @@ REVOKE ALL ON FUNCTION public.farm_mint_random_event_nft(uuid) FROM PUBLIC, anon
 
 -- ── „Sezonowy Łowca": monthly editions count as a series ───────────────────
 -- Supersedes farm-achievements.sql (only the series predicate changes).
+-- ⚠️ farm_achievements() below is in turn superseded by farm-nft-social.sql
+-- (adds complete_sets) — re-run that after this.
 -- Client mirror: farmSeasonalAchBonus() in index.html.
 CREATE OR REPLACE FUNCTION public.farm_seasonal_bonus(p_user uuid)
 RETURNS numeric LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$

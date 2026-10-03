@@ -281,6 +281,21 @@ let fnftBusy = false;
     .fnft-ribbon { position: absolute; z-index: 3; top: 56px; right: 7px; font-size: 13px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
     .fnft-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     .fnft-actions button { flex: 1 1 140px; }
+    /* 🌸 Kwiat sezonowy */
+    .fnft-bloom-hero { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 12px;
+      border: 1px solid #f9a8d4; background: linear-gradient(135deg, #fdf2f8, var(--surface)); }
+    .fnft-bloom-hero .farm-ico { width: 48px; height: 48px; flex: 0 0 auto; }
+    .fnft-bloom-hero h4 { margin: 0 0 2px; font-size: 15px; }
+    .fnft-uses { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
+    .fnft-group-title { font-weight: 850; font-size: 13px; margin: 6px 0 -2px; }
+    .fnft-bloom-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .fnft-bloom-plant { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; padding: 9px 6px;
+      border-radius: 12px; border: 1px solid var(--border); background: var(--surface); min-width: 0; cursor: pointer; }
+    .fnft-bloom-plant.mine { border-color: #ec4899; box-shadow: 0 0 0 2px rgba(236,72,153,.14); }
+    .fnft-bloom-plant .farm-ico { width: 34px; height: 34px; }
+    .fnft-bloom-name { font-weight: 800; font-size: 12px; line-height: 1.15; }
+    .fnft-bloom-sub { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
+    .fnft-bloom-tal { font-size: 10px; font-style: italic; color: var(--muted); line-height: 1.3; }
     @media (max-width: 520px) { .fnft-altar-row { grid-template-columns: auto minmax(0, 1fr); } .fnft-altar-row button { grid-column: 1 / -1; } }
   `;
   document.head.append(s);
@@ -319,7 +334,7 @@ function buildFarmNftHubBody(bodyEl) {
   const wrap = el('div', { className: 'fnft-hub' });
   const subs = el('div', { className: 'fnft-subs', role: 'tablist' });
   const content = el('div', {});
-  [['album', '📖 Album'], ['expo', '🏛️ Wystawa'], ['altar', '🔥 Ołtarz'], ['calendar', '🗓️ Kalendarz']].forEach(([id, label]) => {
+  [['album', '📖 Album'], ['bloom', '🌸 Kwiat sezonowy'], ['expo', '🏛️ Wystawa'], ['altar', '🔥 Ołtarz'], ['calendar', '🗓️ Kalendarz']].forEach(([id, label]) => {
     const b = el('button', { type: 'button', className: fnftSub === id ? 'active' : '' }, label);
     b.addEventListener('click', () => { fnftSub = id; buildFarmNftHubBody(bodyEl); });
     subs.append(b);
@@ -327,7 +342,7 @@ function buildFarmNftHubBody(bodyEl) {
   wrap.append(subs, content);
   bodyEl.replaceChildren(wrap);
   content.append(el('div', { className: 'farm-card-sub' }, 'Ładowanie…'));
-  const go = fnftSub === 'expo' ? fnftRenderExpo : fnftSub === 'altar' ? fnftRenderAltar
+  const go = fnftSub === 'expo' ? fnftRenderExpo : fnftSub === 'altar' ? fnftRenderAltar : fnftSub === 'bloom' ? fnftRenderBloom
            : fnftSub === 'calendar' ? (host => { host.replaceChildren(); return fnftCalendarInto(host); }) : fnftRenderAlbum;
   Promise.resolve(go(content)).catch(e => {
     console.error('farm nft hub', e);
@@ -350,7 +365,8 @@ async function fnftRenderAlbum(host) {
       'Brakuje ci jednej? Kup ją na Targowisku albo wystaw „Zlecenie zakupu".'),
     el('div', { className: 'fnft-kpi' },
       el('span', {}, 'Komplety: ', el('b', {}, done + ' / ' + sets.length)),
-      el('span', {}, 'Premia teraz: ', el('b', {}, '+' + Math.round((data.bonus || 0) * 100) + '% plonu'))));
+      el('span', {}, 'Premia teraz: ', el('b', {}, '+' + Math.round((data.bonus || 0) * 100) + '% plonu')),
+      el('span', {}, 'Widać ją też w 🏅 Osiągnięcia → 📖 Album Kolekcjonera')));
   const grid = el('div', { className: 'fnft-sets' });
   sets.forEach(s => {
     const sp = s.species || [];
@@ -387,6 +403,85 @@ async function fnftRenderAlbum(host) {
     grid.append(card);
   });
   host.append(grid);
+}
+
+// ── 🌸 Kwiat sezonowy ──────────────────────────────────────────────────────
+// The shared `seasonal_bloom` crop: every weekly-series card and every hybrid
+// harvests into ONE pile with ONE price, which nothing else in the UI spelled
+// out — the plant's name disappears at harvest. This page says what it is,
+// what it is worth, how to sell it, and lists every plant that grows it.
+const FNFT_BLOOM = 'seasonal_bloom';
+const FNFT_BLOOM_GROUPS = [
+  ['summer26', '☀️ Lato 2026 — kolekcje tygodniowe'],
+  ['autumn26', '🍂 Jesień 2026 — kolekcje tygodniowe'],
+  ['hybrid',   '🧬 Hybrydy z krzyżowania'],
+];
+function fnftPrice(v) {
+  return v == null || isNaN(+v) ? '—' : (+v).toFixed(1).replace('.', ',') + ' 🪙';
+}
+
+async function fnftRenderBloom(host) {
+  const mkt = fmMarket.get(FNFT_BLOOM) || {};
+  const plants = [...fmDefs.values()].filter(d => d.crop_type === FNFT_BLOOM);
+  const { data: aff } = await sb.from('farm_weather_affinity').select('category,mult').eq('crop_type', FNFT_BLOOM);
+  const have = fmInventory.get(FNFT_BLOOM) || 0;
+  const mine = new Map();
+  fmNft.forEach(n => { if (n.owner_id === me?.id) mine.set(n.species, (mine.get(n.species) || 0) + 1); });
+  const live = new Map();
+  fmNft.forEach(n => live.set(n.species, (live.get(n.species) || 0) + 1));
+
+  host.replaceChildren();
+  host.append(el('div', { className: 'fnft-bloom-hero' },
+    farmIcon('🌸'),
+    el('div', {},
+      el('h4', {}, '🌸 Kwiat sezonowy — wspólny plon kart NFT'),
+      el('p', { className: 'fnft-lead' },
+        'To ', el('b', {}, 'jeden plon dla wielu roślin'), '. Daje go każda karta z tygodniowych kolekcji ',
+        '(Lato 2026, Jesień 2026) i każda hybryda z krzyżowania. Po zbiorze nie ma znaczenia, która roślina go urodziła: ',
+        'wszystko ląduje w ', el('b', {}, 'jednej kupce'), ' w 🎒 Moim Majątku i ma ', el('b', {}, 'jedną cenę skupu'),
+        '. Rośliny różnią się więc tylko ilością plonu, czasem wzrostu i talentem — nie ceną.'))));
+
+  host.append(el('div', { className: 'fnft-kpi' },
+    el('span', {}, 'Cena teraz: ', el('b', {}, fnftPrice(mkt.cur_price) + '/szt.')),
+    el('span', {}, 'Cena katalogowa: ', el('b', {}, fnftPrice(mkt.base_price))),
+    mkt.floor_price != null ? el('span', {}, 'Podłoga: ', el('b', {}, fnftPrice(mkt.floor_price))) : '',
+    el('span', {}, 'Masz w magazynie: ', el('b', {}, have + ' szt.'))));
+
+  const wx = (aff || []).slice().sort((a, b) => b.mult - a.mult).map(a => {
+    const lab = (typeof FW_WX_LABELS !== 'undefined' && FW_WX_LABELS[a.category]) || { ic: '', name: a.category };
+    return lab.ic + ' ' + lab.name + ' ×' + String(+a.mult).replace('.', ',');
+  });
+  host.append(el('div', { className: 'farm-inv-section-title' }, 'Co z nim zrobić'),
+    el('ul', { className: 'fnft-uses' },
+      el('li', {}, el('b', {}, '💰 Sprzedaj NPC'), ' w 🎒 Moim Majątku — jak każdy plon, cena spada przy dużej sprzedaży i wraca z czasem.'),
+      el('li', {}, el('b', {}, '📋 Zamówienia → 💎 Kolekcjoner z Zarządu'), ' co jakiś czas zamawia Kwiat sezonowy z premią ok. +40% ponad rynek.'),
+      el('li', {}, el('b', {}, '🌦️ Pogoda'), ' zmienia jego plon: ' + (wx.length ? wx.join(' · ') : 'brak danych') + '. Pozostałe pogody ×1.'),
+      el('li', {}, el('b', {}, 'Nie dotyczy'), ' czterech kart Klasyki (każda ma własny legendarny plon) ani miesięcznej Złotej Kolekcji PRL — ',
+        'te rosną zwykły plon swojej rośliny, np. 🎃 dynię.')));
+
+  FNFT_BLOOM_GROUPS.forEach(([col, title]) => {
+    const defs = plants.filter(d => (d.nft_collection || (d.is_hybrid ? 'hybrid' : '')) === col)
+      .sort((a, b) => String(a.series_week || '').localeCompare(String(b.series_week || '')) || a.name.localeCompare(b.name, 'pl'));
+    if (!defs.length) return;
+    host.append(el('div', { className: 'fnft-group-title' }, title + ' (' + defs.length + ')'));
+    const grid = el('div', { className: 'fnft-bloom-grid' });
+    defs.forEach(d => {
+      const my = mine.get(d.species) || 0;
+      const hybrid = !!d.is_hybrid;
+      const talent = fnftTalents?.get(d.species);
+      const card = el('div', { className: 'fnft-bloom-plant' + (my ? ' mine' : ''), title: 'Zobacz wszystkie numery tej edycji' },
+        farmIcon(d.emoji || '🌸'),
+        el('div', { className: 'fnft-bloom-name' }, d.name),
+        el('div', { className: 'fnft-bloom-sub' },
+          (hybrid ? 'plon zależy od rodziców' : d.base_yield + ' szt. / ' + farmGrowLabel(d.base_grow_minutes)) +
+          ' · żywych ' + (live.get(d.species) || 0) + (d.edition_size ? '/' + d.edition_size : '') +
+          (my ? ' · twoich ' + my : '')),
+        talent ? el('div', { className: 'fnft-bloom-tal' }, talent.label) : '');
+      card.addEventListener('click', () => openFarmNftExplorer(d.species));
+      grid.append(card);
+    });
+    host.append(grid);
+  });
 }
 
 // ── 🏛️ Wystawa ─────────────────────────────────────────────────────────────

@@ -25846,7 +25846,7 @@ let fmHybridFeed = null;   // rows from farm_hybrid_recent (Mój Majątek)
 let fmAchMine = null;      // my farm_achievements JSON
 let fmAchAll = null;       // every player's farm_achievements (accordion tables)
 
-// 5-track achievement wall (mirrors supabase/farm-achievements.sql). `bonus`
+// 6-track achievement wall (mirrors farm_achievements(), latest copy in supabase/farm-nft-social.sql). `bonus`
 // returns the CURRENT mechanical bonus % (null = prestige badge only). Stage
 // thresholds are `at`; the 4 tiers are Brąz/Srebro/Złoto/Diament.
 // Progi są skalowane do REALNYCH danych z serwera (lipiec 2026), nie do okrągłych
@@ -25870,6 +25870,13 @@ const ACHIEVEMENTS = [
     unit: 'kolekcji sezonowych', short: 'Kolekcje', stages: [1, 2, 4, 6],
     effect: 'Efekt: +2% do premii z tygodniowego kontraktu 🏆 za każdą posiadaną kolekcję sezonową (maks. +20%).',
     bonus: d => Math.min(20, 2 * (d.distinct_series || 0)), bonusSign: '+' },
+  // 📖 Album (farm-nft-social.sql): the same +2%/set the 💎 NFT tab applies,
+  // so every farm bonus is visible in one place. Max 8 sets = +16%, and it sits
+  // inside the yield-bonus cap (+25% / +35%) together with pairs and talents.
+  { key: 'album', icon: '📖', label: 'Album Kolekcjonera', metricKey: 'complete_sets',
+    unit: 'kompletnych zestawów w Albumie', short: 'Komplety', stages: [1, 2, 4, 8],
+    effect: 'Efekt: +2% plonu na wszystkich polach za każdy kompletny zestaw w 💎 NFT → 📖 Album (w ramach limitu bonusów +25% / +35%). Liczy się to, co trzymasz TERAZ — sprzedana karta zabiera premię.',
+    bonus: d => 2 * (d.complete_sets || 0), bonusSign: '+' },
   { key: 'ziemia', icon: '🏞️', label: 'Potentat Ziemski', metricKey: 'tiles_owned',
     unit: 'posiadanych działek', short: 'Działki', stages: [2, 3, 4, 6],
     effect: 'Efekt: +2% do zbiorów (plonu) za każdą działkę (maks. +15%). Podatek gruntowy sprawia, że 6 działek to naprawdę dużo.',
@@ -25911,8 +25918,8 @@ function buildFarmCollectionsBody(bodyEl) {
   }
 
   bodyEl.append(el('div', { className: 'farm-card-sub' },
-    'Zdobywaj odznaki i pasywne bonusy do całej farmy. Każdy z 5 torów daje REALNY efekt — ' +
-    'lepsze ceny, szybszy wzrost, większe zbiory, tańsze krzyżowanie i wyższe premie z kontraktów. ' +
+    'Zdobywaj odznaki i pasywne bonusy do całej farmy. Każdy z ' + ACHIEVEMENTS.length + ' torów daje REALNY efekt — ' +
+    'lepsze ceny, szybszy wzrost, większe zbiory (działki i komplety w 📖 Albumie NFT), tańsze krzyżowanie i wyższe premie z kontraktów. ' +
     'Bonusy działają zawsze — wystarczy posiadać (nic nie trzeba „zakładać"). ' +
     'Rozwiń „Ranking biura", aby porównać się z innymi.'));
 

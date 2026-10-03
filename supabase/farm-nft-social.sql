@@ -5,6 +5,7 @@
 --
 --  ⚠️ SUPERSEDES farm_harvest_yield() from farm-neighbours.sql (adds the album
 --     set bonus inside the same cap) — re-run this file after re-running that.
+--  ⚠️ SUPERSEDES farm_achievements() from farm-nft-monthly.sql (adds complete_sets).
 --  ⚠️ Owns the farm_nft_transfers kind CHECK ('altar' added); farm-nft-breeding.sql
 --     carries the same list so a re-run there keeps it.
 --
@@ -612,3 +613,36 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.sacrifice_nft(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.sacrifice_nft(uuid) TO authenticated;
+
+
+-- ══ 🏅 Osiągnięcia: the album track ═════════════════════════════════════════
+-- Supersedes farm-nft-monthly.sql's copy (which superseded farm-achievements.sql):
+-- adds 'complete_sets' so the 📖 Album bonus shows on the achievements wall
+-- next to the other farm bonuses. farm_achievements_all() calls this, so the
+-- office ranking picks it up too. Client: the 'album' entry in ACHIEVEMENTS.
+CREATE OR REPLACE FUNCTION public.farm_achievements(p_user uuid DEFAULT auth.uid())
+RETURNS json LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT json_build_object(
+    'user_id', p_user,
+    'nick', (SELECT nick FROM public.profiles WHERE id = p_user),
+    'distinct_species', COALESCE((SELECT count(DISTINCT species) FROM public.farm_nft_instances WHERE owner_id = p_user), 0),
+    'nft_count',        COALESCE((SELECT count(*)               FROM public.farm_nft_instances WHERE owner_id = p_user), 0),
+    'nft_level_sum',    COALESCE((SELECT sum(level)             FROM public.farm_nft_instances WHERE owner_id = p_user), 0),
+    'hybrids_bred',     COALESCE((SELECT count(*)               FROM public.farm_hybrid_births WHERE bred_by  = p_user), 0),
+    'distinct_series',  COALESCE((SELECT count(DISTINCT ni.species)
+                                    FROM public.farm_nft_instances ni
+                                    JOIN public.farm_card_defs d ON d.species = ni.species
+                                   WHERE ni.owner_id = p_user
+                                     AND (d.series_week IS NOT NULL OR d.series_month IS NOT NULL)), 0),
+    'complete_sets',    cardinality(public.farm_nft_complete_sets(p_user)),
+    'tiles_owned',      COALESCE((SELECT count(*) FROM public.farm_tiles
+                                   WHERE owner_id = p_user AND acquired_via IS DISTINCT FROM 'migration'), 0),
+    'price_bonus_pct',    round(public.farm_collector_bonus(p_user) * 100)::int,
+    'growth_bonus_pct',   round(public.farm_growth_bonus(p_user)    * 100)::int,
+    'breed_discount_pct', round(public.farm_breed_discount(p_user)  * 100)::int,
+    'seasonal_bonus_pct', round(public.farm_seasonal_bonus(p_user)  * 100)::int,
+    'yield_bonus_pct',    round(public.farm_yield_bonus(p_user)     * 100)::int,
+    'set_bonus_pct',      round(public.farm_nft_set_bonus(p_user)   * 100)::int
+  );
+$$;
+GRANT EXECUTE ON FUNCTION public.farm_achievements(uuid) TO authenticated;
