@@ -6448,17 +6448,18 @@
        opened. Now a calm card with a green whisper, so the WOOD stays where it
        is actually scenery (sign board, plot sign, fence) and the chrome that
        carries buttons/stats reads as chrome. */
-    .farm-topbar { display: flex; flex-direction: column; gap: 10px; padding: 10px 14px;
+    .farm-topbar { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px;
       border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); box-shadow: var(--sh-sm); }
     /* ── Top bar contents (2026-10-03, farmToolbar) ──
        Left: the field filter („Wszystkie / Moje N / Do zbioru N") + one line of
        what to do next. Right: hub buttons in four groups split by hairlines, flat
        (no fills, no indigo primary) so the only colours in the bar are the two
        that mean something: green = something to collect, red = debt. */
-    .ftb { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; }
-    .ftb-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+    .ftb { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; }
+    .ftb-field { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+    .ftb-field-row { display: flex; align-items: center; gap: 8px; }
     .ftb-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface); }
-    .ftb-seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 11px; border: 0; border-radius: 7px;
+    .ftb-seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 7px;
       background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
       transition: background .12s, color .12s, box-shadow .12s; }
     .ftb-seg-btn:hover:not(:disabled) { color: var(--text); }
@@ -6467,15 +6468,15 @@
     .ftb-seg-btn b { min-width: 20px; padding: 1px 6px; border-radius: 999px; box-sizing: border-box; background: rgba(15,23,42,.07);
       color: var(--text); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .ftb-seg-btn.has b { background: #16a34a; color: #fff; }
-    .ftb-next { font-size: 12px; color: var(--muted); }
+    .ftb-next { padding-left: 2px; font-size: 12px; color: var(--muted); }
     .ftb-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; }
-    .ftb-group { display: flex; padding: 0 6px; }
+    .ftb-group { display: flex; padding: 0 4px; }
     .ftb-group:first-child { padding-left: 0; }
     .ftb-group + .ftb-group { border-left: 1px solid var(--border); }
     .ftb-group:last-child { padding-right: 0; }
     .ftb-row { display: flex; gap: 2px; }
-    .ftb-btn { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border: 0; border-radius: var(--r-sm);
-      background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    .ftb-btn { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 6px 6px; border: 0; border-radius: var(--r-sm);
+      background: transparent; color: var(--text); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
       transition: background .12s; }
     .ftb-btn:hover { background: var(--surface); }
     .ftb-btn:focus-visible, .ftb-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -6489,8 +6490,10 @@
     @media (max-width: 600px) {
       .farm-topbar { padding: 8px; }
       .ftb { flex-direction: column; align-items: stretch; gap: 8px; }
-      .ftb-field { flex-direction: column; align-items: stretch; gap: 6px; }
-      .ftb-seg { display: flex; }
+      .ftb-field { align-items: stretch; gap: 6px; }
+      .ftb-seg { display: flex; flex: 1 1 auto; min-width: 0; }
+      .ftb-field-row { gap: 6px; }
+      .farm-view-toggle { padding: 6px 8px; font-size: 12px; }
       .ftb-seg-btn { flex: 1 1 0; padding: 7px 4px; font-size: 12px; }
       .ftb-next { text-align: center; }
       .ftb-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
@@ -6512,11 +6515,11 @@
     .farm-box-link-btn { display: block; width: 100%; margin-bottom: 10px; padding: 9px 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: 800; font-size: 12px; color: #fff; background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 2px 6px rgba(217,119,6,.4); }
     .farm-box-link-btn:hover { filter: brightness(1.06); }
     /* Ogródek-style scene: grass field with a sky band on top + weather overlay. */
-    .farm-stage { position: relative; overflow: hidden; border-radius: 12px; border: 1px solid rgba(62,95,55,.28); height: auto; max-height: calc(100dvh - 170px); padding: 0; display: flex; flex-direction: column;
+    .farm-stage { position: relative; overflow: hidden; border-radius: 12px; border: 1px solid rgba(62,95,55,.28); height: auto; padding: 0; display: flex; flex-direction: column;
       background: linear-gradient(180deg, var(--g-grass-a, #cbe9bf) 0%, var(--g-grass-b, #b7d7a8) 100%); transition: background 1.5s linear; }
     /* Sky band scales with the viewport so short screens (MacBook Air) spend the
        height on tiles, not decoration; min keeps the starter chip readable. */
-    .farm-stage > .garden-sky { position: relative; flex: 0 0 auto; height: clamp(76px, 12vh, 128px); margin: 0; border-radius: 11px 11px 0 0; overflow: hidden; box-shadow: inset 0 -9px 16px -8px rgba(0,0,0,.14);
+    .farm-stage > .garden-sky { position: relative; flex: 0 0 auto; height: auto; min-height: 40px; margin: 0; border-radius: 11px 11px 0 0; overflow: hidden; box-shadow: inset 0 -9px 16px -8px rgba(0,0,0,.14);
       background: linear-gradient(180deg, var(--g-sky-a, #bfe6f6) 0%, var(--g-sky-b, #a6d6ee) 100%); }
     .farm-stage > .garden-sky::before { content: ''; position: absolute; left: -4%; right: -4%; bottom: -2px; height: 44px; opacity: .7; filter: blur(.4px);
       background: radial-gradient(58% 150% at 24% 100%, var(--g-grass-b, #aed79e) 0 56%, transparent 58%), radial-gradient(66% 150% at 72% 100%, var(--g-grass-a, #cbe9bf) 0 54%, transparent 56%); }
@@ -6584,6 +6587,10 @@
     .plot-sign::after { right: 4px; }
     /* Zen renders with the SAME grid as the crop board (.farm-board/.fb-seg + the
        .farm-cell/.farm-plant-cell rules below), so both halves look identical. */
+    /* With zen folded the only grid is the farm and the folded tab is already
+       labelled, so the plank would just cost the board a row of height. With zen
+       open both signs stay, keeping the two grids top-aligned. */
+    .farm-split:has(.zen-folded) .farm-field > .plot-sign { display: none; }
     .zen-board { flex: 0 0 auto; overflow: visible; justify-content: flex-start; gap: 0; padding: 0; }
     .zen-sign-row { display: flex; align-items: flex-start; gap: 6px; }
     .zen-fold-btn { margin-left: auto; border: 0; background: rgba(255,255,255,.55); color: #3d2810; font: inherit; font-weight: 800;
@@ -6619,6 +6626,14 @@
       .zen-fold-label { writing-mode: horizontal-tb; transform: none; }
       .farm-divider { display: none; }
       .farm-split .farm-field { flex: 0 0 auto; align-items: center; overflow: visible; }
+    }
+    /* Phones: the field runs nearly edge to edge — every px of gutter is
+       divided between only 5 columns of plants. */
+    @media (max-width: 480px) {
+      #tab-farm main { padding-left: 6px; padding-right: 6px; }
+      .farm-split { padding: 6px 4px 10px; gap: 8px; }
+      .farm-split .farm-field { padding: 2px; }
+      .farm-sky-bar { padding: 8px 8px 14px; }
     }
     .fb-seg { display: grid; gap: 4px; }
     .farm-cell { position: relative; background: rgba(95,140,55,.16); border: 1px solid rgba(80,110,45,.12); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; min-width: 0; min-height: 0; overflow: visible; }
@@ -7049,12 +7064,24 @@
     /* Ogródek farm: catalog / inventory modals */
     /* Wspólny Cel + weather share one row when both fit (auto-fit collapses the
        empty track, so a lone strip takes the whole width). */
-    .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; margin: 0 0 10px; align-items: stretch; }
-    .farm-strips > .og-goal { margin: 0; }
+    /* The sky bar: starter chip, Wspólny Cel and the weather as frosted cards
+       IN the sky band (2026-10-03). auto-fit collapses hidden tracks, so a lone
+       card takes the whole width; the sky grows if they wrap or the forecast
+       is expanded, and scaleFarmPots measures the board's real top. */
+    .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; align-items: stretch; }
+    .farm-sky-bar { position: relative; z-index: 5; padding: 10px 12px 18px; }
+    .farm-sky-bar > .og-goal, .farm-sky-bar > #fw-banner { margin: 0; padding: 7px 12px; border-color: rgba(255,255,255,.7);
+      background: rgba(255,255,255,.86); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
+    .farm-sky-bar > .og-goal .og-goal-ic, .farm-sky-bar .fw-wx-ic { font-size: 18px; }
+    .farm-sky-bar > .og-goal .og-goal-title { margin-bottom: 4px; }
+    .farm-sky-bar > .farm-starter-chip { position: static; align-self: center; justify-self: start; max-width: 100%; }
     /* Ogródek ⇄ tabela view switch */
-    .farm-view-switch { display: flex; justify-content: center; margin-top: 2px; }
-    .farm-view-toggle { padding: 7px 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .farm-view-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    /* Sits beside the field filter in the top bar (farmFieldFilter moves it). */
+    .farm-view-toggle { flex: 0 0 auto; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--card);
+      color: var(--text); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
+    .farm-view-toggle:hover { background: var(--surface); }
+    .farm-view-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #tab-farm .farm-wrap > .farm-view-toggle { display: none; }   /* before the top bar adopts it */
     .farm-table-wrap { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: auto; max-height: calc(100dvh - 190px); }
     .farm-table-summary { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px 8px; position: sticky; left: 0; background: var(--surface); z-index: 3; }
     .farm-table-summary .ftbl-chip { font-size: 12px; font-weight: 700; color: var(--text-dim, #6b7280); background: var(--bg, #f3f4f6); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; }
@@ -11555,19 +11582,22 @@
         <div class="farm-topbar" id="farm-topbar">
           <div class="farm-toolbar-host" id="farm-topbar-btns"></div>
         </div>
-        <div class="farm-strips">
-        <div class="og-goal hidden" id="og-goal" role="button" tabindex="0"
-             onclick="openOfficeGoalModal()"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
-        <div class="hidden" id="fw-banner"></div>
-        </div>
         <div class="farm-stage">
           <div class="garden-sky">
             <div class="garden-glow"></div><div class="garden-stars"></div>
-            <div class="farm-starter-chip hidden" id="farm-starter-banner">
-              <span class="farm-starter-emoji" aria-hidden="true">🎁</span>
-              <span class="farm-starter-text"><strong>Prezent od serwera</strong><span>Darmowe skrzynki za 0 🪙</span></span>
-              <button class="farm-starter-action" id="farm-starter-btn" type="button">Otwórz</button>
+            <!-- The weather and the office goal live IN the sky (2026-10-03): a
+                 separate strip row plus a decorative sky band cost the board
+                 ~200px of height, which is what sizes the plants. -->
+            <div class="farm-strips farm-sky-bar">
+              <div class="farm-starter-chip hidden" id="farm-starter-banner">
+                <span class="farm-starter-emoji" aria-hidden="true">🎁</span>
+                <span class="farm-starter-text"><strong>Prezent od serwera</strong><span>Darmowe skrzynki za 0 🪙</span></span>
+                <button class="farm-starter-action" id="farm-starter-btn" type="button">Otwórz</button>
+              </div>
+              <div class="og-goal hidden" id="og-goal" role="button" tabindex="0"
+                   onclick="openOfficeGoalModal()"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
+              <div class="hidden" id="fw-banner"></div>
             </div>
           </div>
           <div class="garden-weather"></div>
@@ -11578,9 +11608,8 @@
           </div>
         </div>
         <div class="farm-table-wrap hidden" id="farm-table-wrap"></div>
-        <div class="farm-view-switch">
-          <button class="farm-view-toggle" id="farm-view-toggle" type="button">📋 Widok tabeli</button>
-        </div>
+        <!-- moved into the top bar's filter row by farmFieldFilter() -->
+        <button class="farm-view-toggle" id="farm-view-toggle" type="button" title="Pokaż działki jako tabelę">📋 Tabela</button>
       </div>
     </main>
   </div>
@@ -21133,7 +21162,11 @@ function farmExtraTiles() {
 const OGRODEK_DESKTOP_ROWS = 5;
 // Column count of the farm display grid: 40 cells reflow as 8×5 on desktop and
 // as 7 columns on stacked mobile (matching the zen part's width).
+// Phones get 5 columns (2026-10-03): at 7 a plot was 41px on a 375px screen.
+// The page scrolls there anyway, so more rows cost nothing.
+const FARM_PHONE_COLS = 5;
 function farmDisplayCols() {
+  if (window.innerWidth <= 480) return FARM_PHONE_COLS;
   if (window.innerWidth <= 760) return Math.ceil(FARM_W / 2);
   return Math.ceil((FARM_W * FARM_DISPLAY_ROWS + farmExtraTiles().length) / OGRODEK_DESKTOP_ROWS);
 }
@@ -21618,7 +21651,10 @@ function applyFarmViewMode() {
   const isTable = farmViewMode === 'table';
   if (stage) stage.classList.toggle('hidden', isTable);
   if (tableWrap) tableWrap.classList.toggle('hidden', !isTable);
-  if (btn) btn.textContent = isTable ? '🌳 Widok ogródka' : '📋 Widok tabeli';
+  if (btn) {
+    btn.textContent = isTable ? '🌳 Pole' : '📋 Tabela';
+    btn.title = isTable ? 'Wróć do widoku pola' : 'Pokaż działki jako tabelę';
+  }
   if (isTable) renderFarmTable();
   else {
     farmTableOpenMenu = null;
@@ -22313,6 +22349,7 @@ function renderZenZone() {
 // are equally tall and read as one aligned field; on mobile match the stacked
 // farm part's width (7 columns) so the stacked grid parts share the same size.
 function zenColsFor() {
+  if (window.innerWidth <= 480) return FARM_PHONE_COLS;
   if (window.innerWidth <= 760) return Math.ceil(FARM_W / 2);
   // Min 4 columns: the extra unassigned plots keep the panel from looking cramped
   // and show newcomers there's room to grow.
@@ -22779,20 +22816,27 @@ function scaleFarmPots() {
       // Stacked mobile layout: budget from the split container, NOT the field —
       // the field shrinks to fit its content there, so measuring it would just
       // echo back the previous cell size and lock the tiles small.
-      const fw = (split ? split.clientWidth - 28 : field.clientWidth);
+      let fw = field.clientWidth;
+      if (split) {
+        const sc = getComputedStyle(split), fc = getComputedStyle(field);
+        fw = split.clientWidth - parseFloat(sc.paddingLeft) - parseFloat(sc.paddingRight)
+           - parseFloat(fc.paddingLeft) - parseFloat(fc.paddingRight) - 2;
+      }
       if (!fw || fw < 0) return;
       byW = (fw - (maxCols - 1) * gap) / maxCols;
     }
     // Height budget: viewport minus the chrome actually above the grids —
     // MEASURED (board's document top), not a fixed guess, so any header/nav/
-    // topbar/sky height (the sky band is vh-based) yields a clean no-scroll fit
-    // on every screen, from a MacBook Air to a 1080p monitor. The reserve below
-    // the grids covers stage padding + the "Widok tabeli" switch. Stacked mobile
+    // topbar/sky height (the sky grows with the weather/goal cards in it) yields
+    // a clean no-scroll fit on every screen, from a MacBook Air to a 1080p
+    // monitor. The reserve below the grids covers the stage padding. Stacked mobile
     // scrolls the page naturally, so width alone decides there.
     let byH = Infinity;
     if (desktop) {
       const boardTopDoc = board.getBoundingClientRect().top + window.scrollY;
-      const bottomReserve = 88;
+      // stage bottom padding + border + the page's bottom padding (the
+      // table toggle that used to sit under the stage is in the top bar now)
+      const bottomReserve = 64;
       byH = (window.innerHeight - boardTopDoc - bottomReserve) / OGRODEK_DESKTOP_ROWS;
     }
     const minCell = window.innerWidth <= 520 ? 34 : 46;
@@ -23357,7 +23401,8 @@ function farmFieldFilter() {
   const mineN = el('b', {}, '0'), readyN = el('b', {}, '0');
   mineBtn.append(mineN); readyBtn.append(readyN);
   const next = el('span', { className: 'ftb-next' });
-  wrap.append(seg, next);
+  const viewToggle = document.getElementById('farm-view-toggle');
+  wrap.append(viewToggle ? el('div', { className: 'ftb-field-row' }, seg, viewToggle) : seg, next);
   fmSummaryRefs = { mine: mineN, ready: readyN, readyBtn, next, key: '' };
   updateFarmFieldSummary();
   return wrap;
