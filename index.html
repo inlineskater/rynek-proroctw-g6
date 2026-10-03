@@ -6448,10 +6448,58 @@
        opened. Now a calm card with a green whisper, so the WOOD stays where it
        is actually scenery (sign board, plot sign, fence) and the chrome that
        carries buttons/stats reads as chrome. */
-    .farm-topbar { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px;
-      border: 1px solid rgba(62,95,55,.20); border-radius: var(--r-md);
-      background: linear-gradient(180deg, #f7fbf4 0%, var(--card) 100%); box-shadow: var(--sh-sm); }
-    .farm-toolbar-host { display: flex; justify-content: center; }
+    .farm-topbar { display: flex; flex-direction: column; gap: 10px; padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); box-shadow: var(--sh-sm); }
+    /* ── Top bar contents (2026-10-03, farmToolbar) ──
+       Left: the field filter („Wszystkie / Moje N / Do zbioru N") + one line of
+       what to do next. Right: hub buttons in four groups split by hairlines, flat
+       (no fills, no indigo primary) so the only colours in the bar are the two
+       that mean something: green = something to collect, red = debt. */
+    .ftb { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; }
+    .ftb-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+    .ftb-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface); }
+    .ftb-seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 11px; border: 0; border-radius: 7px;
+      background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+      transition: background .12s, color .12s, box-shadow .12s; }
+    .ftb-seg-btn:hover:not(:disabled) { color: var(--text); }
+    .ftb-seg-btn.on { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(15,23,42,.14); }
+    .ftb-seg-btn:disabled { cursor: default; opacity: .55; }
+    .ftb-seg-btn b { min-width: 20px; padding: 1px 6px; border-radius: 999px; box-sizing: border-box; background: rgba(15,23,42,.07);
+      color: var(--text); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ftb-seg-btn.has b { background: #16a34a; color: #fff; }
+    .ftb-next { font-size: 12px; color: var(--muted); }
+    .ftb-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; }
+    .ftb-group { display: flex; padding: 0 6px; }
+    .ftb-group:first-child { padding-left: 0; }
+    .ftb-group + .ftb-group { border-left: 1px solid var(--border); }
+    .ftb-group:last-child { padding-right: 0; }
+    .ftb-row { display: flex; gap: 2px; }
+    .ftb-btn { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border: 0; border-radius: var(--r-sm);
+      background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+      transition: background .12s; }
+    .ftb-btn:hover { background: var(--surface); }
+    .ftb-btn:focus-visible, .ftb-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .ftb-ic { font-size: 15px; line-height: 1; }
+    .ftb-badge { min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px; box-sizing: border-box; background: #16a34a; color: #fff;
+      font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; font-variant-numeric: tabular-nums; }
+    .ftb-badge.warn { background: #dc2626; }
+    /* Phone: the filter spans the width, and the ten buttons become a 5×2 grid
+       of icon tiles — every destination visible, no sideways scroll strip
+       cutting labels in half. Groups flatten (display: contents) on purpose. */
+    @media (max-width: 600px) {
+      .farm-topbar { padding: 8px; }
+      .ftb { flex-direction: column; align-items: stretch; gap: 8px; }
+      .ftb-field { flex-direction: column; align-items: stretch; gap: 6px; }
+      .ftb-seg { display: flex; }
+      .ftb-seg-btn { flex: 1 1 0; padding: 7px 4px; font-size: 12px; }
+      .ftb-next { text-align: center; }
+      .ftb-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+      .ftb-group, .ftb-row { display: contents; }
+      .ftb-btn { flex-direction: column; gap: 3px; padding: 7px 1px 6px; background: var(--surface); font-size: 10.5px; letter-spacing: -.01em; min-width: 0; }
+      .ftb-ic { font-size: 18px; }
+      .ftb-txt { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+      .ftb-badge { position: absolute; top: 3px; right: 4px; }
+    }
     /* Tile inspector now lives inside the one wooden top bar — strip its own plate look, add a divider + height cap. */
     /* The wooden side board (.farm-section / .farm-side) was removed when the hub
        moved into the modal — its CSS is gone. Wood now survives only where it is
@@ -6607,22 +6655,35 @@
        rings the plot and fills the nick pill, the level is a corner badge, and
        the full text is the tooltip / the tap popup. My plots keep the gold
        ring from .farm-cell.mine below (source order). */
-    .farm-cell.other { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--own, #94a3b8) 85%, transparent); }
+    /* 2026-10-03: owners are no longer colour-coded (fourteen ring colours read
+       as noise). Colour now carries meaning only: amber = yours, green = ripe.
+       Whose plot it is: the nick pill, and hover outlines all of that owner's
+       plots (.fm-same, farmOwnerHover). */
     .farm-cell-owner { left: 50%; right: auto; bottom: 2px; transform: translateX(-50%); max-width: calc(100% - 4px);
-      padding: 0 4px; border-radius: 4px; background: var(--own, #64748b); color: #fff; text-shadow: none;
-      box-shadow: 0 1px 2px rgba(0,0,0,.25); box-sizing: border-box; }
-    .farm-cell.mine .farm-cell-owner { background: #c98a12; }
+      padding: 0 4px; border-radius: 4px; background: rgba(20,32,14,.58); color: #fff; font-weight: 700; text-shadow: none;
+      box-sizing: border-box; }
+    .farm-cell.mine .farm-cell-owner { background: #b45309; }
+    .farm-cell.other.fm-same { box-shadow: inset 0 0 0 2px rgba(255,255,255,.95); }
+    .farm-cell, .farm-plant-cell { transition: opacity .2s ease, filter .2s ease, box-shadow .15s ease; }
+    /* Field filter (farmFieldFilter): dim everything that isn't the answer. */
+    .farm-stage.fm-only-mine .farm-cell:not(.mine), .farm-stage.fm-only-mine .farm-plant-cell:not(.mine),
+    .farm-stage.fm-only-ready .farm-cell:not(.mine.ready), .farm-stage.fm-only-ready .farm-plant-cell {
+      opacity: .28; filter: grayscale(.7); }
+    /* A free plot says so: a quiet plus instead of an empty square. */
+    .farm-cell.unowned::after { content: '+'; color: rgba(255,255,255,.75); font-size: 22px; font-weight: 300; line-height: 1; }
+    .farm-cell.unowned:hover::after { color: #fff; }
     .farm-cell-lvl { position: absolute; top: 2px; left: 2px; z-index: 9; min-width: 15px; height: 15px; padding: 0 3px;
       box-sizing: border-box; border-radius: 8px; background: rgba(20,32,14,.72); color: #fff; font-size: 9px; font-weight: 800;
       line-height: 15px; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none; }
     @media (max-width: 520px) { .farm-cell-lvl { min-width: 12px; height: 12px; line-height: 12px; font-size: 7px; } }
-    .farm-cell .farm-cell-bar { height: 3px; bottom: 17px; left: 14%; right: 14%; }
+    .farm-cell .farm-cell-bar { height: 3px; bottom: 17px; left: 14%; right: 14%; background: rgba(20,32,14,.28); box-shadow: none; }
+    .farm-cell .farm-cell-bar-fill { background: rgba(255,255,255,.95); }
     .farm-cell .farm-cell-bar.ready, .farm-cell-ready { display: none; }
     /* Ripe: a warm pulsing halo behind the plant (opacity-only animation, so it
        stays on the compositor — see the mobile note on farmCropBob below). */
     .farm-cell.crop.ready::before { content: ''; position: absolute; left: 50%; top: 44%; width: 78%; aspect-ratio: 1;
       transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 0;
-      background: radial-gradient(circle, rgba(253,224,71,.75) 0%, rgba(253,224,71,.25) 45%, rgba(253,224,71,0) 70%);
+      background: radial-gradient(circle, rgba(240,253,244,.95) 0%, rgba(134,239,172,.55) 40%, rgba(134,239,172,0) 70%);
       animation: farmRipeGlow 2.4s ease-in-out infinite; }
     .farm-cell.crop .farm-cell-emoji { position: relative; z-index: 1; }
     @keyframes farmRipeGlow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
@@ -6638,8 +6699,7 @@
     .farm-plant-cell { position: relative; cursor: pointer; border-radius: 6px; min-width: 0; min-height: 0; background: rgba(120,160,80,.26); border: 1px solid rgba(255,255,255,.16); }
     .farm-plant-cell.mine { outline: none; }
     /* Own tiles/plants always stand out: bright gold ring + soft outer glow */
-    .farm-cell.mine, .farm-plant-cell.mine { z-index: 1;
-      box-shadow: inset 0 0 0 3px rgba(255,213,110,.95), 0 0 12px 3px rgba(255,196,60,.45); }
+    .farm-cell.mine, .farm-plant-cell.mine { z-index: 1; box-shadow: inset 0 0 0 2.5px #f5b301; }
     .farm-plant-cell .garden-pot { position: absolute; top: 50%; left: 50%; width: 108px; min-height: 112px; padding: 0 6px 6px; justify-content: flex-end; transform: translate(-50%, -50%) scale(calc(var(--pot-scale, .32) * 1.18)); transform-origin: center; pointer-events: none; margin: 0; background: none; border-color: transparent; box-shadow: none; }
     .farm-plant-cell .garden-pot::before { display: none; }
     .farm-plant-cell .garden-pot .gp-info,
@@ -6986,26 +7046,11 @@
     .farm-box-coll-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-width: 56px; }
     .farm-box-coll-emoji { font-size: 24px; }
     .farm-box-coll-item small { font-size: 10px; color: var(--muted); font-weight: 700; }
-    /* Ogródek farm: side toolbar + catalog / inventory modals */
-    /* Nine hub buttons since the 📋/🤝 tabs (2026-09-28): compact, one line each,
-       short labels (FARM_HUB_TABS[].short) so the row fits beside an open chat. */
-    .farm-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
-    .farm-toolbar .farm-tool-btn { width: auto; flex: 0 1 auto; padding: 7px 9px; font-size: 12px; white-space: nowrap; }
+    /* Ogródek farm: catalog / inventory modals */
     /* Wspólny Cel + weather share one row when both fit (auto-fit collapses the
        empty track, so a lone strip takes the whole width). */
-    /* Phone: one swipeable row instead of three wrapped ones. */
-    @media (max-width: 600px) {
-      .farm-toolbar-host { justify-content: flex-start; min-width: 0; }
-      .farm-toolbar { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none;
-        -webkit-overflow-scrolling: touch; max-width: 100%; }
-      .farm-toolbar::-webkit-scrollbar { display: none; }
-      .farm-toolbar .farm-tool-btn { flex: 0 0 auto; }
-    }
     .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; margin: 0 0 10px; align-items: stretch; }
     .farm-strips > .og-goal { margin: 0; }
-    .farm-toolbar .farm-box-link-btn { margin-bottom: 0; }
-    .farm-tool-btn { display: block; width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; font-weight: 800; font-size: 12px; color: var(--text); background: var(--surface); }
-    .farm-tool-btn:hover { border-color: var(--accent); color: var(--accent); }
     /* Ogródek ⇄ tabela view switch */
     .farm-view-switch { display: flex; justify-content: center; margin-top: 2px; }
     .farm-view-toggle { padding: 7px 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -7758,17 +7803,6 @@
         radial-gradient(circle at 88% 70%, #fff7c2 0 3px, transparent 4px);
       animation: fccSpark .65s ease forwards; }
     @keyframes fccSpark { 0% { opacity: 0; transform: scale(.6); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
-    /* These open the SAME destinations as .farm-hub-tab in the modal, so they
-       share its shape: same radius, weight, size and accent. (They used to be
-       carved wooden planks, which made one navigation land in two visual
-       languages depending on whether you were in the garden or in a window.)
-       The wood stays where it is scenery — the bar they sit on, signs, fence. */
-    .farm-tool-btn { color: var(--muted); text-shadow: none; border: 1px solid var(--border);
-      border-radius: var(--r-sm); font-weight: 600; font-size: 13px;
-      background: var(--card); box-shadow: none; transition: background .12s, color .12s, border-color .12s; }
-    .farm-tool-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--card); }
-    .farm-tool-btn.primary { border-color: transparent; background: var(--accent); color: #fff; font-weight: 700; text-shadow: none; box-shadow: var(--sh-sm); }
-    .farm-tool-btn.primary:hover { background: #4f46e5; color: #fff; border-color: transparent; }
     /* Hub modal: clean white, matching the rest of the site (wood stays only on the farm side board) */
     /* One definition only — this used to be declared twice (the later copy
        silently dropped min-height, so an empty tab collapsed to nothing). */
@@ -21548,6 +21582,11 @@ function setupFarmOnce() {
   });
   const viewToggle = document.getElementById('farm-view-toggle');
   if (viewToggle) viewToggle.addEventListener('click', toggleFarmView);
+  const fboard = document.getElementById('farm-board');
+  if (fboard && window.matchMedia('(hover: hover)').matches) {
+    fboard.addEventListener('mouseover', farmOwnerHover);
+    fboard.addEventListener('mouseleave', farmOwnerHover);
+  }
   document.addEventListener('click', e => {
     if (farmViewMode !== 'table' || !farmTableOpenMenu) return;
     if (e.target.closest('#farm-table-wrap .ftbl-menu') || e.target.closest('#farm-table-wrap .ftbl-head-btn')) return;
@@ -22616,7 +22655,7 @@ function buildFarmDisplayCell(cx, cy, now = Date.now()) {
     cell.title = 'Wolna działka — kliknij, by kupić';
   } else {
     cell.classList.add(tile.owner_id === me?.id ? 'mine' : 'other');
-    cell.style.setProperty('--own', farmOwnerColor(tile.owner_id));
+    if (tile.owner_id) cell.dataset.owner = tile.owner_id;
     if (tile.listed) {
       cell.classList.add('listed');
       cell.title = 'Działka wystawiona na sprzedaż';
@@ -22626,8 +22665,9 @@ function buildFarmDisplayCell(cx, cy, now = Date.now()) {
       const def = fmDefs.get(tile.planted_species);
       // Art first (2026-09-28): the plant name no longer fits a plot at real
       // size („K… lvl17"), so the icon names the plant, the corner badge carries
-      // the level, the owner's colour carries whose it is, and the full text is
-      // the tooltip and the tap popup.
+      // the level, the nick pill says whose it is (hover outlines all of that
+      // owner's plots — farmOwnerHover), and the full text is the tooltip and
+      // the tap popup.
       const lvl = tile.planted_level || 1;
       cell.title = (def ? def.name : tile.planted_species) + ' · poziom ' + lvl + ' · ' + (tile.owner_id === me?.id ? 'Twoja' : (tile.nick || '?'));
       cell.appendChild(el('span', { className: 'farm-cell-lvl' + (tile.planted_instance_id ? ' nft' : ''), 'aria-label': 'poziom ' + lvl }, String(lvl)));
@@ -22685,7 +22725,9 @@ function renderFarmBoard() {
   // harvesting and listing changes must update a cell in place, never move the
   // plot to another visible grid slot.
   farmDisplayCoords().forEach(c => seg.appendChild(buildFarmDisplayCell(c.x, c.y, now)));
+  board._fmHoverOwner = '';
   markFarmSel();
+  updateFarmFieldSummary(now);
   scaleFarmPots();
   if (farmViewMode === 'table') renderFarmTable();   // keep the table mirror in sync
 }
@@ -22799,22 +22841,6 @@ function farmCropStageIcon(ripeEmoji, pct, ready) {
   const stage = ready ? 2 : (pct < 0.34 ? 0 : (pct < 0.7 ? 1 : 2));
   return stage === 0 ? '🌱' : (stage === 1 ? '🌿' : (ripeEmoji || '🌱'));
 }
-// One colour per owner, so the shared board reads as „whose land is whose" at a
-// glance. Indexed by the owner's position in the sorted id list of everyone who
-// holds land, so every viewer sees the same colour for the same player (a hash
-// would collide among eleven people). My own plots keep the gold ring on top.
-const FARM_OWNER_PALETTE = ['#3b82f6', '#ef4444', '#10b981', '#a855f7', '#f97316', '#06b6d4',
-  '#ec4899', '#84cc16', '#6366f1', '#14b8a6', '#e11d48', '#0ea5e9', '#d946ef', '#65a30d'];
-let fmOwnerColorKey = '', fmOwnerColorMap = new Map();
-function farmOwnerColor(ownerId) {
-  const ids = [...new Set([...fmTiles.values()].map(t => t.owner_id).filter(Boolean))].sort();
-  const key = ids.join(',');
-  if (key !== fmOwnerColorKey) {
-    fmOwnerColorMap = new Map(ids.map((id, i) => [id, FARM_OWNER_PALETTE[i % FARM_OWNER_PALETTE.length]]));
-    fmOwnerColorKey = key;
-  }
-  return fmOwnerColorMap.get(ownerId) || '#94a3b8';
-}
 
 // Child-node lookups for one farm cell, memoised on the cell element itself.
 // Every path that changes a plot replaces the whole cell node
@@ -22881,6 +22907,7 @@ function updateFarmGrowth() {
       cell.appendChild(refs.ready);
     }
   });
+  updateFarmFieldSummary(now);
   if (farmViewMode === 'table') updateFarmTableGrowth(now);
 }
 
@@ -23237,14 +23264,158 @@ function farmBoxLinkBtn() {
 // previously disagreed: „Jak to działa" vs „Pomoc", and the top bar was missing
 // 🏅 Osiągnięcia entirely). The top bar may use an entry's `short` label, with
 // the full one as its tooltip — the one deliberate difference.
+// ── Ogródek top bar (2026-10-03) ─────────────────────────────────────────────
+// Two jobs, left to right: „where is my stuff" (a filter that dims the rest of
+// the field, with counts and the next harvest) and „where do I go" (the hub
+// buttons, grouped by intent). Ten equal pills in one row with an indigo
+// primary was a wall nobody could scan. Ids index FARM_HUB_TABS, whose order
+// still drives the hub modal's own tab bar.
+const FARM_TOOLBAR_GROUPS = [
+  { label: 'Moja farma', ids: ['inventory', 'boxes', 'collections'] },
+  { label: 'Handel',     ids: ['market', 'orders', 'seasonal'] },
+  { label: 'Biuro',      ids: ['neighbours', 'nft'] },
+  { label: 'Wiedza',     ids: ['catalog', 'help'] },
+];
+let fmBoardFilter = 'all';   // 'all' | 'mine' | 'ready'
+let fmSummaryRefs = null;    // { mine, ready, readyBtn, next, key } — patched by the 1s tick
+
 function farmToolbar() {
-  const bar = el('div', { className: 'farm-toolbar' });
-  FARM_HUB_TABS.forEach(t => {
-    const b = el('button', { className: 'farm-tool-btn' + (t.id === 'inventory' ? ' primary' : ''), title: t.label }, t.short || t.label);
-    b.addEventListener('click', () => openFarmHub(t.id));
-    bar.append(b);
+  const bar = el('div', { className: 'ftb' });
+  bar.append(farmFieldFilter());
+  const nav = el('nav', { className: 'ftb-nav', 'aria-label': 'Menu Ogródka' });
+  FARM_TOOLBAR_GROUPS.forEach(g => {
+    const grp = el('div', { className: 'ftb-group', role: 'group', 'aria-label': g.label });
+    const row = el('div', { className: 'ftb-row' });
+    g.ids.forEach(id => {
+      const t = FARM_HUB_TABS.find(x => x.id === id);
+      if (!t) return;
+      const words = t.label.split(' ');
+      const short = (t.short && t.short.includes(' ')) ? t.short.split(' ').slice(1).join(' ') : words.slice(1).join(' ');
+      const b = el('button', { className: 'ftb-btn', type: 'button', title: t.label },
+        el('span', { className: 'ftb-ic', 'aria-hidden': 'true' }, words[0]),
+        el('span', { className: 'ftb-txt' }, short));
+      if (id === 'boxes' || id === 'inventory') b.dataset.badge = id;
+      b.addEventListener('click', () => openFarmHub(t.id));
+      row.append(b);
+    });
+    grp.append(row);
+    nav.append(grp);
   });
+  bar.append(nav);
+  fmSummaryRefs.nav = nav;
+  updateFarmFieldSummary();
   return bar;
+}
+
+// Count badges on the hub buttons: sealed boxes on 📦, a „!" on 🎒 while a
+// land-tax debt is outstanding. Re-checked by the 1s tick, so opening a box
+// in the hub updates the badge without re-rendering the bar.
+function syncFarmToolbarBadges(nav) {
+  const boxes = Number(fmBoxes || 0) + Number(fmGoldBoxes || 0);
+  const debt = Number(fmTax?.debt || 0) > 0;
+  nav.querySelectorAll('.ftb-btn[data-badge]').forEach(b => {
+    const want = b.dataset.badge === 'boxes' ? (boxes > 0 ? String(boxes) : '') : (debt ? '!' : '');
+    let badge = b.querySelector('.ftb-badge');
+    if ((badge?.textContent || '') === want) return;
+    if (!want) { badge?.remove(); return; }
+    if (!badge) {
+      badge = el('span', { className: 'ftb-badge' + (b.dataset.badge === 'inventory' ? ' warn' : '') });
+      b.append(badge);
+    }
+    badge.textContent = want;
+    badge.title = b.dataset.badge === 'boxes' ? plBoxes(boxes) + ' do otwarcia' : 'Zaległy podatek gruntowy';
+  });
+}
+
+function farmFieldStats(now = Date.now()) {
+  let mine = 0, ready = 0, growing = 0, next = Infinity;
+  fmTiles.forEach(t => {
+    if (t.owner_id !== me?.id) return;
+    mine++;
+    if (!t.planted_species || !t.ready_at) return;
+    const r = new Date(t.ready_at).getTime();
+    if (now >= r) ready++; else { growing++; next = Math.min(next, r); }
+  });
+  return { mine, ready, growing, next };
+}
+
+// A segmented control whose segments ARE the counts: „Moje 5", „Do zbioru 2".
+// Picking one dims everything else on the field (and the zen pots), so the
+// answer to „which ones are mine / ripe?" is one click instead of a scan.
+function farmFieldFilter() {
+  const wrap = el('div', { className: 'ftb-field' });
+  const seg = el('div', { className: 'ftb-seg', role: 'radiogroup', 'aria-label': 'Pokaż na polu' });
+  const mk = (id, label) => {
+    const b = el('button', { className: 'ftb-seg-btn', type: 'button', role: 'radio', 'data-filter': id }, label);
+    b.addEventListener('click', () => setFarmBoardFilter(fmBoardFilter === id ? 'all' : id));
+    seg.append(b);
+    return b;
+  };
+  mk('all', 'Wszystkie');
+  const mineBtn = mk('mine', 'Moje ');
+  const readyBtn = mk('ready', 'Do zbioru ');
+  const mineN = el('b', {}, '0'), readyN = el('b', {}, '0');
+  mineBtn.append(mineN); readyBtn.append(readyN);
+  const next = el('span', { className: 'ftb-next' });
+  wrap.append(seg, next);
+  fmSummaryRefs = { mine: mineN, ready: readyN, readyBtn, next, key: '' };
+  updateFarmFieldSummary();
+  return wrap;
+}
+
+function updateFarmFieldSummary(now = Date.now()) {
+  const r = fmSummaryRefs;
+  if (!r || !r.next.isConnected) return;
+  if (r.nav) syncFarmToolbarBadges(r.nav);
+  const s = farmFieldStats(now);
+  const nextText = !me ? ''
+    : s.mine === 0 ? 'Nie masz jeszcze działki — kliknij wolne pole lub otwórz 📦 Skrzynki.'
+    : s.ready > 0 ? 'Kliknij dojrzałą roślinę, żeby zebrać plon.'
+    : s.growing > 0 ? 'Następny zbiór za ' + farmTableDuration(s.next - now)
+    : 'Nic nie rośnie — kliknij swoją działkę i zasadź kartę.';
+  const key = s.mine + '|' + s.ready + '|' + nextText;
+  if (key !== r.key) {
+    r.key = key;
+    r.mine.textContent = String(s.mine);
+    r.ready.textContent = String(s.ready);
+    r.readyBtn.disabled = s.ready === 0;
+    r.readyBtn.classList.toggle('has', s.ready > 0);
+    r.next.textContent = nextText;
+    // Nothing left to pick („Do zbioru" after the last harvest) → back to all.
+    if (fmBoardFilter === 'ready' && s.ready === 0) fmBoardFilter = 'all';
+    applyFarmBoardFilter();
+  }
+}
+
+function setFarmBoardFilter(f) {
+  fmBoardFilter = f;
+  applyFarmBoardFilter();
+}
+
+function applyFarmBoardFilter() {
+  const stage = document.querySelector('#tab-farm .farm-stage');
+  if (stage) {
+    stage.classList.toggle('fm-only-mine', fmBoardFilter === 'mine');
+    stage.classList.toggle('fm-only-ready', fmBoardFilter === 'ready');
+  }
+  document.querySelectorAll('#farm-topbar-btns .ftb-seg-btn').forEach(b => {
+    const on = b.dataset.filter === fmBoardFilter;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+}
+
+// Hovering a plot outlines every plot of the same owner — „whose land is
+// whose" without painting the whole field in fourteen colours.
+function farmOwnerHover(e) {
+  const board = e.currentTarget;
+  const cell = e.target.closest && e.target.closest('.farm-cell[data-owner]');
+  const owner = cell ? cell.dataset.owner : '';
+  if (board._fmHoverOwner === owner) return;
+  board._fmHoverOwner = owner;
+  board.querySelectorAll('.farm-cell.fm-same').forEach(c => c.classList.remove('fm-same'));
+  if (!owner) return;
+  board.querySelectorAll('.farm-cell[data-owner="' + owner + '"]').forEach(c => c.classList.add('fm-same'));
 }
 
 // Polish counts take three forms (1 / 2-4 / 5+ with the teens exception), so a
