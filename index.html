@@ -7069,7 +7069,8 @@
        card takes the whole width; the sky grows if they wrap or the forecast
        is expanded, and scaleFarmPots measures the board's real top. */
     .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; align-items: stretch; }
-    .farm-sky-bar { position: relative; z-index: 5; padding: 10px 12px 18px; }
+    /* .garden-sky is pointer-events:none (decor) — the cards inside it must opt back in. */
+    .farm-sky-bar { position: relative; z-index: 5; padding: 10px 12px 18px; pointer-events: auto; }
     .farm-sky-bar > .og-goal, .farm-sky-bar > #fw-banner { margin: 0; padding: 7px 12px; border-color: rgba(255,255,255,.7);
       background: rgba(255,255,255,.86); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
     .farm-sky-bar > .og-goal .og-goal-ic, .farm-sky-bar .fw-wx-ic { font-size: 18px; }
