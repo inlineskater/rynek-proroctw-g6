@@ -293,6 +293,8 @@ AS $$
           SELECT prize_coins FROM public.filler_weekly_awards
           UNION ALL
           SELECT prize_coins FROM public.bubble_breaker_weekly_awards
+          UNION ALL
+          SELECT prize_coins FROM public.moto_trial_weekly_awards
         ) _awards
       ), 0::bigint)::numeric AS prizes_minted,
 

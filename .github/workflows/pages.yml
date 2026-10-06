@@ -36,6 +36,12 @@ jobs:
       # When a feature genuinely belongs inline, raise the budget in the SAME commit
       # so the increase is a deliberate, reviewable decision. Otherwise the fix is to
       # move the code into tabs/*.js (see ensureTabModule) or games/*.js.
+      - name: Verify Moto Trial physics and scoring
+        run: |
+          node scripts/moto-trial-parity.mjs
+          npm install --prefix "$RUNNER_TEMP/moto-trial-tests" --ignore-scripts --no-audit --no-fund @electric-sql/pglite@0.5.8
+          PGLITE_MODULE="$RUNNER_TEMP/moto-trial-tests/node_modules/@electric-sql/pglite/dist/index.js" node scripts/moto-trial-db-test.mjs
+
       - name: Check payload budget
         run: |
           # 1600 → 1616 (2026-09-28): the Ogródek orders/weather/neighbour hooks

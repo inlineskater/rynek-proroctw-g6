@@ -213,6 +213,8 @@ AS $$
     SELECT user_id, prize_coins, awarded_at FROM public.filler_weekly_awards
     UNION ALL
     SELECT user_id, prize_coins, awarded_at FROM public.bubble_breaker_weekly_awards
+    UNION ALL
+    SELECT user_id, prize_coins, awarded_at FROM public.moto_trial_weekly_awards
   ),
   -- NOTE: this UNION must list EVERY seasonal game. It is the one place that
   -- has to be touched when a game joins SEASONAL_ROTATION — tetris shipped

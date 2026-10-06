@@ -26,6 +26,7 @@ function normalizeSeasonAwardWeekStart(weekStart, gameType) {
 // the same columns, so only two games need an entry.
 const SEASON_AWARD_DEFAULT_COLS = 'week_start,user_id,nick,rank,score,prize_coins,awarded_at';
 const SEASON_AWARD_SOURCES = {
+  moto_trial: { cols: 'week_start,user_id,nick,rank,score,completion_ms,prize_coins,awarded_at' },
   // Reads the raw awards table (not the view) because `course_id` distinguishes
   // the legacy/hard/dynamic course eras.
   bug_jumper: {
@@ -63,6 +64,7 @@ const SEASON_LIVE_SOURCES = {
 // This used to be a hardcoded `isBugJumper` branch; filler is the second such
 // game, and a third would otherwise mean a third branch.
 const SEASON_LIVE_VIEW_SOURCES = {
+  moto_trial: 'user_id,nick,score,completed,completion_ms,submitted_at',
   bug_jumper: 'user_id,nick,score,rounds_played,completion_ms,submitted_at',
   filler: 'user_id,nick,score,matches_played,wins,opponents,submitted_at',
 };

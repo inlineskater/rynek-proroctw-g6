@@ -45,7 +45,7 @@ Function secrets used by `football-action`: `ODDS_API_KEY`, `FOOTBALL_CRON_SECRE
 - Mundial: fixed-odds World Cup 2026 betting vs the house; odds come from The Odds API and are locked at bet time; one bet per match.
 - Poker: one shared Hold'em table, 100 coin buy-in, server-owned state.
 - Casino (house games): Plinko, Miny (5×5 mines), Ruletka (shared table), Rakieta (solo crash), Sloty, and Koło Żubra (shared 15-second rounds with unanimous ready-to-start acceleration) — all RNG and payouts are server-owned; the browser only animates trusted results.
-- Seasonal games: one rotating arcade game per Monday-start week (Whack-a-Boss, Bug Jumper, „3 Pary Spodni", Snake, „Najazd Ticketów", VAR Patrol, „Łap Jajka", „Super Mariusz", „Zamknij Popupy!"); server-validated rounds with game-specific weekly prizes.
+- Seasonal games: one rotating arcade game per Monday-start week (Whack-a-Boss, Bug Jumper, „3 Pary Spodni", Snake, „Najazd Ticketów", VAR Patrol, „Łap Jajka", „Super Mariusz", „Zamknij Popupy!", and two-week Moto Trial G6, prepared for rollout after local playtesting); server-validated competitive rounds with game-specific weekly prizes. Moto Trial free practice also runs locally without Supabase.
 - Wspólne Płótno: shared 192×108 pixel canvas; one free pixel per 2 h, then 1 coin per pixel.
 - Targowisko: peer-to-peer marketplace (fixed price or auction with escrow); coins transfer buyer → seller.
 - Ogródek (Farma): shared 13×4 tile grid; buy tiles, open card lootboxes, plant, harvest, and sell crops at a fluctuating "stalk market" NPC price; serialized NFT cards with per-instance levels (merge two to level up); land tax on holdings above the fair share; P2P resale of cards/NFTs/tiles via Targowisko. Details in [docs/farma.md](docs/farma.md).

@@ -10868,6 +10868,7 @@
 
       <!-- rps: games/rps.js builds this panel -->
       <div id="seasonal-game-rps" class="hidden"></div>
+      <div id="seasonal-game-moto-trial" class="hidden"></div>
 
       <!-- Uzdrowiciel G6 panel (WoW Classic resto-druid healer; gameType healer_dungeon).
            PHASE 1: arcade-only. Unlike every other seasonal panel this one is a
@@ -11366,6 +11367,11 @@
             <div class="ag-card-cta">Za darmo — kliknij, aby zagrać</div>
           </div>
           <div class="ag-card-scores" data-scores="bubble_breaker"></div>
+        </div>
+        <div class="ag-card" role="button" tabindex="0" data-game="moto_trial">
+          <div class="ag-card-media"><span class="ag-card-emoji">🏍️</span></div>
+          <div class="ag-card-main"><div class="ag-card-head"><span class="ag-card-name">Moto Trial G6</span><span class="ag-card-tag">NOWOŚĆ · TESTY</span></div><div class="ag-card-desc">Kamieniołom i Górska Przełęcz. Gaz, hamulec i równowaga.</div><div class="ag-card-cta">Za darmo — trening bez rankingu</div></div>
+          <div class="ag-card-scores" data-scores="moto_trial"></div>
         </div>
         <div class="ag-card" role="button" tabindex="0" data-game="rps">
           <div class="ag-card-media"><span class="ag-card-emoji" aria-hidden="true">✂️</span></div>
@@ -12320,6 +12326,8 @@ let bubbleBreakerRuntime = null;
 let saperRuntime = null;
 let arkanoidRuntime = null;
 let rpsRuntime = null;
+let motoTrialRuntime = null;
+function stopMotoTrialRound() {}
 let allGamesMode = false;
 let allGamesSelectedGame = null;
 
@@ -12347,6 +12355,7 @@ const LAZY_GAME_SCRIPTS = {
   saper:         'games/saper.js',
   arkanoid:      'games/arkanoid.js',
   rps:           'games/rps.js',
+  moto_trial:    'games/moto-trial.js',
 };
 // ── Lazy-loaded tab modules ────────────────────────────────────────────────
 // Same idea as ensureGameScript below, applied to whole tabs. A tab listed here
@@ -13377,6 +13386,7 @@ const AG_PANEL_IDS = {
   saper:         'seasonal-game-saper',
   arkanoid:      'seasonal-game-arkanoid',
   rps:           'seasonal-game-rps',
+  moto_trial:    'seasonal-game-moto-trial',
 };
 let agPanelHome = {};
 
@@ -13436,7 +13446,7 @@ function isTypingTarget(t) {
 // Every arcade runtime, in one place: the tab switch, the picker, its back
 // button and logout all need the same list, and four hand-kept copies drifted.
 function stopAllArcadeRounds() {
-  stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound();
+  stopWhackBossRound(); stopBugJumperRound(); stopFlappyPantsRound(); stopSnakeRound(); stopInvoiceHordeRound(); stopVarPatrolRound(); stopEggCatchRound(); stopSuperMariuszRound(); stopPopupPanicRound(); stopTetrisRound(); stopHealerDungeonRound(); stopFillerRound(); stopBubbleBreakerRound(); stopSaperRound(); stopArkanoidRound(); stopRpsRound(); stopMotoTrialRound();
 }
 
 function leaveAllGamesTab() {
@@ -13494,6 +13504,7 @@ function selectAllGame(gameType) {
     if (gameType === 'saper') requestAnimationFrame(() => { saperInitCanvas(); saperSyncFlagBtn(); saperDraw(); });
     if (gameType === 'arkanoid') requestAnimationFrame(() => { arkanoidInitCanvas(); arkanoidDraw(); });
     if (gameType === 'rps') loadRpsState(false);
+    if (gameType === 'moto_trial') loadMotoTrialState();
     // Takeover game: build the idle party, then size the console to the viewport.
     if (gameType === 'healer_dungeon') requestAnimationFrame(() => {
       stopHealerDungeonRound();
@@ -13532,6 +13543,7 @@ function formatArcadeScore(gameType, score) {
   // Super Mariusz stores progress in tile columns, which means nothing on its
   // own — show it the way the seasonal board does, as a percent of the course.
   if (gameType === 'super_mariusz') return smProgressPct(n) + '%';
+  if (gameType === 'moto_trial') return n >= 200000 ? '🏁 ' + ((380000-n)/1000).toFixed(2) + ' s' : (n/100).toFixed(2) + '%';
   return n.toLocaleString('pl-PL');
 }
 
@@ -14224,7 +14236,7 @@ const ACT_GAME_LABELS = {
   invoice_horde: '🎫 Najazd Ticketów', var_patrol: '📺 VAR Patrol',
   egg_catch: '🥚 Łap Jajka', super_mariusz: '🧢 Super Mariusz',
   popup_panic: '🖱️ Zamknij Popupy', tetris: '🧱 Tetris G6',
-  bubble_breaker: '🔵 Kulki G6', saper: '💣 Saper Maraton', arkanoid: '🏓 Arkanoid G6', rps: '✂️ Kamień, Papier, Nożyce',
+  bubble_breaker: '🔵 Kulki G6', saper: '💣 Saper Maraton', arkanoid: '🏓 Arkanoid G6', rps: '✂️ Kamień, Papier, Nożyce', moto_trial: '🏍️ Moto Trial G6',
   arcade: '🕹️ Arkada',
 };
 // Casino games whose rapid plays are collapsed into one session row; an idle gap
@@ -14309,7 +14321,7 @@ async function buildActivityFeed() {
   const [
     profRes, tradesRes, gameRes, footballRes, coinTxRes,
     whackRes, snakeRes, flappyRes, bugRes, invoiceRes, varPatrolRes, eggCatchRes,
-    superMariuszRes, popupPanicRes, tetrisRes, bubbleBreakerRes, saperRes, arkanoidRes, rpsRes, arcadeRes, nftRes,
+    superMariuszRes, popupPanicRes, tetrisRes, bubbleBreakerRes, saperRes, arkanoidRes, rpsRes, motoRes, arcadeRes, nftRes,
   ] = await Promise.all([
     sb.from('profiles').select('id,nick'),
     ranged(sb.from('trades').select('nick_snapshot,side,amount,market_id,created_at'), 'created_at'),
@@ -14330,6 +14342,7 @@ async function buildActivityFeed() {
     ranged(sb.from('saper_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('arkanoid_scores').select(scoreSel), 'submitted_at'),
     ranged(sb.from('rps_scores').select(scoreSel), 'submitted_at'),
+    ranged(sb.from('moto_trial_scores').select('user_id,nick_snapshot,score,completion_ms,completed,submitted_at').eq('mode','season'), 'submitted_at'),
     ranged(sb.from('arcade_scores').select('user_id,game_type,score,created_at'), 'created_at'),
     ranged(sb.from('farm_nft_transfers').select('from_owner,to_owner,species,serial_no,price,kind,created_at'), 'created_at'),
   ]);
@@ -14422,6 +14435,7 @@ async function buildActivityFeed() {
   pushScores(saperRes.data, 'saper');
   pushScores(arkanoidRes.data, 'arkanoid');
   pushScores(rpsRes.data, 'rps');
+  for (const r of (motoRes.data || [])) { const tail = r.completed ? '🏁 '+(r.completion_ms/1000).toFixed(2)+' s' : (r.score/100).toFixed(2)+'%'; entries.push({ nick:nickOf(r), ts:r.submitted_at, cat:'game', desc:'🏍️ Moto Trial G6 — '+tail }); }
   (superMariuszRes.data || []).forEach(s => {
     const tail = s.completed ? 'ukończył trasę w ' + smFormatTime(s.completion_ms) : 'DNF — ' + smProgressPct(s.score) + '% trasy';
     entries.push({ nick: nickOf(s), ts: s.submitted_at, cat: 'game',
@@ -14429,7 +14443,7 @@ async function buildActivityFeed() {
   });
   (arcadeRes.data || []).forEach(s => {
     entries.push({ nick: nickOf(s), ts: s.created_at, cat: 'game',
-      desc: (ACT_GAME_LABELS[s.game_type] || '🕹️ ' + s.game_type) + ' — wynik ' + s.score });
+      desc: (ACT_GAME_LABELS[s.game_type] || '🕹️ ' + s.game_type) + ' — wynik ' + formatArcadeScore(s.game_type, s.score) });
   });
 
   // farm_nft_transfers carries five kinds, and only two of them are an acquisition.
@@ -14795,6 +14809,7 @@ const SEASONAL_STATE_LOADERS = {
   saper:          () => loadSaperState(false),
   arkanoid:       () => loadArkanoidState(false),
   rps:            () => loadRpsState(false),
+  moto_trial:     () => loadMotoTrialState(),
 };
 
 // Its own channel (not db-changes) so it can be swapped when Monday 00:00
@@ -15775,6 +15790,7 @@ function startActivityLive() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'saper_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'arkanoid_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rps_scores' }, scheduleActivityRebuild)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moto_trial_scores' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'gardens' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_listings' }, scheduleActivityRebuild)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'farm_nft_transfers' }, scheduleActivityRebuild)
@@ -18311,6 +18327,7 @@ const SEASONAL_ROTATION = [
   { gameType: 'saper', displayName: '„Saper Maraton" 💣' },
   { gameType: 'arkanoid', displayName: '„Arkanoid G6" 🏓' },
   { gameType: 'rps', displayName: '„Kamień, Papier, Nożyce G6" ✂️' },
+  { gameType: 'moto_trial', displayName: '„Moto Trial G6" 🏍️' },
 ];
 // ⚠️ Every entry here is mirrored in seasonal_game_for_week()
 // (supabase/season-award-gating.sql) — that SQL function gates the Monday
@@ -18357,6 +18374,9 @@ const SEASONAL_OVERRIDES = {
   '2026-09-21': { gameType: 'invoice_horde', displayName: 'Najazd Ticketów 🎫' },  // pinned (in season)
   '2026-09-28': { gameType: 'arkanoid', displayName: '„Arkanoid G6" 🏓' },  // debut
   '2026-10-05': { gameType: 'rps', displayName: '„Kamień, Papier, Nożyce G6" ✂️' },  // debut
+  '2026-10-12': { gameType: 'tetris', displayName: '„Tetris G6" 🧱' },  // encore while Moto Trial is playtested
+  '2026-10-19': { gameType: 'moto_trial', displayName: '„Moto Trial G6" 🏍️ · Kamieniołom' },  // debut
+  '2026-10-26': { gameType: 'moto_trial', displayName: '„Moto Trial G6" 🏍️ · Górska Przełęcz' },
 };
 
 // The NFT series calendar (one edition a month since 2026-11, farm-nft-monthly.sql)
@@ -18895,6 +18915,10 @@ function loadSeasonalTab(showSpinner = true) {
   const isSP = current.gameType === 'saper';
   const isAK = current.gameType === 'arkanoid';
   const isRPS = current.gameType === 'rps';
+  const isMT = current.gameType === 'moto_trial';
+  const mtPanel = document.getElementById('seasonal-game-moto-trial');
+  if (mtPanel) { if (isMT) show(mtPanel); else hide(mtPanel); }
+  if (!isMT) stopMotoTrialRound();
   if (wbPanel) { if (isWB) show(wbPanel); else hide(wbPanel); }
   if (bjPanel) { if (isBJ) show(bjPanel); else hide(bjPanel); }
   if (fpPanel) { if (isFP) show(fpPanel); else hide(fpPanel); }
@@ -18967,6 +18991,7 @@ function loadSeasonalTab(showSpinner = true) {
   if (isSP) ensureGameScript('saper').then(() => loadSaperState(showSpinner));
   if (isAK) ensureGameScript('arkanoid').then(() => loadArkanoidState(showSpinner));
   if (isRPS) ensureGameScript('rps').then(() => loadRpsState(showSpinner));
+  if (isMT) ensureGameScript('moto_trial').then(() => { if (activeTab === 'whack-boss' && getCurrentSeasonalEntry().gameType === 'moto_trial') loadMotoTrialState(); });
   if (isHD) ensureGameScript('healer_dungeon').then(() => {
     if (!healerRuntime) stopHealerDungeonRound();
     healerEnterView();
@@ -20467,6 +20492,7 @@ function whackBossRankLabel(rank) {
 // client_meta) — NOT the player's currently equipped item, so the split stays
 // stable whether or not the item is worn now.
 function lbScoreCell(row) {
+  if (row.gameType === 'moto_trial') return el('td', { className: 'lb-net' }, Number(row.score) === 10000 ? '🏁 ' + (Number(row.completion_ms)/1000).toFixed(2) + ' s' : (Number(row.score)/100).toFixed(2) + '%');
   if (row.gameType === 'super_mariusz') {
     // finisher rows carry completion_ms; DNF rows rank by progress (% of course)
     return el('td', { className: 'lb-net' }, row.completion_ms != null ? '🏁 ' + smFormatTime(row.completion_ms) : smProgressPct(row.score) + '%');

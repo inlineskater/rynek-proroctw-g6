@@ -81,7 +81,7 @@ function agpMount(card) {
   const p = { game, def, card, stage, ready: false, visible: false, acc: 0, t: 0 };
   agpLive.set(game, p);
 
-  ensureGameScript(def.dep).then(() => {
+  ensureGameScript(def.dep).then(() => def.prepare ? def.prepare() : null).then(() => {
     const size = def.size ? def.size() : [def.vw, def.vh];
     p.vw = size[0];
     p.vh = size[1];
@@ -194,7 +194,7 @@ function agpStartPreviews() {
 // animating but keep the mounted previews so coming back is instant.
 function agpStopPreviews() {
   if (agpRaf != null) { cancelAnimationFrame(agpRaf); agpRaf = null; }
-  agpLive.forEach(p => { p.visible = false; });
+  agpLive.forEach(p => { p.visible = false; if (p.def.dispose) p.def.dispose(p); });
 }
 
 // ── Tetris G6 — real simulation, Dellacherie-lite stacking bot ───────────────
@@ -1028,6 +1028,14 @@ function agpBubbleStep(p) {
 // ── Definitions ─────────────────────────────────────────────────────────────
 
 const AGP_DEFS = {
+  moto_trial: {
+    dep: 'moto_trial', dom: true, vw: 640, vh: 360,
+    prepare: () => mtDependencies(),
+    init(p) { p.course=mtCourse('quarry_v3');p.st=mtInit(p.course);p.move=0;p.keys=0; },
+    step(p,dt) { p.acc+=dt;while(p.acc>=1000/MT_HZ){p.acc-=1000/MT_HZ;if(p.st.over){p.st=mtInit(p.course);p.move=0;p.keys=0;}const log=MT_GOLDEN.quarry_v3.moves;if(log[p.move]?.tick===p.st.tick)p.keys=log[p.move++].keys;mtStep(p.st,p.keys,p.course);} },
+    draw(p) { if(!p.visible)return;if(!p.view)p.view=mtCreateView(p.host,p.course);p.view.draw(p.st,null,1,16); },
+    dispose(p) { if(p.view){p.view.dispose();p.view=null;} },
+  },
   whack_boss: {
     dep: null, dom: true, vw: 480, vh: 270,
     init(p) {

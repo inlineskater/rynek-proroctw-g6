@@ -57,14 +57,18 @@ AS $$
     -- % 15 into % 16. Every week up to and including the current one is
     -- already an override, so nothing played or in progress moves.
     WHEN '2026-10-05' THEN 'rps'  -- „Kamień, Papier, Nożyce G6" debut
+    WHEN '2026-10-12' THEN 'tetris'      -- encore while Moto Trial G6 is playtested
+    -- Moto Trial G6: two consecutive weeks, one course each.
+    WHEN '2026-10-19' THEN 'moto_trial'  -- Kamieniołom (debut)
+    WHEN '2026-10-26' THEN 'moto_trial'  -- Górska Przełęcz
     -- SEASONAL_ROTATION from its 2026-05-18 Monday anchor.
     ELSE
       (ARRAY[
         'whack_boss','bug_jumper','flappy_pants','snake','invoice_horde',
         'var_patrol','egg_catch','super_mariusz','popup_panic','tetris','healer_dungeon','filler',
-        'bubble_breaker','saper','arkanoid','rps'
+        'bubble_breaker','saper','arkanoid','rps','moto_trial'
       ])[
-        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 16) + 1
+        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 17) + 1
       ]
   END;
 $$;
