@@ -141,7 +141,6 @@ function farmNftDecorateTile(tile, n, def) {
   const t = fnftTalents?.get(n.species);
   if (t) tile.append(el('span', { className: 'fnft-talent', title: 'Talent (gdy zasadzona): ' + t.label },
     FNFT_TALENT_ICON[t.kind] || '✨'));
-  if (fnftRibbons.has(n.id)) tile.append(el('span', { className: 'fnft-ribbon', title: 'Zwyciężczyni Wystawy' }, '🏆'));
 }
 
 function fnftMonthTitle(iso) {
@@ -200,7 +199,8 @@ async function fnftCalendarInto(host) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  💎 Kolekcja NFT hub tab — 📖 Album · 🏛️ Wystawa · 🔥 Ołtarz · 🗓️ Kalendarz
+//  💎 Kolekcja NFT hub tab — 📖 Album · 🌸 Kwiat sezonowy · 🔥 Ołtarz · 🗓️ Kalendarz
+//  (🏛️ Wystawa was removed 2026-10-20 — supabase/farm-nft-expo-removed.sql.)
 //  Backend: supabase/farm-nft-social.sql. Nothing here mints a coin.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -212,7 +212,6 @@ function fnftAltarBoxes(value) {          // farm_altar_boxes()
 
 let fnftSub = 'album';
 let fnftSets = null;          // farm_nft_sets rows (species arrays) for the yield preview
-let fnftRibbons = new Set();  // instance ids that won a Wystawa
 let fnftBusy = false;
 
 (function farmNftHubCss() {
@@ -250,22 +249,7 @@ let fnftBusy = false;
     .fnft-slot-name { font-size: 10px; font-weight: 750; line-height: 1.15; overflow-wrap: anywhere; }
     .fnft-slot-sub { font-size: 9.5px; color: var(--muted); }
     .fnft-set-by { font-size: 11px; color: var(--muted); }
-    /* Wystawa */
-    .fnft-expo-me { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-    .fnft-expo-me select { flex: 1 1 220px; min-width: 0; width: auto; }
-    .fnft-expo-me button, .fnft-altar-row button, .fnft-actions button { width: auto; margin: 0; }
-    .fnft-expo { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
-    .fnft-expo-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 12px 8px 10px;
-      border-radius: 14px; border: 3px solid #e7cfa0; background: linear-gradient(180deg, #fffaf0, #f6ead0); color: #3b2405; min-width: 0; }
-    .fnft-expo-card.col-classic { border-color: #94a3b8; } .fnft-expo-card.col-autumn26 { border-color: #c2410c; }
-    .fnft-expo-card.col-prl { border-color: #b91c1c; } .fnft-expo-card.col-hybrid { border-color: #a855f7; }
-    .fnft-expo-card.is-voted { box-shadow: 0 0 0 3px rgba(220,38,38,.25); }
-    .fnft-expo-card .farm-ico { width: 52px; height: 52px; filter: drop-shadow(0 3px 5px rgba(0,0,0,.22)); }
-    .fnft-expo-name { font-weight: 850; font-size: 13px; line-height: 1.15; }
-    .fnft-expo-sp { font-size: 10.5px; color: #7a5a1a; overflow-wrap: anywhere; }
-    .fnft-expo-who { font-size: 11px; font-weight: 700; }
-    .fnft-expo-votes { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .fnft-expo-card button { width: 100%; margin-top: 2px; }
+    .fnft-altar-row button, .fnft-actions button { width: auto; margin: 0; }
     .fnft-hist { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
     .fnft-hist div { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     .fnft-hist .farm-ico { width: 16px; height: 16px; }
@@ -278,7 +262,6 @@ let fnftBusy = false;
     .fnft-altar-name { font-weight: 800; font-size: 13px; overflow-wrap: anywhere; }
     .fnft-altar-sub { font-size: 11px; color: var(--muted); }
     .fnft-altar-row button { white-space: nowrap; }
-    .fnft-ribbon { position: absolute; z-index: 3; top: 56px; right: 7px; font-size: 13px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
     .fnft-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     .fnft-actions button { flex: 1 1 140px; }
     /* 🌸 Kwiat sezonowy */
@@ -301,15 +284,11 @@ let fnftBusy = false;
   document.head.append(s);
 })();
 
-// Album sets + Wystawa ribbons, loaded with the calendar. Kept separate from
-// fnftRefresh's first-load repaint so a slow call never blocks the frames.
+// Album sets, loaded with the calendar. Kept separate from fnftRefresh's
+// first-load repaint so a slow call never blocks the frames.
 async function fnftLoadSocial() {
-  const [sets, wins] = await Promise.all([
-    sb.from('farm_nft_sets').select('code,species'),
-    sb.from('farm_nft_expo_winners').select('instance_id').gt('prize_boxes', 0),
-  ]);
+  const sets = await sb.from('farm_nft_sets').select('code,species');
   if (!sets.error) fnftSets = sets.data || [];
-  if (!wins.error) fnftRibbons = new Set((wins.data || []).map(w => w.instance_id).filter(Boolean));
 }
 
 // Client mirror of farm_nft_set_bonus(): +2% per set whose every species you
@@ -325,16 +304,11 @@ function fnftNick(uid) {
   return (sidePeople.find(p => p.id === uid) || {}).nick || (uid === me?.id ? me.nick : '?');
 }
 
-function fnftWeekLabel(iso) {
-  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
-  return isNaN(d) ? String(iso) : 'tydz. od ' + d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
-}
-
 function buildFarmNftHubBody(bodyEl) {
   const wrap = el('div', { className: 'fnft-hub' });
   const subs = el('div', { className: 'fnft-subs', role: 'tablist' });
   const content = el('div', {});
-  [['album', '📖 Album'], ['bloom', '🌸 Kwiat sezonowy'], ['expo', '🏛️ Wystawa'], ['altar', '🔥 Ołtarz'], ['calendar', '🗓️ Kalendarz']].forEach(([id, label]) => {
+  [['album', '📖 Album'], ['bloom', '🌸 Kwiat sezonowy'], ['altar', '🔥 Ołtarz'], ['calendar', '🗓️ Kalendarz']].forEach(([id, label]) => {
     const b = el('button', { type: 'button', className: fnftSub === id ? 'active' : '' }, label);
     b.addEventListener('click', () => { fnftSub = id; buildFarmNftHubBody(bodyEl); });
     subs.append(b);
@@ -342,7 +316,7 @@ function buildFarmNftHubBody(bodyEl) {
   wrap.append(subs, content);
   bodyEl.replaceChildren(wrap);
   content.append(el('div', { className: 'farm-card-sub' }, 'Ładowanie…'));
-  const go = fnftSub === 'expo' ? fnftRenderExpo : fnftSub === 'altar' ? fnftRenderAltar : fnftSub === 'bloom' ? fnftRenderBloom
+  const go = fnftSub === 'altar' ? fnftRenderAltar : fnftSub === 'bloom' ? fnftRenderBloom
            : fnftSub === 'calendar' ? (host => { host.replaceChildren(); return fnftCalendarInto(host); }) : fnftRenderAlbum;
   Promise.resolve(go(content)).catch(e => {
     console.error('farm nft hub', e);
@@ -484,98 +458,6 @@ async function fnftRenderBloom(host) {
   });
 }
 
-// ── 🏛️ Wystawa ─────────────────────────────────────────────────────────────
-async function fnftRenderExpo(host) {
-  const { data, error } = await sb.rpc('farm_expo_state');
-  if (error) throw error;
-  const entries = data.entries || [];
-  const myEntry = entries.find(e => e.mine);
-  const ends = new Date(data.ends_at);
-  host.replaceChildren();
-  host.append(el('p', { className: 'fnft-lead' },
-    'Co tydzień każdy może wystawić ', el('b', {}, 'jedną'), ' kartę NFT. Każdy ma ', el('b', {}, 'jeden głos'),
-    ' (tajny — widać tylko liczby) i nie może głosować na siebie. W poniedziałek o północy wygrywa karta z największą liczbą głosów: ',
-    el('b', {}, '⭐ Złota Skrzynia i 🏆 na karcie na zawsze'), '. Nagroda jest, gdy wystawiono min. ' + data.min_entries +
-    ' karty i oddano min. ' + data.min_votes + ' głosy. Remis wygrywa ten, kto wystawił wcześniej.'));
-  host.append(el('div', { className: 'fnft-kpi' },
-    el('span', {}, 'Koniec: ', el('b', {}, fmtDateTime(ends))),
-    el('span', {}, 'Karty: ', el('b', {}, String(entries.length))),
-    el('span', {}, 'Głosy: ', el('b', {}, String(data.voters || 0)))));
-
-  // My entry
-  const mine = fmNft.filter(n => n.owner_id === me?.id).sort((a, b) => a.species.localeCompare(b.species) || a.serial_no - b.serial_no);
-  const meBox = el('div', { className: 'fnft-expo-me' });
-  if (!mine.length) {
-    meBox.append(el('span', { className: 'fnft-lead' }, 'Nie masz karty NFT do wystawienia — ale możesz głosować.'));
-  } else {
-    const sel = el('select', { className: 'nick-select', 'aria-label': 'Twoja karta na Wystawę' });
-    mine.forEach(n => sel.append(el('option', { value: n.id }, farmNftLabel(n) + (n.nft_name ? ' — ' + n.nft_name : ''))));
-    if (myEntry) sel.value = myEntry.instance_id;
-    const enter = el('button', { className: 'btn-primary', type: 'button' }, myEntry ? 'Zmień kartę' : '🏛️ Wystaw');
-    enter.addEventListener('click', () => fnftExpoCall('farm_expo_enter', { p_instance_id: sel.value }, enter, host, myEntry ? 'Zmieniono kartę na Wystawie.' : '🏛️ Twoja karta jest na Wystawie!'));
-    meBox.append(sel, enter);
-    if (myEntry) {
-      const out = el('button', { className: 'btn-ghost', type: 'button' }, 'Wycofaj');
-      out.addEventListener('click', () => fnftExpoCall('farm_expo_enter', { p_instance_id: null }, out, host, 'Wycofano kartę z Wystawy.'));
-      meBox.append(out);
-    }
-  }
-  host.append(meBox);
-
-  if (!entries.length) {
-    host.append(el('div', { className: 'farm-empty' }, 'Na tej Wystawie nie ma jeszcze żadnej karty. Bądź pierwszy!'));
-  } else {
-    const grid = el('div', { className: 'fnft-expo' });
-    entries.slice().sort((a, b) => (b.votes - a.votes) || String(a.entered_at).localeCompare(String(b.entered_at))).forEach(e => {
-      const voted = data.my_vote === e.user_id;
-      const card = el('div', { className: 'fnft-expo-card col-' + (e.nft_collection || 'classic') + (voted ? ' is-voted' : '') },
-        farmIcon(farmNftIconFor(e.species, e.serial_no, e.emoji)),
-        el('div', { className: 'fnft-expo-name' }, (e.nft_name || e.name) + (e.level > 1 ? ' ' + '⭐'.repeat(e.level) : '')),
-        el('div', { className: 'fnft-expo-sp' }, e.name + ' · #' + e.serial_no + '/' + e.edition_size),
-        el('div', { className: 'fnft-expo-who' }, '👤 ' + e.nick),
-        el('div', { className: 'fnft-expo-votes' }, '❤️ ' + e.votes + ' ' + plCount(e.votes, 'głos', 'głosy', 'głosów')));
-      let btn;
-      if (e.mine) btn = el('button', { className: 'btn-ghost', type: 'button', disabled: true }, 'Twoja karta');
-      else if (voted) {
-        btn = el('button', { className: 'btn-ghost', type: 'button', title: 'Kliknij, aby cofnąć głos' }, '✓ Twój głos');
-        btn.addEventListener('click', () => fnftExpoCall('farm_expo_vote', { p_entry_user: null }, btn, host, 'Cofnięto głos.'));
-      } else {
-        btn = el('button', { className: 'btn-primary', type: 'button' }, data.my_vote ? 'Przenieś głos' : '❤️ Głosuj');
-        btn.addEventListener('click', () => fnftExpoCall('farm_expo_vote', { p_entry_user: e.user_id }, btn, host, '❤️ Zagłosowano na kartę ' + e.nick + '.'));
-      }
-      card.append(btn);
-      grid.append(card);
-    });
-    host.append(grid);
-  }
-
-  const wins = data.winners || [];
-  host.append(el('div', { className: 'farm-inv-section-title' }, '🏆 Poprzednie Wystawy'));
-  if (!wins.length) host.append(el('div', { className: 'farm-empty' }, 'Jeszcze żadna Wystawa się nie zakończyła.'));
-  else {
-    const hist = el('div', { className: 'fnft-hist' });
-    wins.forEach(w => hist.append(el('div', {},
-      el('span', { className: 'fnft-when' }, fnftWeekLabel(w.week_start)),
-      w.prize_boxes > 0
-        ? el('span', {}, '🏆 ', el('b', {}, w.nick || '?'), ' — ', farmIcon(w.emoji || '💎'), ' „' + (w.nft_name || w.name || '') + '" #' + w.serial_no + ' · ' + w.votes + ' ' + plCount(w.votes, 'głos', 'głosy', 'głosów'))
-        : el('span', { className: 'fnft-when' }, 'bez nagrody — ' + w.entries + ' ' + plCount(w.entries, 'karta', 'karty', 'kart') + ', ' + w.voters + ' ' + plCount(w.voters, 'głos', 'głosy', 'głosów')))));
-    host.append(hist);
-  }
-}
-
-async function fnftExpoCall(fn, args, btn, host, okMsg) {
-  if (fnftBusy) return;
-  fnftBusy = true; if (btn) btn.disabled = true;
-  try {
-    const { error } = await sb.rpc(fn, args);
-    if (error) { showToast('❌ ' + fmErr(error)); return; }
-    showToast(okMsg);
-    await fnftRenderExpo(host);
-  } finally {
-    fnftBusy = false; if (btn) btn.disabled = false;
-  }
-}
-
 // ── 🔥 Ołtarz ──────────────────────────────────────────────────────────────
 async function fnftRenderAltar(host) {
   const planted = farmPlantedNftIds();
@@ -587,7 +469,7 @@ async function fnftRenderAltar(host) {
     'Złóż kartę NFT w ofierze, a dostaniesz ', el('b', {}, '⭐ Złote Skrzynie'), ' (5 losowań, pierwsza karta co najmniej rzadka). ',
     'Skrzyń jest tyle, ile tysięcy 🪙 warta jest karta w Net Worth (w górę, min. 1) — mniej niż jej wartość, bo to ołtarz, a nie kantor. ',
     el('b', {}, 'Karta znika na zawsze'), ', a jej numer zostaje w eksploratorze edycji ze świeczką 🕯️. ',
-    'Zasadzonych, wystawionych na Targowisku i tej z bieżącej Wystawy nie da się złożyć.'));
+    'Zasadzonych i wystawionych na Targowisku nie da się złożyć.'));
   if (!free.length) {
     host.append(el('div', { className: 'farm-empty' }, mine.length
       ? 'Wszystkie twoje karty NFT są zasadzone albo wystawione.'
@@ -665,20 +547,11 @@ function farmNftModalExtras(n, body, close, opts) {
     await sideLoadShowcases(true);
     close();
   });
-  const expo = el('button', { className: 'btn-ghost', type: 'button' }, '🏛️ Wystaw na Wystawie');
-  expo.addEventListener('click', async () => {
-    expo.disabled = true;
-    const { error } = await sb.rpc('farm_expo_enter', { p_instance_id: n.id });
-    expo.disabled = false;
-    if (error) { showToast('❌ ' + fmErr(error)); return; }
-    showToast('🏛️ Karta jest na tegotygodniowej Wystawie!');
-    close(); fnftSub = 'expo'; openFarmHub('nft');
-  });
   const blocked = opts?.planted || n.listed;
   const altar = el('button', { className: 'btn-ghost', type: 'button', disabled: !!blocked,
     title: blocked ? 'Zasadzonej albo wystawionej karty nie da się złożyć' : '' }, '🔥 Na ołtarz → ⭐×' + fnftAltarBoxes(farmNftValue(n) || 0));
   altar.addEventListener('click', async () => { if (await fnftSacrifice(n, altar)) close(); });
-  body.append(fdsSection('Kolekcjoner'), el('div', { className: 'fnft-actions' }, show, expo, altar));
+  body.append(fdsSection('Kolekcjoner'), el('div', { className: 'fnft-actions' }, show, altar));
 }
 
 // ── Moved from index.html: merge, breeding lab, edition explorer ─────────────

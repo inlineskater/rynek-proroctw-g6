@@ -1,4 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
+-- ⚠️ 🏛️ Wystawa removed 2026-10-20: re-run farm-nft-expo-removed.sql after this file (it re-grants farm_expo_*).
 --  NFT social layer — 📖 Album, 🔥 Ołtarz, 🏛️ Wystawa, 🖼️ Wizytówka  (2026-10-03)
 -- ════════════════════════════════════════════════════════════════════════════
 --  Run after farm-nft-monthly.sql (and after farm-neighbours.sql). Idempotent.
