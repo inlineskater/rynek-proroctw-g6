@@ -1492,7 +1492,7 @@ function healerLeaveGame() {
   // actually takes the overlay off screen is switchTab() hiding #tab-whack-boss
   // — `display: none !important` on the ancestor kills the fixed child too —
   // and its previousTab teardown already stops the round and the RAF loop.
-  if (typeof switchTab === 'function') switchTab('markets');
+  if (typeof switchTab === 'function') switchTab('farm');
 }
 
 function healerToggleHelp(on) {
