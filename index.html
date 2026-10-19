@@ -7071,6 +7071,10 @@
     .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; align-items: stretch; }
     /* .garden-sky is pointer-events:none (decor) — the cards inside it must opt back in. */
     .farm-sky-bar { position: relative; z-index: 5; padding: 10px 12px 18px; pointer-events: auto; }
+    .og-goal.farm-season-end .og-goal-title { margin-bottom: 2px; }
+    .farm-season-end-txt { font-size: 12px; color: var(--muted); line-height: 1.35; }
+    .farm-season-end-x { flex: 0 0 auto; border: 0; background: none; color: var(--muted); font: inherit; font-size: 15px; cursor: pointer; padding: 2px 4px; }
+    .farm-season-end-x:hover { color: var(--text); }
     .farm-sky-bar > .og-goal, .farm-sky-bar > #fw-banner { margin: 0; padding: 7px 12px; border-color: rgba(255,255,255,.7);
       background: rgba(255,255,255,.86); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
     .farm-sky-bar > .og-goal .og-goal-ic, .farm-sky-bar .fw-wx-ic { font-size: 18px; }
@@ -11605,6 +11609,7 @@
                    onclick="openOfficeGoalModal()"
                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
               <div class="hidden" id="fw-banner"></div>
+              <div class="og-goal hidden" id="farm-seasonal-note"></div>
             </div>
           </div>
           <div class="garden-weather"></div>
@@ -21343,6 +21348,15 @@ let fmAssetBreakdownDirty = true;
 let fmAssetBreakdownLoading = null;
 let fmAssetBreakdownSeq = 0;
 let fmSeasonalEvent = null;      // current/upcoming weekly crop contract
+// „🏆 Wyzwanie tygodnia" ENDED (2026-10-20, supabase/farm-seasonal-end.sql):
+// the week of 2026-10-19 is the last contract; it pays out on Monday 26.10 and
+// from that week the tab, prices badges and teasers are gone. Mirrors
+// farm_seasonal_last_week() — keep in sync.
+const FARM_SEASONAL_LAST_WEEK = '2026-10-19';
+// After the end the „it's over" note stays in the sky for two weeks, then goes.
+const FARM_SEASONAL_NOTE_UNTIL = '2026-11-09';
+function farmSeasonalEnded() { return currentSeasonWeekStartStr() > FARM_SEASONAL_LAST_WEEK; }
+function farmHubTabs() { return farmSeasonalEnded() ? FARM_HUB_TABS.filter(t => t.id !== 'seasonal') : FARM_HUB_TABS; }
 let fmSeasonalLeaderboard = [];  // current event aggregate leaderboard
 // Mirrors farm_seasonal_premium_cap_x() in supabase/anti-inflation.sql. The
 // weekly contract premium is paid on at most this many fair-share weeks of
@@ -21581,6 +21595,8 @@ async function refreshFarmTaxQuote() {
 async function refreshFarmSeasonalState() {
   fmSeasonalEvent = null;
   fmSeasonalLeaderboard = [];
+  renderFarmSeasonalNote();
+  if (farmSeasonalEnded()) return null;
   try {
     // Creates the display event row if the seasonal SQL has been installed.
     await sb.rpc('farm_ensure_seasonal_display_event');
@@ -23358,7 +23374,7 @@ function farmToolbar() {
     const grp = el('div', { className: 'ftb-group', role: 'group', 'aria-label': g.label });
     const row = el('div', { className: 'ftb-row' });
     g.ids.forEach(id => {
-      const t = FARM_HUB_TABS.find(x => x.id === id);
+      const t = farmHubTabs().find(x => x.id === id);
       if (!t) return;
       const words = t.label.split(' ');
       const short = (t.short && t.short.includes(' ')) ? t.short.split(' ').slice(1).join(' ') : words.slice(1).join(' ');
@@ -25493,12 +25509,57 @@ function farmSeasonalMyRow() {
 }
 
 // Mirrors farm_seasonal_species_for_week() in supabase/farm-seasonal-contracts.sql — keep in sync.
+// FARM_SEASONAL_LAST_WEEK and farmSeasonalEnded() live up by fmSeasonalEvent (they are read before this point).
 const FARM_SEASONAL_ROTATION = ['carrot', 'potato', 'tomato', 'corn', 'chili', 'strawberry', 'pumpkin', 'grapes', 'pineapple'];
 const FARM_SEASONAL_ANCHOR_WEEK = '2026-07-06';
+// The „Wyzwanie is ending / has ended" note in the sky band. During the last
+// week it announces the end and opens the contract; for two weeks after it
+// explains where the bonus went (dismissible), then disappears for good.
+function renderFarmSeasonalNote() {
+  const host = document.getElementById('farm-seasonal-note');
+  if (!host) return;
+  const ended = farmSeasonalEnded();
+  const today = warsawCalendarDateStr();
+  const key = 'rp_farm_season_end_note';
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(key) === '1'; } catch (e) {}
+  if (ended && (today >= FARM_SEASONAL_NOTE_UNTIL || dismissed)) { host.classList.add('hidden'); return; }
+  const dm = str => str.slice(8, 10) + '.' + str.slice(5, 7);
+  const lastSun = dm(addDaysStr(FARM_SEASONAL_LAST_WEEK, 6));
+  const payDay = dm(addDaysStr(FARM_SEASONAL_LAST_WEEK, 7));
+  const open = () => openFarmHub(ended ? 'orders' : 'seasonal');
+  host.classList.remove('hidden');
+  host.classList.add('farm-season-end');
+  host.setAttribute('role', 'button');
+  host.tabIndex = 0;
+  host.onclick = open;
+  host.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+  const kids = [
+    el('span', { className: 'og-goal-ic' }, ended ? '🏁' : '🏆'),
+    el('div', { className: 'og-goal-main' },
+      el('div', { className: 'og-goal-title' }, el('b', {}, ended ? 'Wyzwanie tygodnia zakończone' : 'Ostatnie Wyzwanie tygodnia')),
+      el('div', { className: 'farm-season-end-txt' }, ended
+        ? 'Ostatnia edycja (' + dm(FARM_SEASONAL_LAST_WEEK) + '–' + lastSun + ') została rozliczona ' + payDay + '. Kontrakty tygodniowe nie wracają — plony sprzedajesz w 📈 Cenniku i 📋 Zamówieniach.'
+        : 'Ten tydzień to ostatnia edycja: sprzedawaj do niedzieli ' + lastSun + ', nagrody wypłacimy w poniedziałek ' + payDay + '. Od ' + payDay + ' Wyzwania tygodnia już nie będzie.')),
+    el('span', { className: 'og-goal-cta' }, ended ? 'Zamówienia' : 'Zobacz'),
+  ];
+  if (ended) {
+    const x = el('button', { className: 'farm-season-end-x', type: 'button', title: 'Ukryj', 'aria-label': 'Ukryj' }, '✕');
+    x.addEventListener('click', e => {
+      e.stopPropagation();
+      try { localStorage.setItem(key, '1'); } catch (err) {}
+      host.classList.add('hidden');
+    });
+    kids.push(x);
+  }
+  host.replaceChildren(...kids);
+}
+
 function farmSeasonalSpeciesForWeek(weekStartStr) {
   const anchor = new Date(FARM_SEASONAL_ANCHOR_WEEK + 'T00:00:00Z');
   const week = new Date(weekStartStr + 'T00:00:00Z');
   if (week < anchor) return null;
+  if (weekStartStr > FARM_SEASONAL_LAST_WEEK) return null;
   const days = Math.round((week - anchor) / 86400000);
   return FARM_SEASONAL_ROTATION[Math.floor(days / 7) % FARM_SEASONAL_ROTATION.length];
 }
@@ -25541,6 +25602,11 @@ async function buildFarmSeasonalBody(bodyEl) {
   const title = ev.status === 'upcoming' ? 'Następny kontrakt: ' : 'Kontrakt tygodnia: ';
   const statusCls = ev.status === 'active' ? ' active' : (ev.status === 'closed' ? ' closed' : '');
   const barDone = !!ev.bar_filled || total >= target;
+
+  if (ev.week_start === FARM_SEASONAL_LAST_WEEK) {
+    bodyEl.append(el('div', { className: 'farm-seasonal-empty' },
+      '🏁 To ostatnie Wyzwanie tygodnia — nagrody za nie wypłacimy normalnie w poniedziałek, a od przyszłego tygodnia kontraktów już nie będzie.'));
+  }
 
   // ── Header: what the contract is + how long it runs ───────────────────────
   const card = el('div', { className: 'farm-seasonal-card' });
@@ -25699,7 +25765,7 @@ function renderFarmHubBody() {
   
   if (farmHubTab === 'inventory') buildFarmInventoryBody(bodyEl);
   else if (farmHubTab === 'collections') buildFarmCollectionsBody(bodyEl);
-  else if (farmHubTab === 'seasonal') buildFarmSeasonalBody(bodyEl);
+  else if (farmHubTab === 'seasonal' && !farmSeasonalEnded()) buildFarmSeasonalBody(bodyEl);
   else if (farmHubTab === 'orders') withTabModule('farmworld', () => buildFarmOrdersBody(bodyEl));
   else if (farmHubTab === 'neighbours') withTabModule('farmworld', () => buildFarmNeighboursBody(bodyEl));
   else if (farmHubTab === 'nft') withTabModule('farmnft', () => buildFarmNftHubBody(bodyEl));
@@ -25734,10 +25800,11 @@ async function openFarmHub(initialTab) {
   } else if (!majInventoryUi) {
     majInventoryUi = newMajInventoryUi();
   }
-  if (initialTab && FARM_HUB_TABS.some(t => t.id === initialTab)) farmHubTab = initialTab;
+  if (initialTab && farmHubTabs().some(t => t.id === initialTab)) farmHubTab = initialTab;
+  if (!farmHubTabs().some(t => t.id === farmHubTab)) farmHubTab = 'inventory';
   const shellBody = openFarmModalShell('🌱 Ogródek');
   const bar = el('div', { className: 'farm-hub-tabs' });
-  FARM_HUB_TABS.forEach(t => {
+  farmHubTabs().forEach(t => {
     const b = el('button', { className: 'farm-hub-tab' + (t.id === farmHubTab ? ' active' : ''), 'data-hubtab': t.id }, t.label);
     b.addEventListener('click', () => { farmHubTab = t.id; renderFarmHubBody(); });
     bar.append(b);

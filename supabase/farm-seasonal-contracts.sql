@@ -1,4 +1,8 @@
 -- Farma seasonal crop contracts.
+-- ⚠️ ENDED: the week of 2026-10-19 was the last contract. farm-seasonal-end.sql
+-- redefines farm_seasonal_species_for_week() / farm_ensure_seasonal_display_event()
+-- / award_farm_seasonal_week_cron() — re-run it after re-running this file or
+-- farm-seasonal-award-reliability.sql, or the contracts quietly restart.
 -- Run AFTER farm.sql + farm-marketplace.sql + nft-leveling-rework.sql +
 -- nft-merge-fixes.sql. Idempotent; safe to re-run.
 --

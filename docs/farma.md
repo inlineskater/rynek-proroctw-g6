@@ -165,6 +165,8 @@ Klient ma wierną replikę tej matematyki w `farmSellQuote` (podgląd przed potw
 
 ## Kontrakt tygodnia
 
+> **Zakończone (2026-10-20).** Tydzień 2026-10-19 (🎃 Dynia) był ostatnim kontraktem — rozliczony normalnie 26.10, potem nowe już nie powstają (`farm-seasonal-end.sql`). Poniższy opis zostaje jako historia.
+
 `farm-seasonal-contracts.sql` dodaje cotygodniowe kontrakty na jedną istniejącą roślinę. Pierwszy start: **poniedziałek 06.07.2026 00:00 Europe/Warsaw**, **🥕 Marchewka**. Klient pokazuje to w hubie farmy jako **🏆 Wyzwanie**.
 
 Do wyniku liczą się tylko sztuki aktywnej rośliny **zebrane i sprzedane w tym samym tygodniu eventu**. Stare partie można sprzedać normalnie, ale nie dają premii, punktów rankingu ani wkładu do paska.

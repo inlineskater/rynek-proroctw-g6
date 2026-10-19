@@ -1,4 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ Re-run farm-seasonal-end.sql after this file (it supersedes award_farm_seasonal_week_cron()).
 --  Farma weekly contract („🏆 Wyzwanie") — MAKE THE MONDAY PAYOUT RELIABLE
 --  Run AFTER: farm.sql, farm-seasonal-contracts.sql, polish-midnight-schedules.sql
 --  Idempotent (CREATE OR REPLACE + cron.schedule upsert only). Safe to re-run.
