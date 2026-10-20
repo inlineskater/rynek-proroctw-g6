@@ -8938,7 +8938,6 @@
   <nav class="nav-tabs">
     <button class="nav-tab active" data-tab="farm">🌱 Ogródek</button>
 
-    <button class="nav-tab" data-tab="lottery">🎟️ Loteria</button>
 
     <div class="nav-group" data-group="games">
       <button class="nav-group-btn">🎮 Gry <span class="nav-chevron">▾</span></button>
@@ -13836,7 +13835,8 @@ document.getElementById('ag-back').addEventListener('click', () => {
 // still says switchTab('markets')) lands on the read-only 📦 Archiwum instead.
 // Their tables, Edge Functions and inline code are untouched — deleting a name
 // here brings a tab back. History: supabase/archive.sql + tabs/archive.js.
-const ARCHIVED_TABS = new Set(['markets', 'football', 'roulette', 'slots', 'poker', 'mines', 'crash', 'wheel', 'canvas']);
+// Loteria joined them the same day (its one draw ran 2026-08-03).
+const ARCHIVED_TABS = new Set(['markets', 'football', 'lottery', 'roulette', 'slots', 'poker', 'mines', 'crash', 'wheel', 'canvas']);
 
 function switchTab(tab) {
   if (tab === 'bug-jumper-test' && !isAdmin()) tab = 'farm';

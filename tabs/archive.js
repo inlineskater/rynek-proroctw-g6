@@ -3,7 +3,8 @@
 //  (ARCHIVED_TABS in index.html). Lazy module: TAB_MODULES.archive.
 //
 //  Everything comes from one call, archive_summary() (supabase/archive.sql),
-//  plus the canvas pixels, which every player could already read. Nothing here
+//  plus the canvas pixels and the lottery draw, which every player could
+//  already read. Nothing here
 //  writes — there is no button that bets, trades or paints. To bring a tab
 //  back, delete its name from ARCHIVED_TABS; its own code is still inline.
 // ════════════════════════════════════════════════════════════════════════════
@@ -112,6 +113,7 @@ function renderArchive(body, d) {
   body.append(arcCanvasSection(d.canvas));
   body.append(arcMarketsSection(d.markets || []));
   body.append(arcFootballSection(d.football));
+  body.append(arcLotterySection());
   body.append(arcCasinoSection(d.casino || []));
   body.append(arcPokerSection(d.poker));
 }
@@ -164,6 +166,32 @@ function arcFootballSection(f) {
   sec.append(arcTable(
     [{ label: '#' }, { label: 'Gracz', nw: true }, { label: 'Typy', num: true }, { label: 'Trafione', num: true }, { label: 'Bilans', num: true }],
     (f.ranking || []).map((r, i) => [String(i + 1), r.nick, arcN(r.bets), arcN(r.hits), arcSigned(r.net)])));
+  return sec;
+}
+
+// ── 🎟️ Loteria po Mundialu: the one draw, read straight from lottery_draws ──
+// (public SELECT; the section fills in when the query lands).
+const ARC_MEDAL = ['🥇', '🥈', '🥉'];
+function arcLotterySection() {
+  const sec = arcSec('🎟️', 'Loteria po Mundialu', '');
+  const slot = el('div', { className: 'arc-note' }, 'Ładowanie…');
+  sec.append(slot);
+  sb.from('lottery_draws')
+    .select('pool, total_tickets, player_count, dividend_each, paid_total, drawn_at, winners')
+    .eq('status', 'drawn').order('drawn_at', { ascending: false })
+    .then(({ data, error }) => {
+      if (error || !data?.length) { slot.textContent = error ? 'Nie udało się wczytać losowania.' : 'Losowanie się nie odbyło.'; return; }
+      const dr = data[0];
+      sec.querySelector('h3').append(el('span', { className: 'arc-when' }, 'losowanie ' + arcDate(dr.drawn_at)));
+      slot.replaceWith(
+        el('div', { className: 'arc-kpis' },
+          arcKpi('Pula', arcN(dr.pool) + ' 🪙'), arcKpi('Losów', arcN(dr.total_tickets)), arcKpi('Uczestników', arcN(dr.player_count)),
+          arcKpi('Dywidenda dla każdego', arcN(dr.dividend_each) + ' 🪙'), arcKpi('Wypłacono', arcN(dr.paid_total) + ' 🪙')),
+        arcTable(
+          [{ label: 'Miejsce' }, { label: 'Gracz', nw: true }, { label: 'Losów', num: true }, { label: 'Nagroda', num: true }],
+          (dr.winners || []).slice().sort((a, b) => a.place - b.place)
+            .map(w => [(ARC_MEDAL[w.place - 1] || '') + ' ' + w.place + '.', w.nick, arcN(w.tickets), arcN(w.prize) + ' 🪙'])));
+    });
   return sec;
 }
 
