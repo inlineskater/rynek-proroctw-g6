@@ -803,6 +803,8 @@ async function spinNow(userId) {
   });
 }
 
+const ARCHIVED_ALLOWED_ACTIONS = new Set(["state", "history", "leave"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -811,6 +813,12 @@ Deno.serve(async (req) => {
     const user = await requireUser(req);
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "state");
+    // Archived 2026-10-20 (supabase/archived-features-lockdown.sql): Ruletka
+    // is read-only in 📦 Archiwum, so only reads are still served.
+    // `leave` stays open: it frees a seat and moves no coins.
+    if (!ARCHIVED_ALLOWED_ACTIONS.has(action)) {
+      return json({ ok: false, code: "feature_archived", error: "Ruletka jest w Archiwum — tylko do odczytu." });
+    }
 
     let result;
     if (action === "state" || action === "history") result = await getState(user.id);

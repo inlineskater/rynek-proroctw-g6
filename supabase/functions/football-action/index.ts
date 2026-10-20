@@ -559,6 +559,8 @@ async function runCron() {
 }
 
 // ── HTTP entry ───────────────────────────────────────────────────────────────
+const ARCHIVED_ALLOWED_ACTIONS = new Set(["state", "cron", "void"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -566,6 +568,13 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "state");
+    // Archived 2026-10-20 (supabase/archived-features-lockdown.sql): Mundial
+    // is read-only in 📦 Archiwum, so only reads are still served.
+    // `cron` (secret-gated settle/void sweep) and the admin-only `void` stay
+    // open: they only settle or refund bets, never take a new one.
+    if (!ARCHIVED_ALLOWED_ACTIONS.has(action)) {
+      return json({ ok: false, code: "feature_archived", error: "Mundial jest w Archiwum — tylko do odczytu." });
+    }
 
     if (action === "cron") {
       const secret = req.headers.get("x-cron-secret") ?? "";

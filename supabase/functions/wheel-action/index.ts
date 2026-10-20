@@ -453,6 +453,8 @@ async function markReady(userId) {
   });
 }
 
+const ARCHIVED_ALLOWED_ACTIONS = new Set(["state", "history"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return json(req, { ok: false, error: "Method not allowed." }, 405);
@@ -461,6 +463,11 @@ Deno.serve(async (req) => {
     const user = await requireUser(req);
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "state");
+    // Archived 2026-10-20 (supabase/archived-features-lockdown.sql): Koło Żubra
+    // is read-only in 📦 Archiwum, so only reads are still served.
+    if (!ARCHIVED_ALLOWED_ACTIONS.has(action)) {
+      return json(req, { ok: false, code: "feature_archived", error: "Koło Żubra jest w Archiwum — tylko do odczytu." });
+    }
 
     let result;
     if (action === "state" || action === "history") result = await getState(user.id);

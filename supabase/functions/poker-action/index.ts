@@ -1135,6 +1135,8 @@ async function setBots(userId, count) {
   });
 }
 
+const ARCHIVED_ALLOWED_ACTIONS = new Set(["state", "stand"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -1144,6 +1146,13 @@ Deno.serve(async (req) => {
     const user = await requireUser(req);
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "state");
+    // Archived 2026-10-20 (supabase/archived-features-lockdown.sql): Poker
+    // is read-only in 📦 Archiwum, so only reads are still served.
+    // `stand` stays open: it is the only way a seated stack goes back to
+    // the player, so closing it could trap coins at the table.
+    if (!ARCHIVED_ALLOWED_ACTIONS.has(action)) {
+      return json({ ok: false, code: "feature_archived", error: "Poker jest w Archiwum — tylko do odczytu." });
+    }
 
     let state;
     if (action === "state") state = await getState(user.id);
