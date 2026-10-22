@@ -702,6 +702,7 @@ Object.assign(FARM_ERR, {
   not_stealable_yet: 'Właściciel ma jeszcze czas na zbiór.',
   protected: 'Tego pola pilnuje strach na wróble.',
   steal_limit_day: 'Wykorzystałeś dzisiejsze podbierania.',
+  robin_hood: '🏹 Zasada Robin Hooda: podbierać można tylko bogatszym od siebie.',
   steal_limit_tile: 'Z tej rośliny podebrało już dość osób.',
   already_stolen: 'Już podbierałeś z tej rośliny.',
   nothing_to_steal: 'Nie ma już czego podbierać.',
@@ -725,6 +726,10 @@ function loadFarmNeighbours() {
       fwNb = data;
       fwNb.tileMap = new Map((data.tiles || []).map(t => [t.x + ',' + t.y, t]));
       fwNb.protectedSet = new Set(data.protected || []);
+      // farm-robin-hood.sql: owners richer than me — the only ones I may rob.
+      // null (function not installed yet) = no filter, the server decides.
+      const rh = await sb.rpc('farm_robin_hood_targets');
+      fwNb.robSet = rh.error ? null : new Set(rh.data || []);
       fwNbAt = Date.now();
     } catch (e) {
       console.warn('farm_neighbours_state', e);   // not installed yet: board stays plain
@@ -773,6 +778,7 @@ function fwTileStealable(tile, key, now) {
   const ripeFor = now - Math.max(new Date(tile.ready_at).getTime(), launch);
   if (ripeFor < (fwNb.limits?.steal_grace_hours || 12) * 3600000) return false;
   if (fwNb.protectedSet.has(tile.owner_id)) return false;
+  if (fwNb.robSet && !fwNb.robSet.has(tile.owner_id)) return false;   // Robin Hood
   const ev = fwNb.tileMap.get(key);
   if (ev?.stolen_by_me) return false;
   if ((ev?.thieves || 0) >= (fwNb.limits?.steal_thieves_per_cycle || 3)) return false;
@@ -949,7 +955,7 @@ function fwRenderNeighbours(bodyEl) {
       'Farma to wspólne pole: sąsiadom możesz ', el('b', {}, 'podlewać'), ' rosnące rośliny (+'
         + Math.round((L.water_bonus || 0.03) * 100) + '% plonu dla nich), a to, co ktoś zostawi dojrzałe na ponad '
         + (L.steal_grace_hours || 12) + ' h, można ', el('b', {}, 'podebrać'), ' (' + Math.round((L.steal_share || 0.1) * 100)
-        + '%). Strach na wróble albo NFT z talentem „nikt nie podbierze" chroni wszystkie twoje pola. ',
+        + '%) — ale 🏹 tylko komuś bogatszemu od siebie (zasada Robin Hooda). Strach na wróble albo NFT z talentem „nikt nie podbierze" chroni wszystkie twoje pola. ',
       'Łączny bonus: do +' + Math.round((L.bonus_cap || 0.25) * 100) + '% (+'
         + Math.round((L.bonus_cap_talent || 0.35) * 100) + '% z talentem NFT).')));
 

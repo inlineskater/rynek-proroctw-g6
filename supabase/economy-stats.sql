@@ -258,7 +258,10 @@ AS $$
                              -- principal that was never burned, so counting
                              -- them would invent supply on every maturity.
                              'bank_deposit_interest','bank_bond_coupon',
-                             'bank_share_dividend')
+                             'bank_share_dividend',
+                             -- bank-casino-share-removed.sql: the one-off
+                             -- refund that offsets the burned bank_share_buy.
+                             'bank_share_buyback')
       ), 0::numeric) AS ledger_minted,
 
       -- weekly game prize payouts (game-defined top-three awards)

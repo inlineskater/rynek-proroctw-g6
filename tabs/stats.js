@@ -1714,7 +1714,7 @@ function buildBalancePoints({ userId, coins, createdAt, trades = [], games = [],
   // are deliberately absent here: those are real income and must move the line.
   const NEUTRAL = { hero_item_purchase: 1, garden_accessory: 1, garden_certificate: 1, hero_auction_bid_reserved: 1, hero_auction_outbid_refund: 1, hero_auction_edition_refund: 1, farm_tile_buy: 1, farm_box_buy: 1, card_levelup: 1,
     bank_deposit_open: 1, bank_deposit_close: 1, bank_bond_buy: 1, bank_bond_redeem: 1,
-    bank_share_buy: 1, bank_resale_purchase: 1, bank_resale_sale: 1 };
+    bank_share_buy: 1, bank_share_buyback: 1, bank_resale_purchase: 1, bank_resale_sale: 1 };
   // football_bet/football_win/football_refund are audit copies of the same events already
   // reconstructed below from the `football_bets` table (with correct lockDelta handling for
   // open stakes) — counting them here too would double the P/L.
@@ -1773,6 +1773,8 @@ function buildBalancePoints({ userId, coins, createdAt, trades = [], games = [],
       ? '📜 Obligacje: wykup nominału'
       : t.reason === 'bank_share_buy'
       ? '🎰 Udział w kasynie: zakup'
+      : t.reason === 'bank_share_buyback'
+      ? '🎰 Udział w kasynie: odkup przez Bank'
       : t.reason === 'bank_share_dividend'
       ? '🎰 Udział w kasynie: dywidenda'
       : t.reason === 'bank_resale_purchase'

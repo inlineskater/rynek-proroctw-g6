@@ -12390,6 +12390,7 @@ const TAB_MODULES = {
   coinpusher:  'tabs/coinpusher.js', // Automat Monet G6 (imports three + Rapier itself)
   chatfx:      'tabs/chat-reactions.js', // not a tab: Czat G6 reactions + naklejki, fetched by initChat()
   farmworld:   'tabs/farm-world.js', // not a tab: Ogródek orders, weather, neighbours
+  farmevents:  'tabs/farm-events.js', // not a tab: 🌪️ random farm events (animations + banner)
   farmnft:     'tabs/farm-nft.js',   // not a tab: NFT cards, calendar, merge, breeding, explorer
   archive:     'tabs/archive.js',    // 📦 Archiwum: read-only history of ARCHIVED_TABS
 };
@@ -14301,6 +14302,7 @@ const ACT_COIN_REASONS = {
   bank_deposit_open:          '🏦 ulokował monety w Banku',
   bank_bond_buy:              '📜 objął emisję obligacji',
   bank_share_buy:             '🎰 kupił udział w kasynie',
+  bank_share_buyback:         '🎰 Bank odkupił jego udziały w kasynie',
   bank_resale_sale:           '🤝 sprzedał papier na rynku wtórnym',
   // Wspólny Cel Biura — a deliberate, public gesture: exactly what the feed is for.
   office_goal_contribution:   '🎯 dorzucił się do wspólnego celu',
@@ -22275,6 +22277,7 @@ async function loadFarm() {
     // An arrow, not a bare `fwRefresh`: the name only exists once the module has
     // loaded, and a ReferenceError here aborted the rest of loadFarm (the board).
     withTabModule('farmworld', () => fwRefresh());   // weather banner + neighbour badges
+    withTabModule('farmevents', () => fevRefresh());  // 🌪️ random events: banner + replay
     withTabModule('farmnft', () => fnftRefresh());    // NFT card frames + calendar
     renderFarmPanels();
     renderFarmBoard();
