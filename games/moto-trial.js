@@ -173,14 +173,10 @@ function mtAudioUpdate(st){if(!mtAudio||mtMuted)return;const t=mtAudio.ctx.curre
 function mtSnap(st){return {...st,b:{...st.b},wr:{...st.wr},wf:{...st.wf}};}
 function mtCreateView(host,course){
  const canvas=document.createElement('canvas');canvas.style.cssText='display:block;width:100%;height:100%';host.prepend(canvas);
- const main=canvas.getContext('2d');if(!main)throw new Error('Canvas jest niedostępny w tej przeglądarce.');
- // Ghosts are drawn opaque on their own layer and composited once, so a translucent
- // bike doesn't darken wherever its own strokes overlap. ctx points at whichever is live.
- const layer=document.createElement('canvas'),ghostCtx=layer.getContext('2d');
- let ctx=main;
+ const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas jest niedostępny w tej przeglądarce.');
  const DEPTH=[0.55,0.42];
  let W=640,H=360,dpr=1,ppm=40,cam=null,last=null,disposed=false;
- function resize(){if(disposed)return;dpr=Math.min(2,window.devicePixelRatio||1);W=Math.max(160,host.clientWidth||640);H=Math.max(120,host.clientHeight||360);canvas.width=layer.width=Math.round(W*dpr);canvas.height=layer.height=Math.round(H*dpr);ppm=Math.min(H/7,W/(W<600?8.5:11.5));if(last)draw(last.st,last.prev,last.t,0,last.ghosts);}
+ function resize(){if(disposed)return;dpr=Math.min(2,window.devicePixelRatio||1);W=Math.max(160,host.clientWidth||640);H=Math.max(120,host.clientHeight||360);canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);ppm=Math.min(H/7,W/(W<600?8.5:11.5));if(last)draw(last.st,last.prev,last.t,0,last.ghosts);}
  const mix=(a,b,t)=>a+(b-a)*t;
  function pose(st,prev,t){
   const p=prev||st,c=mix(p.b.c,st.b.c,t),s=mix(p.b.s,st.b.s,t),l=Math.sqrt(c*c+s*s)||1;
@@ -241,32 +237,45 @@ function mtCreateView(host,course){
  }
  // A crashed ghost lingers for 1.5 s where it fell, then leaves; a finished one stays at the line.
  function ghostShown(g){return !g.done||g.st.completed||(g.idle||0)<90;}
- function drawGhosts(ghosts,t,world){
-  const shown=ghosts.filter(ghostShown);if(!shown.length)return [];
-  ctx=ghostCtx;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,layer.width,layer.height);ctx.setTransform(...world);
-  const heads=shown.map(g=>({g,p:pose(g.st,g.prev,t),head:null}));
-  for(const h of heads)h.head=drawBike(h.p,h.g.color);
-  ctx=main;ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=0.38;ctx.drawImage(layer,0,0);ctx.restore();
+ // Ghosts are solid pale silhouettes (the rank colour mixed into the white field),
+ // drawn before the track so they sit behind it. No offscreen layer: compositing a
+ // full-canvas layer every frame nearly doubled the frame cost at Retina fullscreen.
+ const pale={};
+ function paleOf(hex){return pale[hex]||(pale[hex]='#'+[1,3,5].map(i=>Math.round(255-(255-parseInt(hex.slice(i,i+2),16))*0.42).toString(16).padStart(2,'0')).join(''));}
+ function drawGhosts(ghosts,t,x0,x1){
+  const heads=ghosts.filter(ghostShown).map(g=>{const p=pose(g.st,g.prev,t);return {g,p,head:mtLocal(p,MT_P.head[0]-MT_P.leanShift*p.lean,MT_P.head[1]-0.05*Math.abs(p.lean))};});
+  for(const h of heads)if(h.p.x>x0-1.4&&h.p.x<x1+1.4)drawBike(h.p,paleOf(h.g.color));
   return heads;
  }
  // Name tags in screen space, nudged apart when ghosts ride together; a ghost
  // outside the view gets a tag pinned to that edge with its distance.
+ // A tag is rendered once into a small canvas and reused while its text stays the same:
+ // measuring and filling text every frame was most of what the ghosts still cost.
+ const tagCache=new Map();
+ function tagImage(text,color){
+  const key=text+'|'+color+'|'+dpr;let tag=tagCache.get(key);if(tag)return tag;
+  if(tagCache.size>48)tagCache.clear();
+  const font='700 11px system-ui,sans-serif';ctx.font=font;
+  const w=Math.ceil(ctx.measureText(text).width)+14,h=18,c=document.createElement('canvas'),x=c.getContext('2d');
+  c.width=Math.ceil(w*dpr);c.height=Math.ceil(h*dpr);x.scale(dpr,dpr);
+  x.beginPath();x.roundRect?x.roundRect(0.75,0.75,w-1.5,h-1.5,8.5):x.rect(0.75,0.75,w-1.5,h-1.5);x.fillStyle='#fff';x.fill();x.strokeStyle=color;x.lineWidth=1.5;x.stroke();
+  x.font=font;x.textBaseline='middle';x.textAlign='center';x.fillStyle=color;x.fillText(text,w/2,h/2+0.5);
+  tagCache.set(key,tag={c,w,h});return tag;
+ }
  function ghostTags(heads,px){
-  ctx.font='700 11px system-ui,sans-serif';ctx.textBaseline='middle';
   const placed=[];
   for(const {g,p,head} of heads){
    let sx=W*0.4+(head[0]-cam.x)*ppm,sy=H*0.6-(head[1]+MT_P.headR+0.32-cam.y)*ppm;
    const dist=Math.round(p.x-px),off=sx<8?-1:sx>W-8?1:0;
    const text=(off<0?'◀ ':'')+(g.done?(g.st.completed?'🏁 ':'💥 '):'')+g.name+(g.st.completed?' · '+(g.completion_ms/1000).toFixed(2)+' s':'')+(off?' · '+(dist>0?'+':'')+dist+' m':'')+(off>0?' ▶':'');
-   const w=ctx.measureText(text).width+14,h=18;
+   const tag=tagImage(text,g.color),w=tag.w,h=tag.h;
    sx=Math.max(4+w/2,Math.min(W-4-w/2,sx));sy=Math.max(14,Math.min(H-12,sy));
    for(let k=0;k<6&&placed.some(r=>Math.abs(r.x-sx)<(r.w+w)/2&&Math.abs(r.y-sy)<h);k++)sy-=h+2;
    placed.push({x:sx,y:sy,w});
    ctx.globalAlpha=g.done&&!g.st.completed?0.6:0.92;
-   ctx.beginPath();ctx.roundRect?ctx.roundRect(sx-w/2,sy-h/2,w,h,9):ctx.rect(sx-w/2,sy-h/2,w,h);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=g.color;ctx.lineWidth=1.5;ctx.stroke();
-   ctx.fillStyle=g.color;ctx.textAlign='center';ctx.fillText(text,sx,sy+0.5);
+   ctx.drawImage(tag.c,Math.round(sx-w/2),Math.round(sy-h/2),w,h);
   }
-  ctx.globalAlpha=1;ctx.textAlign='start';ctx.textBaseline='alphabetic';
+  ctx.globalAlpha=1;
  }
  function banner(text,color){ctx.font='800 '+Math.round(Math.min(44,W/12))+'px system-ui,sans-serif';ctx.textAlign='center';ctx.lineWidth=5;ctx.strokeStyle='#fff';ctx.strokeText(text,W/2,H*0.22);ctx.fillStyle=color;ctx.fillText(text,W/2,H*0.22);ctx.textAlign='start';}
  function draw(st,prev=null,t=1,dt=0,ghosts=null){
@@ -278,11 +287,10 @@ function mtCreateView(host,course){
   const world=[dpr*ppm,0,0,-dpr*ppm,dpr*(ox-cam.x*ppm),dpr*(oy+cam.y*ppm)];
   ctx.setTransform(...world);
   const x0=cam.x-ox/ppm-1,x1=cam.x+(W-ox)/ppm+1;
+  const heads=ghosts?.length?drawGhosts(ghosts,t,x0,x1):[];
   drawTrack(x0,x1);
   if(course.start-1>x0-2&&course.start-1<x1+2)flag(course.start-1,'START');
   if(course.finish>x0-2&&course.finish<x1+2)flag(course.finish,'META');
-  const heads=ghosts?.length?drawGhosts(ghosts,t,world):[];
-  ctx.setTransform(...world);
   drawBike(p);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   if(heads.length)ghostTags(heads,p.x);

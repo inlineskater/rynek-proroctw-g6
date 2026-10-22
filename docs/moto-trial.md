@@ -99,8 +99,11 @@ filters on `version = MT_VERSION`. `mtGhostStep()` runs each log in lockstep wit
 ticks, for `ceil(duration_ms × 60 / 1000)` ticks. Checked on 2026-10-22: the 40 best
 stored runs all replayed to exactly the stored score and time.
 
-The renderer draws the ghosts in their rank colour on an offscreen layer, composites it
-once at 38% opacity, and adds a name tag. A ghost outside the view gets a tag pinned to
+The renderer draws each ghost straight onto the game canvas, behind the track, as a solid
+pale silhouette: its rank colour mixed into the white field. Each name tag is rendered
+once into a small cached canvas. Do not put an offscreen layer back. Compositing one the
+size of the whole canvas every frame roughly tripled what the ghosts cost at Retina
+fullscreen (2880×1620), and players felt it as lag. A ghost outside the view gets a tag pinned to
 the screen edge with its distance, and each ghost has a notch on the progress strip. A
 crashed ghost disappears after 1.5 s; a finished one stays at the line with its time. The
 **Duchy** button turns them off (`rp_mt_ghosts` in localStorage). Ghosts are render-only
