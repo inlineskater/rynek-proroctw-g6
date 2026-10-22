@@ -24153,7 +24153,9 @@ function farmSellConfirm(crop, maxQty, afterSell) {
       ? '🏆 Kontrakt liczy tylko plony zebrane w aktywnym tygodniu. Normalna sprzedaż nadal obniży cenę o ~' + q.dropPct + '%.'
       : '📉 Ta sprzedaż obniży cenę o ~' + q.dropPct + '% (im więcej naraz, tym mocniej). Cena wraca do dziennego poziomu z czasem i resetuje się o 00:00 i 12:00.');
     confirmBtn.replaceChildren('💰 Sprzedaj · brutto ~' + q.totalProceeds + ' 🪙');
+    donateBtn?._sync?.(currentQty, q);
   };
+  const donateBtn = farmGoalDonateButton(crop, () => currentQty, close, afterSell);
   
   confirmBtn.addEventListener('click', async () => { confirmBtn.disabled = true; await sellCrop(crop, currentQty); close(); if (afterSell) afterSell(); });
   const closeX = el('button', { className: 'btn-close', type: 'button', 'aria-label': 'Zamknij' }, '✕');
@@ -24189,7 +24191,7 @@ function farmSellConfirm(crop, maxQty, afterSell) {
         ? el('div', { className: 'farm-sell-note' },
             '🧬 ' + ident.note + ' Zebrany plon z różnych kart i hybryd trafia do jednej partii — lepsza karta daje WIĘCEJ sztuk, nie droższą sztukę.')
         : ''),
-    confirmBtn);
+    confirmBtn, donateBtn);
     
   updateQuote();
   overlay.append(modal);
@@ -24528,6 +24530,9 @@ function farmPerDayIncome(d, price, level = 1) {
 function farmWeatherYieldMult() { return 1; }
 function farmNeighbourYieldMult() { return 1; }
 function farmWorldDecorateCell() {}
+// 🎯 crop donations to the Wspólny Cel — implemented in tabs/farm-world.js.
+function farmGoalDonateButton() { return ''; }
+function ogCropDonateSection() { return ''; }
 function farmWorldTileActions() {}
 function farmPlantIncomeCalc(def, level, over) {
   const mkt = def && fmMarket.get(def.crop_type);
@@ -25402,6 +25407,7 @@ function openOfficeGoalModal() {
     box.append(el('div', { className: 'og-hint' },
       'Monety są spalane, nie zbierane — a spalanie podnosi budżet skupu NPC, ',
       'więc dorzucając się podnosisz ceny plonów całemu biuru.'));
+    box.append(ogCropDonateSection(close));
   }
 
   const contributors = fmOfficeGoal?.contributors || [];
@@ -25411,7 +25417,8 @@ function openOfficeGoalModal() {
     contributors.forEach((c, i) => list.append(el('div', { className: 'og-list-row' },
       el('span', { className: 'og-rank' }, ['🥇', '🥈', '🥉'][i] || (i + 1) + '.'),
       el('span', { className: 'og-nick' }, c.nick),
-      el('b', {}, ogCoins(c.amount) + ' 🪙'))));
+      el('b', { title: Number(c.crop_amount) > 0 ? 'w tym plony: ' + ogCoins(c.crop_amount) + ' 🪙' : '' },
+        (Number(c.crop_amount) > 0 ? '🌾 ' : '') + ogCoins(c.amount) + ' 🪙'))));
     box.append(list);
   } else if (!done) {
     box.append(el('div', { className: 'og-empty' }, 'Nikt jeszcze nic nie dorzucił. Bądź pierwszy.'));

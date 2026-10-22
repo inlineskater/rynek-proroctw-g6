@@ -1049,3 +1049,126 @@ function fwRenderNeighbours(bodyEl) {
 
   bodyEl.replaceChildren(wrap);
 }
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  🎯 Crop donations to the Wspólny Cel Biura (supabase/office-goal-crop-donations.sql)
+// ════════════════════════════════════════════════════════════════════════════
+//  Past 2× the fair share (farm-fair-share.sql) the NPC pays 5%; donated crops
+//  count toward the office goal at FULL spot value instead. No coin moves and
+//  the market price does not dip. index.html keeps two no-op stubs
+//  (farmGoalDonateButton / ogCropDonateSection) that these overwrite.
+
+(function farmDonateInjectCss() {
+  if (document.getElementById('farm-donate-css')) return;
+  const s = document.createElement('style');
+  s.id = 'farm-donate-css';
+  s.textContent = `
+    .fw-don-btn { width: 100%; margin-top: 8px; padding: 9px 12px; border-radius: 10px; font: inherit;
+      font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+      background: var(--surface, var(--card)); color: var(--text); font-variant-numeric: tabular-nums; }
+    .fw-don-btn:hover:not(:disabled) { border-color: var(--accent); }
+    .fw-don-btn.is-better { border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+      background: color-mix(in srgb, var(--accent) 9%, var(--surface, var(--card))); }
+    .fw-don-hint { font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 5px; }
+    .fw-don-title { margin: 16px 0 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+    .fw-don-row { display: flex; align-items: center; gap: 8px; padding: 6px 0;
+      border-bottom: 1px solid var(--border); font-size: 13px; }
+    .fw-don-row:last-child { border-bottom: 0; }
+    .fw-don-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fw-don-val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .fw-don-row .farm-mini-btn { flex: 0 0 auto; }
+  `;
+  document.head.appendChild(s);
+})();
+
+// Mirror of farm_crop_market_value(): qty × the NPC's current effective price.
+function farmDonationValue(crop, qty) {
+  const mkt = fmMarket.get(crop);
+  return mkt ? Math.floor(qty * farmMarketEffectivePrice(mkt)) : 0;
+}
+
+function fwOpenGoal() {
+  const g = fmOfficeGoal?.goal;
+  return g && g.status === 'open' ? g : null;
+}
+
+function fwGoalRemaining() {
+  const g = fwOpenGoal();
+  return g ? Math.max(0, Number(g.target_coins) - Number(g.raised_coins)) : 0;
+}
+
+async function fwDonateCrops(crop, qty, btn) {
+  if (btn) btn.disabled = true;
+  const { data, error } = await sb.rpc('donate_crops_to_office_goal', { p_crop_type: crop, p_qty: qty });
+  if (error) {
+    const m = String(error.message || error);
+    toast('❌ ' + (/no_open_goal/.test(m) ? 'Nie ma teraz otwartego celu.'
+      : /goal_already_funded/.test(m) ? 'Cel został właśnie ufundowany.'
+      : /not_enough_crops/.test(m) ? 'Nie masz już tylu plonów.'
+      : fmErr(error)));
+    if (btn) btn.disabled = false;
+    return null;
+  }
+  await reloadFarmInventory();
+  await refreshOfficeGoal();
+  await invalidateFarmAssetBreakdown({ reload: true });
+  const name = farmCropIdentity(crop).name;
+  toast(data.completed
+    ? '🎉 Cel osiągnięty! ' + (fmOfficeGoal?.goal?.reward_text || '')
+    : '🎯 Przekazano ' + data.donated_qty + '× ' + name + ' — ' + ogCoins(data.value) + ' 🪙 na Wspólny Cel. Dzięki!');
+  renderFarmMarket();
+  if (farmModalEl) refreshFarmHub();
+  return data;
+}
+
+// Second button in the sell dialog. index.html calls btn._sync(qty, quote) on
+// every slider move, so the label tracks the chosen quantity.
+function farmGoalDonateButton(crop, getQty, close, afterSell) {
+  if (!fwOpenGoal()) return '';
+  const wrap = el('div', {});
+  const btn = el('button', { className: 'fw-don-btn', type: 'button' });
+  const hint = el('div', { className: 'fw-don-hint' });
+  wrap._sync = (qty, q) => {
+    const val = Math.min(farmDonationValue(crop, qty), fwGoalRemaining());
+    const over = !!q && q.fairPct < 100;
+    btn.classList.toggle('is-better', over);
+    btn.replaceChildren('🎯 Przekaż na Wspólny Cel · ' + ogCoins(val) + ' 🪙 wkładu');
+    hint.replaceChildren(over
+      ? '⚖️ Ponad uczciwym udziałem skup płaci Ci tylko ' + q.fairPct + '% — na Wspólny Cel trafia pełna wartość rynkowa.'
+      : 'Plony liczą się do celu po cenie rynkowej. Nie dostajesz za nie monet.');
+  };
+  btn.addEventListener('click', async () => {
+    const d = await fwDonateCrops(crop, getQty(), btn);
+    if (d) { close(); if (afterSell) afterSell(); }
+  });
+  wrap.append(btn, hint);
+  wrap._sync(getQty(), null);
+  return wrap;
+}
+
+// „🌾 Albo przekaż plony" inside the Wspólny Cel modal: every crop I hold.
+function ogCropDonateSection(close) {
+  if (!fwOpenGoal()) return '';
+  const crops = [...fmInventory.entries()].filter(([ct, qty]) => qty > 0 && fmMarket.has(ct))
+    .map(([ct, qty]) => ({ ct, qty, val: farmDonationValue(ct, qty) }))
+    .sort((a, b) => b.val - a.val);
+  if (!crops.length) return '';
+  const box = el('div', {});
+  box.append(el('div', { className: 'fw-don-title' }, '🌾 Albo przekaż plony'));
+  const remaining = fwGoalRemaining();
+  crops.forEach(c => {
+    const ident = farmCropIdentity(c.ct);
+    const btn = el('button', { className: 'farm-mini-btn', type: 'button' }, 'Przekaż');
+    btn.addEventListener('click', async () => { if (await fwDonateCrops(c.ct, c.qty, btn)) close(); });
+    box.append(el('div', { className: 'fw-don-row' },
+      farmIcon(ident.emoji),
+      el('span', { className: 'fw-don-name' }, ident.name + ' ×' + c.qty),
+      el('span', { className: 'fw-don-val' }, ogCoins(Math.min(c.val, remaining)) + ' 🪙'),
+      btn));
+  });
+  box.append(el('div', { className: 'fw-don-hint' },
+    'Plony liczą się po aktualnej cenie skupu, bez monet dla Ciebie. Najbardziej opłaca się to ponad Twoim uczciwym udziałem, ',
+    'gdzie skup płaci tylko 30% albo 5%. Cena rynkowa się przy tym nie zmienia.'));
+  return box;
+}
