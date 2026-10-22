@@ -213,22 +213,28 @@ Nagrody są rozliczane w poniedziałek dokładnie o **00:00 Europe/Warsaw**. Har
 **Generowanie** — leniwie przy pierwszym odczycie dnia (`farm_ensure_daily_orders`, jak `bank_settle_due`, bez crona):
 
 ```text
-2 zamówienia „mix" dziennie + 1 „💎 Kolekcjoner", każde wisi 72 h od północy (≈ 6-9 otwartych naraz)
-mix: 1 linia 50% · 2 linie 35% · 3 linie 15%
-kandydaci: zwykłe (nie-NFT) karty, które ma ≥ 2 graczy, NIGDY roślina z kontraktu tygodnia
+dziennie: 3 „mix" + 1 🚚 hurt + 1 ⚡ ekspres + 1 💎 Kolekcjoner;  tygodniowo: 1 🏛️ Zarząd   (≈ 17 otwartych naraz)
+mix: 1 linia 50% · 2 linie 35% · 3 linie 15%, wisi 72 h od północy
+kandydaci: zwykłe (nie-NFT) karty, które ma ≥ 2 graczy (i nigdy roślina z kontraktu, gdyby wrócił)
 waga       = 1 / (udział w przychodzie ze skupu z 7 dni + 0.03)      -- niesprzedawane częściej
 ilość      = ceil(base_yield × (1 + (L_ref − 1) × 0.5) × k),  k = 1..(4 − liczba_linii) zbiorów
 L_ref      = 35. percentyl poziomów posiadaczy karty (celowo poniżej mediany)
-nagroda    = Σ ilość × base_price × demand × premia,   premia 1.00 / 1.15 / 1.30 za 1 / 2 / 3 linie
+wartość    = max(ilość × base_price,  k × 0.75 × mediana wartości jednego zbioru)   -- podłoga na zbiór
+nagroda    = Σ wartość × √demand × premia,   premia mix 1.10 / 1.25 / 1.40 za 1 / 2 / 3 linie
+🚚 hurt    = 1 roślina (waga jak mix), k = 3..4, premia 0.85, 72 h
+⚡ ekspres  = 2 rośliny, które ktoś MA w magazynie (waga = liczba graczy z zapasem), k = 1, premia 1.40, do północy
+🏛️ Zarząd  = 4 rośliny (waga jak mix), k = 2 (1, gdy do poniedziałku zostały < 4 dni), premia 2.00, pn 00:00 → pn 00:00
 ```
 
-Kotwica rynku to średnio ~0.57 × base × demand, więc premia 1.0–1.3 to w praktyce **~1.75–2.3× skupu**: płaci się za różnorodność, nie za wolumen.
+**Zmiana z 2026-10-22 (po końcu 🏆 Wyzwania).** Kontrakt tygodnia płacił ~8 300 🪙/dzień premii; zamówienia płaciły 150–2 500 🪙 sztuka (~4 000/dzień łącznie, prawie wszystko realizowało dwóch graczy) przy ~100 000/dzień ze skupu. Dwie przyczyny: za mało zamówień i to, że waga „niesprzedawane częściej" losowała głównie 🥕 🥔 🍅 — niesprzedawane właśnie dlatego, że zbiór takiej rośliny jest wart ~50 🪙 w bazie wobec ~600–800 za 🍇 🎃 🍍. Stąd **podłoga na zbiór** (`farm_order_harvest_floor_share()` = 0.75 mediany): linia z jednego zbioru ziemniaków płaci teraz trochę więcej niż pole winogron na skupie — czyli uprawa niepopularnej rośliny POD zamówienie się opłaca. **√demand zamiast demand**: przy demand 0.58 to ×0.76 zamiast ×0.58; zamówienia dalej idą za dławikiem, ale gdy skup jest zalany, stają się względnie lepsze — dokładnie ten bodziec do dywersyfikacji, dla którego istnieją. Zmierzone po wdrożeniu: mix ~350–4 500 🪙, Zarząd ~6 300 🪙 w pełnym tygodniu (pierwszy, od czwartku: 4 550 🪙 za 1 zbiór każdej z 4 roślin).
 
-**💎 Kolekcjoner** — jedno zamówienie dziennie na plon z kart NFT (`seasonal_bloom` albo plon legendarny), trzymany przez ≥ 2 graczy. Ilość = 0.8 × średni zbiór egzemplarzy, które go dają (`stat_yield` hybrydy albo `base_yield`, × poziom), premia 1.40. Pomiar z 2026-09-28: z 54 NFT zasadzonych było 12 — reszta leżała jako trofea, bo wylewelowana zwykła karta zarabia na polu więcej. To drugi kupiec na to, co rodzi NFT.
+**Generator dopełnia, nie „wszystko albo nic".** Każdy rodzaj jest dobijany do celu, a `farm_order_days(day, version)` to szybka ścieżka: podbicie `farm_order_generator_version()` sprawia, że dzień już wygenerowany dostaje brakujące zamówienia przy następnym odczycie (tak 22.10 doszły mix #4, hurt i ekspres do dnia, który już miał 3 zamówienia), a te, nad którymi gracze już pracują, zostają nietknięte. 🏛️ siedzi na swoim poniedziałku w slocie 0.
+
+**💎 Kolekcjoner** — jedno zamówienie dziennie na plon z kart NFT (`seasonal_bloom` albo plon legendarny), trzymany przez ≥ 2 graczy. Ilość = 0.8 × średni zbiór egzemplarzy, które go dają (`stat_yield` hybrydy albo `base_yield`, × poziom), premia 1.60 (było 1.40). Pomiar z 2026-09-28: z 54 NFT zasadzonych było 12 — reszta leżała jako trofea, bo wylewelowana zwykła karta zarabia na polu więcej. To drugi kupiec na to, co rodzi NFT. Od 2026-10-22 waga = 1 + liczba **zasadzonych** egzemplarzy, a plon, na który wisi już otwarte zamówienie Kolekcjonera, idzie na koniec kolejki — wcześniej przez 5 dni z rzędu chciał 💎 diamentowej róży, którą zasadził jeden gracz, i nikt nic nie zrealizował.
 
 **Realizacja** (`fill_farm_order`): wszystko albo nic, każda linia zdejmowana FIFO (najpierw partie najbliższe zgnicia, jak w `sell_crop_to_npc`), raz na gracza na zamówienie — nikt nikomu zamówienia nie zabiera. Wypłata `farm_order_payout` przechodzi przez autospłatę podatku gruntowego. **Nie liczy się do kontraktu tygodnia.**
 
-**Inflacja.** `farm_order_payout` jest na liście `farm_revenue_per_day()` (anti-inflation.sql) obok `farm_crop_sale`, więc każda moneta z zamówienia podnosi zmierzoną presję i obniża mnożnik popytu na skupie. Budżet NPC się nie zmienia — zamówienia decydują tylko, ZA KTÓRE plony jest płacony. Pokrętła: `farm_orders_per_day()`, `farm_order_ttl_hours()`, `farm_order_premium(linie)`, `farm_order_level_percentile()`, `farm_order_collector_premium()`, `farm_order_collector_harvest_share()`.
+**Inflacja.** `farm_order_payout` jest na liście `farm_revenue_per_day()` (anti-inflation.sql) obok `farm_crop_sale`, więc każda moneta z zamówienia podnosi zmierzoną presję i obniża mnożnik popytu na skupie. Budżet NPC się nie zmienia — zamówienia decydują tylko, ZA KTÓRE plony jest płacony. Ponieważ wszystkie rodzaje księgują `farm_order_payout`, większe zamówienia nie dokładają ani monety ponad budżet — zabierają większy kawałek skupowi (i to głównie wielorybom, bo zamówienie płaci każdemu tyle samo, raz). Pokrętła: `farm_orders_per_day()`, `farm_order_ttl_hours()`, `farm_order_premium(linie)`, `farm_order_kind_premium(rodzaj)`, `farm_order_demand_exponent()`, `farm_order_harvest_floor_share()`, `farm_order_level_percentile()`, `farm_order_collector_premium()`, `farm_order_collector_harvest_share()`; po dodaniu rodzaju podbij `farm_order_generator_version()`.
 
 ## 🌦️ Pogoda z Wrocławia (od 2026-09-28)
 

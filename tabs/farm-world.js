@@ -3,7 +3,8 @@
 // ════════════════════════════════════════════════════════════════════════════
 //  📋 Tablica Zamówień: NPC customers who want a MIX of crops, drawn from the
 //  crops the office is not selling, plus one daily 💎 Kolekcjoner order for an
-//  NFT crop. Backend: supabase/farm-orders.sql. The server is authoritative for
+//  NFT crop, a 🚚 bulk order, an ⚡ express order until midnight and one 🏛️
+//  weekly order (2026-10-22, after the 🏆 Wyzwanie ended). Backend: supabase/farm-orders.sql. The server is authoritative for
 //  everything — this file only renders farm_orders_state() and calls
 //  fill_farm_order(). Design and the anti-inflation argument: docs/farma.md.
 //
@@ -35,6 +36,13 @@
     .fw-cust-sub { font-size: 11px; color: var(--muted); }
     .fw-tag { margin-left: auto; flex: 0 0 auto; font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 999px;
       background: color-mix(in srgb, #a855f7 18%, transparent); color: #9333ea; text-transform: uppercase; letter-spacing: .04em; }
+    .fw-tag.is-bulk { background: rgba(37,99,235,.14); color: #1d4ed8; }
+    .fw-tag.is-express { background: rgba(234,88,12,.15); color: #c2410c; }
+    .fw-tag.is-weekly { background: rgba(161,98,7,.16); color: #92400e; }
+    .fw-done { margin-top: 2px; }
+    .fw-done > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); list-style: none; padding: 4px 2px; }
+    .fw-done > summary::-webkit-details-marker { display: none; }
+    .fw-done[open] > summary { margin-bottom: 8px; }
     .fw-lines { display: flex; flex-direction: column; gap: 6px; }
     .fw-line { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 12.5px; }
     .fw-line-ico { font-size: 18px; line-height: 1; }
@@ -76,6 +84,11 @@
     .fw-card .fw-line-bar { background: rgba(60,40,15,.12); }
     .fw-card.is-collector { background: #f6f0ff; }
     .fw-card.is-collector::before { background: radial-gradient(circle at 35% 35%, #d8b4fe, #7e22ce 60%, #3b0764); }
+    .fw-card.is-weekly { grid-column: 1 / -1; background: #fff6dc; --tilt: -.3deg; }
+    .fw-card.is-weekly .fw-lines { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 18px; }
+    .fw-card.is-weekly .fw-reward { font-size: 18px; }
+    .fw-card.is-weekly::before { background: radial-gradient(circle at 35% 35%, #fde68a, #b45309 60%, #78350f); }
+    .fw-card.is-express { background: #fff1e6; }
     .fw-card.is-done { opacity: 1; }
     .fw-card.is-done > * { opacity: .55; }
     .fw-card.is-done::after { content: 'ZREALIZOWANE'; position: absolute; right: 10px; top: 42%; padding: 3px 8px;
@@ -211,11 +224,15 @@ function fwTimeLeft(iso) {
 function fwRenderOrders(bodyEl) {
   const wrap = el('div', { className: 'fw-orders' });
   wrap.append(el('div', { className: 'fw-lead' },
-    'Zestawy plonów za ', el('b', {}, 'więcej niż skup'), '. ',
+    'Zestawy plonów za ', el('b', {}, 'dużo więcej niż skup'), '. ',
     fwHelp(null,
       'Klienci zamawiają głównie to, czego nikt teraz nie uprawia. Każde zamówienie możesz zrealizować raz — nikt nikomu go nie zabiera. ',
       'Nowe przychodzą o północy i wiszą 3 dni, więc zdążysz coś pod nie zasadzić. ',
-      el('b', {}, '💎 Kolekcjoner'), ' kupuje plony z kart NFT.')));
+      el('b', {}, '🏛️ Zamówienie tygodnia'), ' od Zarządu to cztery rośliny naraz, wisi do poniedziałku i płaci najwięcej. ',
+      el('b', {}, '🚚 Hurtownia'), ' bierze dużo jednej rośliny, ',
+      el('b', {}, '⚡ Catering'), ' chce tego, co już masz w magazynie — ale tylko do północy. ',
+      el('b', {}, '💎 Kolekcjoner'), ' kupuje plony z kart NFT. ',
+      'Gdy skup jest zalany, zamówienia tanieją wolniej niż ceny na skupie.')));
 
   const wk = fwOrders.my_week || {};
   wrap.append(el('div', { className: 'fw-week' },
@@ -231,25 +248,41 @@ function fwRenderOrders(bodyEl) {
     return;
   }
 
-  // Open-and-fillable first, then open-but-short, then the ones I already did.
-  const rank = o => o.mine ? 2 : (o.lines.every(l => fwHave(l) >= l.qty) ? 0 : 1);
-  orders.sort((a, b) => rank(a) - rank(b) || new Date(a.expires_at) - new Date(b.expires_at));
+  // The weekly note across the top, then open-and-fillable, then open-but-short.
+  // The ones I already did fold away below — about 17 orders are open at once.
+  const rank = o => (o.kind === 'weekly' ? -1 : 0) + (o.lines.every(l => fwHave(l) >= l.qty) ? 0 : 1);
+  const byRank = (a, b) => rank(a) - rank(b) || new Date(a.expires_at) - new Date(b.expires_at);
+  const open = orders.filter(o => !o.mine).sort(byRank);
+  const done = orders.filter(o => o.mine).sort(byRank);
 
-  const grid = el('div', { className: 'fw-grid' });
-  orders.forEach(o => grid.append(fwOrderCard(o)));
-  wrap.append(grid);
+  if (open.length) {
+    const grid = el('div', { className: 'fw-grid' });
+    open.forEach(o => grid.append(fwOrderCard(o)));
+    wrap.append(grid);
+  } else {
+    wrap.append(el('div', { className: 'fw-empty' }, 'Wszystko zrealizowane — nowe zamówienia o północy.'));
+  }
+  if (done.length) {
+    const grid = el('div', { className: 'fw-grid' });
+    done.forEach(o => grid.append(fwOrderCard(o)));
+    wrap.append(el('details', { className: 'fw-done' },
+      el('summary', {}, '✅ Zrealizowane (' + done.length + ')'), grid));
+  }
   bodyEl.replaceChildren(wrap);
 }
 
+// Badge per order kind (farm-orders.sql); 'mix' has none.
+const FW_ORDER_TAGS = { collector: 'NFT', bulk: 'Hurt', express: 'Do północy', weekly: 'Tydzień' };
+
 function fwOrderCard(o) {
-  const collector = o.kind === 'collector';
-  const card = el('div', { className: 'fw-card' + (collector ? ' is-collector' : '') + (o.mine ? ' is-done' : '') });
+  const card = el('div', { className: 'fw-card is-' + (o.kind || 'mix') + (o.mine ? ' is-done' : '') });
   const head = el('div', { className: 'fw-card-head' },
     el('span', { className: 'fw-cust-emoji' }, o.emoji || '🧺'),
     el('div', { className: 'fw-cust' },
       el('div', { className: 'fw-cust-name' }, o.customer),
       el('div', { className: 'fw-cust-sub' }, fwTimeLeft(o.expires_at))));
-  if (collector) head.append(el('span', { className: 'fw-tag' }, 'NFT'));
+  const tag = FW_ORDER_TAGS[o.kind];
+  if (tag) head.append(el('span', { className: 'fw-tag is-' + o.kind }, tag));
   card.append(head);
 
   const lines = el('div', { className: 'fw-lines' });
