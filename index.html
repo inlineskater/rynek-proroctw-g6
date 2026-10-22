@@ -21377,6 +21377,11 @@ let fmSeasonalLeaderboard = [];  // current event aggregate leaderboard
 // being paid on 20-30x that. Preview only — the server is authoritative.
 const FARM_SEASONAL_PREMIUM_CAP_X = 3;
 let fmMarketState = null;        // farm_market_state(): NPC budget vs office output
+// farm_fairness_state() (supabase/farm-fair-share.sql): my 7-day fair share of
+// the NPC budget, the progressive rate tiers and the catch-up level-up discount.
+// Null before that migration runs — every consumer then falls back to the old
+// flat behaviour, which is exactly what the server is still doing.
+let fmFairness = null;
 // farm_market.floor_price only exists once supabase/anti-inflation.sql has run.
 // PostgREST rejects the WHOLE select for an unknown column, which would take the
 // Ogródek down if index.html deployed first — so the column is dropped from the
@@ -23781,7 +23786,7 @@ function farmCardTile(card, opts) {
   if (!def) return el('div');
   const isNft = def.edition_size != null;
   const rar = def.rarity || 'common';
-  const dupesNeeded = 2 * card.level, coinCost = 50 * card.level * card.level;
+  const dupesNeeded = 2 * card.level, coinCost = farmLevelUpCoinCost(card.species, card.level);
   const haveEnough = card.count >= dupesNeeded;
   const canLevel = haveEnough && (me?.coins || 0) >= coinCost;
   const pick = !!opts.onPick || opts.plantDisabled;
@@ -23801,8 +23806,11 @@ function farmCardTile(card, opts) {
     }
   } else {
     footer = el('button', { className: 'fcc-up' + (canLevel ? ' ready' : ''),
-        title: 'Ulepszenie do poz. ' + (card.level + 1) + ': ' + dupesNeeded + ' duplikatów + ' + coinCost + ' 🪙' },
-      canLevel ? ('⬆ Ulepsz · ' + coinCost + ' 🪙')
+        title: 'Ulepszenie do poz. ' + (card.level + 1) + ': ' + dupesNeeded + ' duplikatów + ' + coinCost + ' 🪙'
+          + (farmLevelUpCoinMult(card.species, card.level) < 1
+            ? ' (🏃 nadrabianie: −' + Math.round((1 - farmLevelUpCoinMult(card.species, card.level)) * 100) + '% monet, bo biuro ma tę kartę na wyższym poziomie)' : '') },
+      canLevel ? ('⬆ Ulepsz · ' + coinCost + ' 🪙'
+                  + (farmLevelUpCoinMult(card.species, card.level) < 1 ? ' 🏃' : ''))
                : (haveEnough ? ('Wymaga ' + coinCost + ' 🪙') : ('Karty: ' + card.count + ' / ' + dupesNeeded)));
     footer.disabled = !canLevel;
     footer.addEventListener('click', async e => {
@@ -24082,11 +24090,16 @@ function farmSellQuote(crop, qty, spotOverride) {
   const startPrice = curEff;
   const endPrice = Math.max(floor, curEff * (1 - dropFrac));
   const collector = farmCollectorBonus();
-  const proceeds = Math.round(qty * ((startPrice + endPrice) / 2) * (1 + collector));
+  const fullProceeds = Math.round(qty * ((startPrice + endPrice) / 2) * (1 + collector));
+  // farm-fair-share.sql: the live path pays the progressive rate; the min–max
+  // envelope (spotOverride) stays at market price, since it describes a crop,
+  // not this week's position of this seller.
+  const proceeds = spotOverride != null ? fullProceeds : Math.round(farmFairSharePay(fullProceeds));
   const eventQty = farmSeasonalEligibleQty(crop, qty);
   const eventBonus = Math.round(eventQty * Number(fmSeasonalEvent?.bonus_per_unit || 0)
                                 * (1 + farmSeasonalAchBonus()));
-  return { base, startPrice, endPrice, proceeds, dropPct: Math.round(dropFrac * 100),
+  return { base, startPrice, endPrice, proceeds, fullProceeds,
+    fairPct: fullProceeds ? Math.round(proceeds / fullProceeds * 100) : 100, dropPct: Math.round(dropFrac * 100),
     startMaxPct: Math.round(startPrice / base * 100),
     endMaxPct: Math.round(endPrice / base * 100),
     collectorPct: Math.round(collector * 100),
@@ -24128,6 +24141,10 @@ function farmSellConfirm(crop, maxQty, afterSell) {
       el('span', { className: 'farm-seasonal-bonus', style: { marginLeft: '6px' },
                    title: 'Renoma Kolekcjonera: +2% za każdy posiadany gatunek NFT (maks. +30%)' },
         '🏅 +' + q.collectorPct + '%'));
+    if (q.fairPct < 100) proceedsLabel.append(
+      el('span', { className: 'farm-seasonal-bonus', style: { marginLeft: '6px' },
+                   title: 'Przekroczony uczciwy udział w budżecie skupu (7 dni). Wartość rynkowa: ~' + q.fullProceeds + ' 🪙' },
+        '⚖️ ' + q.fairPct + '%'));
     bonusLabel.replaceChildren(q.eventBonus > 0
       ? ('+' + q.eventBonus + ' 🪙 za kontrakt (' + q.eventQty + ' szt.)')
       : '—');
@@ -24275,7 +24292,7 @@ function openFarmModalShell(title, opts = {}) {
 async function ensureFarmData(opts = {}) {
   if (!opts.force && fmDefs.size && fmMarket.size && fmTiles.size) return;
   try {
-    const [defsRes, colRes, invRes, mktRes, nftRes, tilesRes, stateRes, taxRes, listedCardsRes] = await Promise.all([
+    const [defsRes, colRes, invRes, mktRes, nftRes, tilesRes, stateRes, taxRes, listedCardsRes, fairRes] = await Promise.all([
       sb.from('farm_card_defs').select('*').eq('is_active', true),
       me ? sb.from('farm_collection').select('species,count,level').eq('user_id', me.id) : Promise.resolve({ data: [] }),
       me ? sb.from('farm_inventory').select('crop_type,qty,harvested_at,expires_at').eq('user_id', me.id) : Promise.resolve({ data: [] }),
@@ -24285,7 +24302,9 @@ async function ensureFarmData(opts = {}) {
       me ? sb.from('farm_user_state').select('boxes,boxes_gold,tile_vouchers').eq('user_id', me.id).maybeSingle() : Promise.resolve({ data: null }),
       me ? sb.rpc('farm_land_tax_quote') : Promise.resolve({ data: null }),
       me ? sb.from('marketplace_listings').select('card_species,qty').eq('seller_id', me.id).eq('status', 'open').eq('item_kind', 'farm_card') : Promise.resolve({ data: [] }),
+      me ? sb.rpc('farm_fairness_state') : Promise.resolve({ data: null }),
     ]);
+    fmFairness = fairRes.error ? null : (fairRes.data || null);
     fmDefs = new Map(); (defsRes.data || []).forEach(d => fmDefs.set(d.species, d));
     fmCollection = colRes.data || [];
     buildFarmInventory(invRes.data || []);
@@ -25196,6 +25215,46 @@ async function refreshFarmMarketState() {
   return fmMarketState;
 }
 
+async function refreshFarmFairness() {
+  try {
+    const { data, error } = await sb.rpc('farm_fairness_state');
+    if (error) throw error;
+    fmFairness = data || null;
+  } catch (e) { fmFairness = null; }
+  return fmFairness;
+}
+
+// Mirror of farm_fair_share_pay(): what a sale worth `value` at market price
+// pays after `used` (market-price value sold in the trailing 7 days), applying
+// the progressive tiers piecewise. Preview only — the server is authoritative.
+function farmFairSharePay(value, used) {
+  const share = Number(fmFairness?.fair_share_7d || 0);
+  const tiers = fmFairness?.tiers;
+  if (!share || !Array.isArray(tiers)) return value;
+  const a = Math.max(0, used ?? Number(fmFairness.used_7d || 0)), b = a + Math.max(0, value);
+  let lo = 0, out = 0;
+  for (const t of tiers) {
+    const hi = t.upto_x == null ? b : Number(t.upto_x) * share;
+    const top = Math.min(b, hi), bot = Math.max(a, lo);
+    if (top > bot) out += (top - bot) * Number(t.rate);
+    lo = hi;
+    if (lo >= b) break;
+  }
+  return out;
+}
+
+// Mirror of level_up_card's coin cost incl. the catch-up discount: cheaper the
+// further this card is behind the office's best copy of the species.
+function farmLevelUpCoinMult(species, level) {
+  const top = Number(fmFairness?.top_levels?.[species] || 0);
+  const gap = top - level;
+  const hit = (fmFairness?.catchup || []).find(t => gap >= Number(t.min_gap));
+  return hit ? Number(hit.cost_mult) : 1;
+}
+function farmLevelUpCoinCost(species, level) {
+  return Math.ceil(50 * level * level * farmLevelUpCoinMult(species, level));
+}
+
 // Prices moving for a reason nobody can see is indistinguishable from prices
 // being broken, so the derivation is on screen: what the office burned, what
 // that buys, what the office sold, and the resulting skup rate.
@@ -25220,12 +25279,19 @@ function farmMarketPressureCard() {
       row('Spalone w farmie i kasynie', nf(burn) + ' 🪙/dzień'),
       row('Budżet skupu NPC', nf(budget) + ' 🪙/dzień'),
       row('Biuro sprzedaje', nf(revenue) + ' 🪙/dzień'),
-      row('Nasycenie', (Number(cur.pressure_bps || 0) / 100).toFixed(0) + '% budżetu')),
+      row('Nasycenie', (Number(cur.pressure_bps || 0) / 100).toFixed(0) + '% budżetu'),
+      fmFairness?.fair_share_7d
+        ? row('Twój udział (7 dni)', nf(fmFairness.used_7d || 0) + ' / ' + nf(fmFairness.fair_share_7d) + ' 🪙')
+        : ''),
     el('div', { className: 'farm-mkt-press-note' },
       'NPC oddaje ' + Math.round(Number(fmMarketState.burn_share || 0.9) * 100)
       + '% tego, co biuro spali na skrzynkach, ulepszeniach, hodowli, podatku i w kasynie. '
       + 'Im więcej biuro wydaje, tym lepsze ceny skupu dla wszystkich — im więcej zalewa rynek plonami, tym niższe. '
-      + (glide ? 'Stawka dochodzi do ' + Math.round(target) + '% stopniowo (maks. 15 pkt proc. na notowanie).' : '')));
+      + (glide ? 'Stawka dochodzi do ' + Math.round(target) + '% stopniowo (maks. 15 pkt proc. na notowanie).' : '')
+      + (fmFairness?.fair_share_7d
+        ? ' ⚖️ Uczciwy udział = budżet tygodnia ÷ ' + fmFairness.farmers + ' sprzedających. Do 1× udziału skup płaci 100%, '
+          + 'od 1× do 2× — 30%, powyżej 2× — 5% (liczone z ostatnich 7 dni). Nadwyżka jednego gracza nie zbija cen pozostałym.'
+        : '')));
 }
 
 // ── „Wspólny Cel Biura" ────────────────────────────────────────────────────
@@ -26736,7 +26802,7 @@ function openFarmCardModal(card) {
 
   const render = () => {
     const level = card.level || 1;
-    const dupesNeeded = 2 * level, coinCost = 50 * level * level;
+    const dupesNeeded = 2 * level, coinCost = farmLevelUpCoinCost(card.species, level);
     const haveEnough = card.count >= dupesNeeded;
     const canLevel = haveEnough && (me?.coins || 0) >= coinCost;
     const calc = farmPlantIncomeCalc(def, level);
@@ -27309,7 +27375,7 @@ function renderGardenAdvisorBody(container) {
       const profitDelta = coinsPerDayNext - coinsPerDay;
 
       const dupesNeeded = 2 * level;
-      const coinCost = 50 * level * level;
+      const coinCost = farmLevelUpCoinCost(card.species, level);
       const haveEnoughDupes = card.count >= dupesNeeded;
       const canUpgrade = haveEnoughDupes && (me?.coins || 0) >= coinCost;
 
@@ -28486,7 +28552,9 @@ async function levelUpCard(species, btn, opts) {
   if (typeof data.coins === 'number') { me.coins = data.coins; setText(headerCoins, me.coins); }
   const card = fmCollection.find(c => c.species === species);
   if (card) { card.level = data.level; card.count = data.count; }
-  showToast('⬆ ' + (fmDefs.get(species)?.name || species) + ' — poziom ' + data.level + '!');
+  const cm = Number(data.catchup_mult ?? 1);
+  showToast('⬆ ' + (fmDefs.get(species)?.name || species) + ' — poziom ' + data.level + '!'
+    + (cm < 1 ? ' · 🏃 nadrabianie −' + Math.round((1 - cm) * 100) + '%' : ''));
   if (opts.cardEl) await playCardUpgradeAnim(opts.cardEl, data.level);
   await invalidateFarmAssetBreakdown({ reload: true });
   renderFarmCollection(); renderFarmSelection();
@@ -28694,6 +28762,7 @@ async function sellCrop(crop, qty, btn) {
     mkt.last_decay_at = data.last_decay_at || new Date().toISOString();
   }
   if (typeof data.land_tax_debt === 'number') fmTax = Object.assign({}, fmTax || {}, { debt: Number(data.land_tax_debt || 0) });
+  if (fmFairness && data.fair_share_used != null) fmFairness.used_7d = Number(data.fair_share_used);
   await refreshFarmTaxQuote();
   await reloadFarmInventory();   // FIFO lot consumption may have emptied the soonest lot
   await refreshFarmSeasonalState();
@@ -28703,7 +28772,8 @@ async function sellCrop(crop, qty, btn) {
   const totalGross = normalGross + eventGross;
   const totalTax = Number(data.tax_paid || 0) + Number(data.event_tax_paid || 0);
   const totalNet = Number(data.net ?? normalGross) + Number(data.event_net ?? eventGross);
-  const eventTxt = eventGross > 0 ? (' · w tym kontrakt +' + eventGross + ' 🪙') : '';
+  const eventTxt = (eventGross > 0 ? (' · w tym kontrakt +' + eventGross + ' 🪙') : '')
+    + (Number(data.full_value || 0) > normalGross ? (' · ⚖️ ponad uczciwy udział (rynkowo ' + data.full_value + ' 🪙)') : '');
   const taxTxt = totalTax > 0 ? (' · podatek ' + totalTax + ' 🪙 · do portfela ' + totalNet + ' 🪙') : '';
   showToast('💰 Sprzedano ' + data.sold + '× · brutto ' + totalGross + ' 🪙' + eventTxt + taxTxt + '!');
   renderFarmMarket();

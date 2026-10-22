@@ -249,3 +249,46 @@ All five are one-line `CREATE OR REPLACE` on an IMMUTABLE function:
 - `FARM_SEASONAL_PREMIUM_CAP_X` ↔ `farm_seasonal_premium_cap_x()`
 - `farmSeasonalPremiumLeft()` ↔ the `v_event_cap` arithmetic in `sell_crop_to_npc`
 - `farm_market` SELECTs must carry `floor_price` (three sites in `index.html`)
+
+## 2026-10-22 — Fair share (`supabase/farm-fair-share.sql`)
+
+**What went wrong after the August fixes.** The farm-market pressure log stayed at
+1.4–2.0× budget every day from 2026-08-28 to 2026-10-22. `roll_farm_prices()` set
+`demand = 1/pressure`, but pressure is measured on revenue that already carries
+the previous demand: with unthrottled revenue `R0`, `R = d·R0` and `d = B/R` give
+`R = √(B·R0)`. So the market never reached its budget, and output still bought income,
+growing with its square root rather than flat. One player with L21–28 cards
+(the next best averaged L17.6) took ~70% of the 30-day crop revenue (1,886,326 of
+~2.7M) and held 804,801 cash.
+
+**Fixes.**
+
+| Control | Rule | Knob |
+|---|---|---|
+| Integral throttle | `demand = demand_prev × pressure^−0.2` (glide and bounds unchanged) | `farm_demand_gain()` |
+| Fair share | `7 × budget/day ÷ players who sold in 14 d`, frozen per roll | — |
+| Progressive rate | rolling 7 d at market price: ≤1× → 100%, 1–2× → 30%, >2× → 5% | `farm_fair_share_tiers()` |
+| Catch-up | level-up coins ×0.5 if ≥6 levels behind the office's top copy, ×0.25 if ≥15 | `farm_catchup_tiers()` |
+
+**Simulated** on the six full weeks of real sales from 2026-09-07 to 2026-10-12
+(static equilibrium at each week's actual budget):
+
+| Player | Paid then | Paid with fix | Δ |
+|---|---|---|---|
+| Kornel | 1,940,722 | 573,491 | −70% |
+| Yurii | 402,618 | 388,922 | −3% |
+| Filip | 333,708 | 361,217 | +8% |
+| Seb | 158,787 | 209,159 | +32% |
+| Maciek | 94,659 | 117,583 | +24% |
+| Adam | 78,768 | 91,864 | +17% |
+| Ilo | 71,339 | 83,525 | +17% |
+| **All** | 3,080,601 | 1,825,762 | −41% |
+
+Demand climbs from ~0.6 to 0.96–1.00. Dynamic simulation (twice-daily rolls,
+7-day revenue lag): the old rule holds at pressure 1.71 forever. Gain 0.2 settles
+at 1.00 in about 2–3 weeks with no overshoot; gain 0.7 oscillates ±25%.
+
+**Second-order risk.** Kornel's level-ups were most of the farm burn, and the NPC
+budget is 0.9 × burn. If he stops levelling, the budget falls, and so does
+everyone's price. That is the intended negative feedback, but the first weeks will
+show it.
