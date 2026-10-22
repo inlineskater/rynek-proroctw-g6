@@ -24,6 +24,17 @@ touch buttons that can be held at the same time. Hiding the tab or blurring the 
 ends the attempt and submits the progress reached. A pause would let you study an
 official run, so there is none.
 
+The game's list of held keys mirrors the physical keys. Only keyup, blur and tab-hide
+clear it; starting or ending a run must not. A W held through Start or R has to ride
+from the first tick, and on macOS pressing R stops W's auto-repeat, so a wiped list
+never fills again.
+
+`mtFit()` sizes the stage so the whole game fits under the sticky nav: title bar,
+track, touch buttons and the Start bar. It is never taller than 16:9 (4:3 on phones).
+Start scrolls the game into place. While riding, the page can't scroll (wheel,
+touch-drag, Space, Page Up/Down); the chat rail is exempt. Between rides the page
+scrolls normally, so the records below are reachable.
+
 ## Physics (games/moto-trial-core.js)
 
 **Determinism rule:** the code is float64, but it may only use `+ − × ÷` and

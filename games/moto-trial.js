@@ -44,17 +44,38 @@ function mtBuildPanel(){
  b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);mtPointers.set(e.pointerId,Number(b.dataset.mtKey));mtSyncKeys();};
  b.onpointerup=b.onpointercancel=b.onlostpointercapture=e=>{mtPointers.delete(e.pointerId);mtSyncKeys();};
  }
- document.addEventListener('keydown',e=>{if(!mtVisible()||isTypingTarget(e.target))return;const k=mtKeyFor(e.code);if(k){e.preventDefault();mtKeyboard.add(e.code);mtSyncKeys();}if(e.code==='KeyR'&&!e.repeat){e.preventDefault();mtStartRun();}});
+ document.addEventListener('keydown',e=>{if(!mtVisible()||isTypingTarget(e.target))return;const k=mtKeyFor(e.code);if(k){e.preventDefault();mtKeyboard.add(e.code);mtSyncKeys();}else if(motoTrialRuntime?.playing&&MT_SCROLL_KEYS.has(e.code))e.preventDefault();if(e.code==='KeyR'&&!e.repeat){e.preventDefault();mtStartRun();}});
  document.addEventListener('keyup',e=>{mtKeyboard.delete(e.code);mtSyncKeys();});
  window.addEventListener('blur',()=>{mtClearKeys();if(motoTrialRuntime?.playing)mtEndRun('Próba przerwana — okno straciło fokus.');});
  document.addEventListener('visibilitychange',()=>{if(document.hidden){mtClearKeys();if(motoTrialRuntime?.playing)mtEndRun('Próba przerwana — karta została ukryta.');}});
  new ResizeObserver(()=>{if(mtView)mtView.resize();}).observe(document.getElementById('mt-stage'));
+ // No page scrolling during a ride; the chat rail keeps its own scroll.
+ const block=e=>{if(motoTrialRuntime?.playing&&mtVisible()&&!e.target.closest?.('#chat-rail'))e.preventDefault();};
+ window.addEventListener('wheel',block,{passive:false});window.addEventListener('touchmove',block,{passive:false});
+ window.addEventListener('resize',mtFit);document.addEventListener('fullscreenchange',mtFit);
 }
 async function mtChangeSetup(courseId,practice){
  if(mtStateBusy)return;mtStateBusy=true;
  const controls=['mt-start','mt-course','mt-practice'].map(id=>document.getElementById(id));controls.forEach(e=>e.disabled=true);
  try{await mtEndRun('Zmiana trasy lub trybu.');stopMotoTrialRound();mtSelected=courseId;mtPractice=practice;await loadMotoTrialState();}
  finally{mtStateBusy=false;controls.forEach(e=>e.disabled=false);}
+}
+const MT_SCROLL_KEYS=new Set(['Space','PageUp','PageDown','Home','End']);
+// The stage takes whatever height lets the whole game (title bar, track, buttons, Start)
+// fit under the sticky nav, never taller than its natural 16:9 (4:3 on phones).
+function mtNavBottom(){const n=document.querySelector('.nav-tabs');return n?Math.max(0,n.getBoundingClientRect().bottom):0;}
+function mtFit(){
+ const stage=document.getElementById('mt-stage'),shell=stage?.closest('.mt-shell');if(!shell)return;
+ if(document.fullscreenElement){stage.style.height='';return;}if(!shell.offsetParent)return;
+ const controls=shell.querySelector('.mt-controls'),bottom=shell.querySelector('.mt-bottom');
+ const above=stage.getBoundingClientRect().top-shell.getBoundingClientRect().top,below=controls.offsetHeight+bottom.offsetHeight;
+ const natural=stage.clientWidth*(window.innerWidth<=600?3/4:9/16),room=window.innerHeight-mtNavBottom()-above-below-12;
+ stage.style.aspectRatio='auto';stage.style.height=Math.round(Math.max(Math.min(180,natural),Math.min(natural,room)))+'px';
+}
+// Start lines the game up under the nav so the whole ride is on screen.
+function mtLockView(){
+ mtFit();const shell=document.getElementById('mt-stage')?.closest('.mt-shell');if(!shell||document.fullscreenElement)return;
+ window.scrollTo({top:window.scrollY+shell.getBoundingClientRect().top-mtNavBottom()-6,behavior:'instant'});
 }
 function mtKeyFor(code){return {KeyW:1,ArrowUp:1,KeyS:2,ArrowDown:2,KeyA:4,ArrowLeft:4,KeyD:8,ArrowRight:8}[code]||0;}
 function mtSyncKeys(){mtKeys=0;for(const k of mtKeyboard)mtKeys|=mtKeyFor(k);for(const k of mtPointers.values())mtKeys|=k;document.querySelectorAll('[data-mt-key]').forEach(b=>b.dataset.held=String(!!(mtKeys&Number(b.dataset.mtKey))));}
@@ -111,7 +132,7 @@ function mtGhostStep(g,course){
  if(g.moves[g.at]?.tick===g.st.tick)g.keys=g.moves[g.at++].keys;
  mtStep(g.st,g.keys,course);
 }
-function mtMount(course){if(mtView)mtView.dispose();mtView=null;try{mtView=mtCreateView(document.getElementById('mt-stage'),course);mtView.draw(mtIdleSnapshot(course));mtSet('mt-time','0.00 s');mtSet('mt-progress','0.00%');}catch(e){mtView=null;throw e;}}
+function mtMount(course){if(mtView)mtView.dispose();mtView=null;mtFit();try{mtView=mtCreateView(document.getElementById('mt-stage'),course);mtView.draw(mtIdleSnapshot(course));mtSet('mt-time','0.00 s');mtSet('mt-progress','0.00%');}catch(e){mtView=null;throw e;}}
 // The idle stage shows the verified replay a few seconds in, mid-ride.
 function mtIdleSnapshot(course){
  const replay=MT_GOLDEN[course.id],st=mtInit(course);let at=0,keys=0;
@@ -128,7 +149,7 @@ async function mtStartRun(){
  const requestedAt=performance.now();const data=await mtInvoke({action:'start',mode:mtMode(),courseId:mtSelected});if(gen!==mtGeneration||!mtVisible())return;
  // A Start pressed right after opening the tab must not outrun the rivals' replays.
  if(mtGhostTask)await Promise.race([mtGhostTask,new Promise(r=>setTimeout(r,2000))]);if(gen!==mtGeneration||!mtVisible())return;
- mtSelected=data.round.course_id;const course=mtCourse(mtSelected);mtMount(course);mtClearKeys();
+ mtSelected=data.round.course_id;const course=mtCourse(mtSelected);mtMount(course);mtLockView();
  motoTrialRuntime={playing:true,course,st:mtInit(course),moves:[],lastKeys:-1,round:data.round,acc:0,last:performance.now(),raf:0,deadline:requestedAt+Math.max(0,new Date(data.round.expires_at)-new Date(data.calendar.server_now))-1000,ghosts:mtGhostsFor(course)};
  const ghosts=motoTrialRuntime.ghosts;
  mtView?.draw(motoTrialRuntime.st,null,1,0,mtGhostsOn?ghosts:null);mtStatus(ghosts.length?'Ścigasz się z duchami: '+ghosts.map(g=>g.name).join(', ')+'.':'Gaz i równowaga. Powodzenia!');if(!mtMuted)mtAudioStart();mtLoop(performance.now());
@@ -143,7 +164,7 @@ function mtLoop(now){
  if(r.st.over||now>=r.deadline){mtEndRun(r.st.over?r.st.reason:'Koniec tygodnia / czasu rundy.');return;}
  r.raf=requestAnimationFrame(mtLoop);
 }
-async function mtEndRun(reason){const r=motoTrialRuntime;if(!r?.playing)return;r.playing=false;cancelAnimationFrame(r.raf);mtAudioStop();mtClearKeys();mtStatus(reason);if(!mtMuted&&/Uderzenie|Upadek/.test(reason))mtImpactSound();if(r.st.tick){mtPending={action:'submit',roundId:r.round.id,elapsedTicks:r.st.tick,moves:r.moves};await mtSavePending();}}
+async function mtEndRun(reason){const r=motoTrialRuntime;if(!r?.playing)return;r.playing=false;cancelAnimationFrame(r.raf);mtAudioStop();mtStatus(reason);if(!mtMuted&&/Uderzenie|Upadek/.test(reason))mtImpactSound();if(r.st.tick){mtPending={action:'submit',roundId:r.round.id,elapsedTicks:r.st.tick,moves:r.moves};await mtSavePending();}}
 async function mtSavePending(){
  if(mtSaveTask)return mtSaveTask;
  if(!mtPending)return;
