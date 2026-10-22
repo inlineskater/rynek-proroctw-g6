@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
---  Zen garden: water ONCE a day, for 3× the coins  (2026-10-22)
+--  Zen garden: water ONCE a day, flat 500 coins per plant  (2026-10-22)
 -- ════════════════════════════════════════════════════════════════════════════
 --  Run after garden-water-gate.sql / polish-midnight-schedules.sql. Idempotent.
 --  ⚠️ Supersedes water_plant_core() from those files — RE-RUN THIS after
@@ -12,21 +12,27 @@
 --  466 coins/day office-wide. Three clicks a day 5 h apart was a chore, not a
 --  decision.
 --
---  Now: ONE watering per Warsaw day paying 50 + 10/streak-day capped at 100 —
---  a little more than three old max waterings (90), rounded at the owner's
---  request. Nobody who watered every time earns less; anyone who managed 1–2 a
---  day earns more. Projected on the same 258 garden-days: ~860 coins/day
---  (+~400/day), noise next to the farm's ~100k/day.
---  Streak and stage rules are unchanged. The 5 h cooldown check stays in place
---  and can no longer bite.
+--  Now (owner's call): ONE watering per Warsaw day paying a FLAT 500 per plant.
+--  It pays for the manual daily visit; the streak still counts days and drives
+--  the plant's stage, but no longer changes the coins. Max 2 plants per player
+--  → 1,000/day each. Office-wide: ~4,300/day at the measured 8.6 waterings/day,
+--  ~6,000/day if all 12 active plants are watered daily — 0.3–0.4% of the
+--  1.46M cash supply per day, ~15% of the ~36k/day the fair-share throttle fix
+--  (farm-fair-share.sql) took off farm minting the same day. Lifts small players
+--  most (Ilo: 22k cash, +30k/month). At 500 the anti-bot gate
+--  (garden-water-gate.sql) is what keeps this a manual reward — keep it.
+--  The 5 h cooldown check stays in the function and can only bite across
+--  midnight.
 -- ════════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.garden_waters_per_day()
 RETURNS integer LANGUAGE sql IMMUTABLE AS $c$ SELECT 1 $c$;
 
+-- Flat: the streak argument is kept so the call site and a future streak
+-- bonus need no signature change.
 CREATE OR REPLACE FUNCTION public.garden_water_reward(p_streak integer)
 RETURNS integer LANGUAGE sql IMMUTABLE AS $c$
-  SELECT LEAST(50 + (GREATEST(p_streak, 1) - 1) * 10, 100)
+  SELECT 500
 $c$;
 
 CREATE OR REPLACE FUNCTION public.water_plant_core(p_user uuid, p_slot_index integer DEFAULT 1)
