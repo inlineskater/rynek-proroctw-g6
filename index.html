@@ -20939,7 +20939,7 @@ const GARDEN_ERR_PL = {
   already_has_garden:   'Masz już swoją roślinę w ogródku.',
   no_garden:            'Najpierw zasadź roślinę.',
   cooldown:             'Poczekaj — można podlać raz na 5 godzin.',
-  daily_limit:          'Limit na dziś — maks. 3 podlania.',
+  daily_limit:          'Na dziś już podlane — wróć jutro.',
   invalid_slot:         'To miejsce na ozdobę nie istnieje.',
   not_owned:            'Nie posiadasz tej ozdoby.',
   invalid_accessory:    'Ta ozdoba nie istnieje.',
@@ -22554,11 +22554,14 @@ function tagZenBlocks() {
 let farmPlantModalEl = null;
 let farmPlantModalEsc = null;
 
+// Zen watering: once per Warsaw day (supabase/garden-water-once.sql).
+const GARDEN_WATERS_PER_DAY = 1;
+
 function farmPlantSnapshot(g) {
   const totalWaters = Math.max(0, Number(g?.total_waters || 0));
   const today = warsawCalendarDateStr();
   const watersToday = (g?.last_water_date === today) ? Math.max(0, Number(g?.waters_today || 0)) : 0;
-  const dailyFull = watersToday >= 3;
+  const dailyFull = watersToday >= GARDEN_WATERS_PER_DAY;
   let canWater = !dailyFull;
   let cooldownLeft = 0;
   let cooldownProgress = dailyFull ? 0 : 1;
@@ -22630,7 +22633,7 @@ function openFarmPlantModal(g) {
   const statusText = !isMine
     ? 'Roślina gracza'
     : snap.dailyFull
-      ? 'Limit dzienny: 3/3'
+      ? 'Na dziś podlana — wróć jutro'
       : snap.canWater
         ? 'Gotowa do podlania'
         : 'Podlewanie za ' + cvFmtDur(snap.cooldownLeft);
@@ -22663,7 +22666,7 @@ function openFarmPlantModal(g) {
         farmPlantStat('Typ', PLANT_LABELS[plantType] || plantType),
         farmPlantStat('Etap', snap.stage + '/6'),
         farmPlantStat('Podlania', String(snap.totalWaters)),
-        farmPlantStat('Dziś', snap.watersToday + '/3'),
+        farmPlantStat('Dziś', snap.watersToday + '/' + GARDEN_WATERS_PER_DAY),
         farmPlantStat('Następne podlanie', nextWaterText),
         farmPlantStat('Seria', snap.streakDays + (snap.streakDays === 1 ? ' dzień' : ' dni')),
         farmPlantStat('Ozdoby', snap.activeAccessoryCount + '/' + GARDEN_TILE_ACCESSORY_LIMIT),
@@ -29744,7 +29747,7 @@ function buildPot(g, isMine) {
 
   // Cooldown / daily-cap state
   const today = warsawCalendarDateStr();
-  const dailyFull = g.waters_today >= 3 && g.last_water_date === today;
+  const dailyFull = g.waters_today >= GARDEN_WATERS_PER_DAY && g.last_water_date === today;
   const watersToday = (g.last_water_date === today) ? (g.waters_today || 0) : 0;
   const activeAccessoryCount = gardenActiveEquippedCount(equipped);
   let pct = 100;
@@ -29766,7 +29769,7 @@ function buildPot(g, isMine) {
       el('span', {}, 'Etap'), el('b', {}, String(g.stage || 1) + '/6'),
       el('span', {}, 'Seria'), el('b', {}, String(g.streak_days || 0) + (g.streak_days === 1 ? ' dzień' : ' dni')),
       el('span', {}, 'Podlano'), el('b', {}, String(g.total_waters || 0) + '×'),
-      el('span', {}, 'Dziś'), el('b', {}, watersToday + '/3'),
+      el('span', {}, 'Dziś'), el('b', {}, watersToday + '/' + GARDEN_WATERS_PER_DAY),
       el('span', {}, 'Ozdoby'), el('b', {}, activeAccessoryCount + '/' + GARDEN_TILE_ACCESSORY_LIMIT)
     )
   ));
