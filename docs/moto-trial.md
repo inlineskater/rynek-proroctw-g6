@@ -88,6 +88,24 @@ crash/finish banner are drawn on the canvas, and time and records sit outside it
 feeds the simulation. The interface is `{draw, resize, project, dispose}`, shared by the
 game, the practice page and the „Wszystkie Gry" card preview (`games/previews.js`).
 
+## Ghosts (top-3 rivals)
+
+Every run's input log is already stored in `moto_trial_scores.client_meta.moves`, which
+every player can read, and `moto-trial-action` replayed it before storing it. So ghosts
+need no SQL or Edge change: `mtLoadGhosts()` picks the top 3 of the ranking you are racing
+in, leaving you out. That is this week in season mode, or the course records in arcade
+and practice. It then fetches each rival's ranked run with the views' own `ORDER BY` and
+filters on `version = MT_VERSION`. `mtGhostStep()` runs each log in lockstep with your
+ticks, for `ceil(duration_ms × 60 / 1000)` ticks. Checked on 2026-10-22: the 40 best
+stored runs all replayed to exactly the stored score and time.
+
+The renderer draws the ghosts in their rank colour on an offscreen layer, composites it
+once at 38% opacity, and adds a name tag. A ghost outside the view gets a tag pinned to
+the screen edge with its distance, and each ghost has a notch on the progress strip. A
+crashed ghost disappears after 1.5 s; a finished one stays at the line with its time. The
+**Duchy** button turns them off (`rp_mt_ghosts` in localStorage). Ghosts are render-only
+and never touch your run.
+
 ## Golden replays and tests
 
 ```sh
