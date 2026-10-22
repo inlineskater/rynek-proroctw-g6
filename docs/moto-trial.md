@@ -29,11 +29,16 @@ clear it; starting or ending a run must not. A W held through Start or R has to 
 from the first tick, and on macOS pressing R stops W's auto-repeat, so a wiped list
 never fills again.
 
-`mtFit()` sizes the stage so the whole game fits under the sticky nav: title bar,
-track, touch buttons and the Start bar. It is never taller than 16:9 (4:3 on phones).
-Start scrolls the game into place. While riding, the page can't scroll (wheel,
-touch-drag, Space, Page Up/Down); the chat rail is exempt. Between rides the page
-scrolls normally, so the records below are reachable.
+The game fills the window. `mtFit()` scrolls the page so the game sits right under the
+sticky nav (in Wszystkie Gry its back button stays visible). It sets the shell to the
+remaining height and gives the stage whatever is left. While it fits, the shell carries
+`.mt-fits`. A CSS `html:has(…)` rule in the panel styles then locks page scroll, and only
+while the Moto Trial panel is on a visible tab. Because the lock is declarative, leaving
+the tab can't leave the page stuck. The rules and the records live in the **🏆 Ranking**
+overlay over the track instead of below it, and Start closes it. While riding, wheel,
+touch-drag, Space and Page Up/Down are also swallowed; the chat rail is exempt. Below
+170 px of track (a phone in landscape) `.mt-fits` is dropped and the page scrolls
+normally.
 
 ## Physics (games/moto-trial-core.js)
 
@@ -104,7 +109,7 @@ game, the practice page and the „Wszystkie Gry" card preview (`games/previews.
 Every run's input log is already stored in `moto_trial_scores.client_meta.moves`, which
 every player can read, and `moto-trial-action` replayed it before storing it. So ghosts
 need no SQL or Edge change: `mtLoadGhosts()` picks the top 3 of the ranking you are racing
-in, leaving you out. That is this week in season mode, or the course records in arcade
+in, leaving you out, and adds your own best run in blue („Ty · rekord”). That is this week in season mode, or the course records in arcade
 and practice. It then fetches each rival's ranked run with the views' own `ORDER BY` and
 filters on `version = MT_VERSION`. `mtGhostStep()` runs each log in lockstep with your
 ticks, for `ceil(duration_ms × 60 / 1000)` ticks. Checked on 2026-10-22: the 40 best

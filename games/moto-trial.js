@@ -5,7 +5,7 @@ let mtPractice=true, mtLocalRound=null, mtLocalBest={};
 // Ghosts: the best runs of the top 3 rivals, replayed in lockstep from their stored inputs.
 let mtGhostData=null, mtGhostTask=null, mtGhostsOn=true;
 try{mtGhostsOn=localStorage.getItem('rp_mt_ghosts')!=='0';}catch{}
-const MT_GHOST_COLORS=['#c99712','#6f7f8c','#b0652c'];
+const MT_GHOST_COLORS=['#c99712','#6f7f8c','#b0652c'],MT_GHOST_SELF='#3f6fd8';
 function mtTraining(){return allGamesMode && mtPractice;}
 function mtDependencies() {
  if(!mtDepsPromise)mtDepsPromise=Promise.all([
@@ -28,16 +28,18 @@ function mtBuildPanel(){
  .mt-top,.mt-bottom{padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.mt-top h2{margin:0;font-size:23px;letter-spacing:-.6px}.mt-kicker{font-size:10px;letter-spacing:2px;color:#c9d49d;font-weight:800}.mt-top .mt-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
  .mt-shell button,.mt-shell select{border:1px solid #658087;border-radius:8px;padding:10px 14px;color:#fff;background:#29424a;font:inherit;cursor:pointer}.mt-shell button:disabled{opacity:.5;cursor:wait}.mt-shell button:focus-visible{outline:3px solid #ffcf68;outline-offset:2px}.mt-shell .mt-primary{background:#efbe62;border-color:#efbe62;color:#172b32;font-weight:800}
  .mt-info{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:#edf1ec;color:#172b32}.mt-course-label{font-size:12px;font-weight:700;letter-spacing:.04em}.mt-hud{position:static;display:flex;justify-content:flex-end;gap:8px;color:#172b32;font-variant-numeric:tabular-nums}.mt-hud strong{font-size:19px;display:block}.mt-hud small{font-size:9px;text-transform:uppercase;letter-spacing:1.2px}.mt-hud>div{min-width:94px;background:#fff;border-radius:5px;padding:6px 10px}
- .mt-stage{position:relative;width:100%;height:auto;aspect-ratio:16/9;background:#fff;overflow:hidden;touch-action:none}.mt-stage canvas{display:block;width:100%;height:100%}.mt-controls{display:flex;gap:8px;padding:12px 18px;background:#20373f}.mt-controls button{flex:1;touch-action:none;user-select:none;-webkit-user-select:none;min-height:52px;font-weight:700}.mt-controls button[data-held=true]{background:#a9c793;color:#172b32}.mt-controls .mt-gap{width:30px}.mt-bottom{justify-content:space-between;font-size:13px}.mt-help{color:#b8c9cc;padding:0 20px 16px;font-size:12px;line-height:1.7}.mt-records{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:16px 20px;background:#102329}.mt-records h3{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#c9d49d}.mt-records ol{list-style:none;padding:0;margin:0}.mt-records li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #ffffff12;font-size:13px}.mt-shell:fullscreen{max-width:none;width:100%;height:100%;border-radius:0;overflow:auto}.mt-shell:fullscreen{display:flex;flex-direction:column;overflow:hidden}.mt-shell:fullscreen .mt-stage{flex:1;min-height:0;aspect-ratio:auto}.mt-shell:fullscreen .mt-help,.mt-shell:fullscreen .mt-records{display:none}.mt-shell:fullscreen .mt-top,.mt-shell:fullscreen .mt-bottom{padding:8px 12px}.mt-shell:fullscreen .mt-controls{padding:6px 12px}
+ .mt-stage{position:relative;width:100%;height:auto;aspect-ratio:16/9;background:#fff;overflow:hidden;touch-action:none}.mt-stage canvas{display:block;width:100%;height:100%}.mt-controls{display:flex;gap:8px;padding:12px 18px;background:#20373f}.mt-controls button{flex:1;touch-action:none;user-select:none;-webkit-user-select:none;min-height:52px;font-weight:700}.mt-controls button[data-held=true]{background:#a9c793;color:#172b32}.mt-controls .mt-gap{width:30px}.mt-bottom{justify-content:space-between;font-size:13px}.mt-help{color:#b8c9cc;padding:0 20px 16px;font-size:12px;line-height:1.7}.mt-records{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:16px 20px;background:#102329}.mt-records h3{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#c9d49d}.mt-records ol{list-style:none;padding:0;margin:0}.mt-records li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #ffffff12;font-size:13px}.mt-shell:fullscreen{max-width:none;width:100%;height:100%;border-radius:0;overflow:auto}.mt-shell:fullscreen{display:flex;flex-direction:column;overflow:hidden}.mt-shell:fullscreen .mt-stage{flex:1;min-height:0;aspect-ratio:auto}.mt-shell.mt-fits{display:flex;flex-direction:column;box-sizing:border-box}.mt-shell.mt-fits .mt-stage{flex:1;min-height:0;aspect-ratio:auto}.mt-extra{position:absolute;inset:0;z-index:2;overflow:auto;touch-action:pan-y;overscroll-behavior:contain;background:rgba(16,35,41,.97);color:#f4f1e8}.mt-extra[hidden]{display:none}.mt-extra .mt-help{padding:16px 56px 8px 20px}.mt-extra .mt-records{background:none}.mt-shell .mt-extra-close{position:absolute;top:10px;right:12px;padding:6px 11px}html:has(#tab-whack-boss:not(.hidden) #seasonal-game-moto-trial:not(.hidden) .mt-fits),html:has(#tab-all-games:not(.hidden) #ag-game-slot:not(.hidden) #seasonal-game-moto-trial:not(.hidden) .mt-fits){overflow:hidden;overscroll-behavior:none}.mt-shell:fullscreen .mt-top,.mt-shell:fullscreen .mt-bottom{padding:8px 12px}.mt-shell:fullscreen .mt-controls{padding:6px 12px}
  @media(max-width:600px){.mt-top{padding:12px}.mt-top h2{font-size:19px}.mt-top .mt-actions{margin-left:0}.mt-info{align-items:flex-start;flex-direction:column;padding:10px}.mt-hud{width:100%;justify-content:space-between}.mt-hud>div{flex:1;min-width:0}.mt-hud strong{font-size:17px}.mt-hud small{font-size:8px}.mt-stage{aspect-ratio:4/3}.mt-records{grid-template-columns:1fr}.mt-controls{padding:10px}.mt-controls button{padding:8px 4px;font-size:12px}.mt-help{font-size:11px}}
  `;document.head.append(css);
- host.innerHTML=`<section class="mt-shell"><div class="mt-top"><div><div class="mt-kicker">G6 • TRIAL RACING</div><h2>Moto Trial <span style="color:#efbe62">G6</span></h2></div><div class="mt-actions"><select id="mt-course" aria-label="Trasa"><option value="quarry_v3">Kamieniołom</option><option value="mountain_v3">Górska Przełęcz</option></select><label id="mt-practice-wrap" style="font-size:12px"><input type="checkbox" id="mt-practice" checked> Trening bez rankingu</label><button id="mt-ghosts" aria-pressed="${mtGhostsOn}">Duchy: ${mtGhostsOn?'wł.':'wył.'}</button><button id="mt-sound" aria-label="Włącz dźwięk">Dźwięk: wył.</button><button id="mt-full">Pełny ekran</button></div></div><div class="mt-info"><div class="mt-course-label" id="mt-course-label">Kamieniołom</div><div class="mt-hud"><div><small>Czas</small><strong id="mt-time">0.00 s</strong></div><div><small>Trasa</small><strong id="mt-progress">0.00%</strong></div><div><small>Twój rekord</small><strong id="mt-best">—</strong></div></div></div><div class="mt-stage" id="mt-stage"></div><div class="mt-controls" aria-label="Sterowanie motocyklem"><button data-mt-key="4">← Odchyl</button><button data-mt-key="8">Pochyl →</button><span class="mt-gap"></span><button data-mt-key="2">↓ Hamulec</button><button data-mt-key="1">↑ Gaz</button></div><div class="mt-bottom"><div role="status" aria-live="polite" id="mt-status">Ładowanie trasy…</div><div><button id="mt-discard" hidden>Odrzuć zapis</button> <button id="mt-save" hidden>Zapisz ponownie</button> <button class="mt-primary" id="mt-start">Start / Ponów · R</button></div></div><div class="mt-help">W / ↑ gaz · S / ↓ hamulec · A / ← odchyl · D / → pochyl · R ponów. Jedno życie, dowolna liczba prób. Skacz z rozpędu, ląduj na kołach. Wszyscy jadą tym samym motocyklem — przedmioty nie dają premii. Duchy to najlepsze przejazdy trzech czołowych rywali — jadą razem z tobą.<br><span id="mt-season-note">Nagrody tygodnia: 🥇 1000 · 🥈 500 · 🥉 200 monet.</span></div><div class="mt-records"><div><h3 id="mt-rank-title">Ten tydzień</h3><ol id="mt-weekly"></ol></div><div><h3>Rekordy tej trasy</h3><ol id="mt-records"></ol></div></div></section>`;
+ host.innerHTML=`<section class="mt-shell"><div class="mt-top"><div><div class="mt-kicker">G6 • TRIAL RACING</div><h2>Moto Trial <span style="color:#efbe62">G6</span></h2></div><div class="mt-actions"><select id="mt-course" aria-label="Trasa"><option value="quarry_v3">Kamieniołom</option><option value="mountain_v3">Górska Przełęcz</option></select><label id="mt-practice-wrap" style="font-size:12px"><input type="checkbox" id="mt-practice" checked> Trening bez rankingu</label><button id="mt-info-btn" aria-expanded="false">🏆 Ranking</button><button id="mt-ghosts" aria-pressed="${mtGhostsOn}">Duchy: ${mtGhostsOn?'wł.':'wył.'}</button><button id="mt-sound" aria-label="Włącz dźwięk">Dźwięk: wył.</button><button id="mt-full">Pełny ekran</button></div></div><div class="mt-info"><div class="mt-course-label" id="mt-course-label">Kamieniołom</div><div class="mt-hud"><div><small>Czas</small><strong id="mt-time">0.00 s</strong></div><div><small>Trasa</small><strong id="mt-progress">0.00%</strong></div><div><small>Twój rekord</small><strong id="mt-best">—</strong></div></div></div><div class="mt-stage" id="mt-stage"><div class="mt-extra" id="mt-extra" hidden><button class="mt-extra-close" id="mt-extra-close" aria-label="Zamknij">✕</button><div class="mt-help">W / ↑ gaz · S / ↓ hamulec · A / ← odchyl · D / → pochyl · R ponów. Jedno życie, dowolna liczba prób. Skacz z rozpędu, ląduj na kołach. Wszyscy jadą tym samym motocyklem — przedmioty nie dają premii. Duchy to najlepsze przejazdy trzech czołowych rywali — jadą razem z tobą.<br><span id="mt-season-note">Nagrody tygodnia: 🥇 1000 · 🥈 500 · 🥉 200 monet.</span></div><div class="mt-records"><div><h3 id="mt-rank-title">Ten tydzień</h3><ol id="mt-weekly"></ol></div><div><h3>Rekordy tej trasy</h3><ol id="mt-records"></ol></div></div></div></div><div class="mt-controls" aria-label="Sterowanie motocyklem"><button data-mt-key="4">← Odchyl</button><button data-mt-key="8">Pochyl →</button><span class="mt-gap"></span><button data-mt-key="2">↓ Hamulec</button><button data-mt-key="1">↑ Gaz</button></div><div class="mt-bottom"><div role="status" aria-live="polite" id="mt-status">Ładowanie trasy…</div><div><button id="mt-discard" hidden>Odrzuć zapis</button> <button id="mt-save" hidden>Zapisz ponownie</button> <button class="mt-primary" id="mt-start">Start / Ponów · R</button></div></div></section>`;
  document.getElementById('mt-start').onclick=mtStartRun;
  document.getElementById('mt-practice').onchange=e=>mtChangeSetup(mtSelected,e.target.checked);
  document.getElementById('mt-save').onclick=()=>mtSavePending();
  document.getElementById('mt-discard').onclick=()=>{mtPending=null;document.getElementById('mt-save').hidden=true;document.getElementById('mt-discard').hidden=true;mtStatus('Zapis odrzucony. Możesz zacząć nową próbę.');};
  document.getElementById('mt-course').onchange=e=>{e.target.blur();mtChangeSetup(e.target.value,mtPractice);};
  document.getElementById('mt-full').onclick=()=>{const e=host.querySelector('.mt-shell');if(document.fullscreenElement)document.exitFullscreen();else e.requestFullscreen?.().catch(()=>mtStatus('Pełny ekran jest niedostępny w tej przeglądarce.'));};
+ document.getElementById('mt-info-btn').onclick=()=>mtShowExtra(document.getElementById('mt-extra').hidden);
+ document.getElementById('mt-extra-close').onclick=()=>mtShowExtra(false);
  document.getElementById('mt-ghosts').onclick=e=>{mtGhostsOn=!mtGhostsOn;try{localStorage.setItem('rp_mt_ghosts',mtGhostsOn?'1':'0');}catch{}e.currentTarget.textContent='Duchy: '+(mtGhostsOn?'wł.':'wył.');e.currentTarget.setAttribute('aria-pressed',String(mtGhostsOn));};
  document.getElementById('mt-sound').onclick=()=>{mtMuted=!mtMuted;mtSet('mt-sound','Dźwięk: '+(mtMuted?'wył.':'wł.'));if(!mtMuted)mtAudioStart();else mtAudioStop();};
  for(const b of host.querySelectorAll('[data-mt-key]')){
@@ -61,22 +63,23 @@ async function mtChangeSetup(courseId,practice){
  finally{mtStateBusy=false;controls.forEach(e=>e.disabled=false);}
 }
 const MT_SCROLL_KEYS=new Set(['Space','PageUp','PageDown','Home','End']);
-// The stage takes whatever height lets the whole game (title bar, track, buttons, Start)
-// fit under the sticky nav, never taller than its natural 16:9 (4:3 on phones).
+// The game fills the window under the sticky nav: the page is scrolled so the game (in
+// Wszystkie Gry, its back button) sits right under the nav and the stage takes whatever
+// height is left. While it fits, .mt-fits locks the page scroll (CSS :has in the panel
+// styles), so the rules and records live in the 🏆 Ranking overlay instead of below.
 function mtNavBottom(){const n=document.querySelector('.nav-tabs');return n?Math.max(0,n.getBoundingClientRect().bottom):0;}
 function mtFit(){
  const stage=document.getElementById('mt-stage'),shell=stage?.closest('.mt-shell');if(!shell)return;
- if(document.fullscreenElement){stage.style.height='';return;}if(!shell.offsetParent)return;
- const controls=shell.querySelector('.mt-controls'),bottom=shell.querySelector('.mt-bottom');
- const above=stage.getBoundingClientRect().top-shell.getBoundingClientRect().top,below=controls.offsetHeight+bottom.offsetHeight;
- const natural=stage.clientWidth*(window.innerWidth<=600?3/4:9/16),room=window.innerHeight-mtNavBottom()-above-below-12;
- stage.style.aspectRatio='auto';stage.style.height=Math.round(Math.max(Math.min(180,natural),Math.min(natural,room)))+'px';
+ if(document.fullscreenElement){shell.style.height='';shell.classList.remove('mt-fits');return;}
+ if(!shell.offsetParent)return;
+ const anchor=allGamesMode&&shell.closest('#ag-game-slot')||shell,nav=mtNavBottom(),fixed=shell.offsetHeight-stage.offsetHeight;
+ // Size first (assuming the scroll lands), scroll, then re-measure where it actually landed.
+ const size=()=>{const h=Math.floor(window.innerHeight-Math.max(nav+6,shell.getBoundingClientRect().top)-10),fits=h-fixed>=170;shell.classList.toggle('mt-fits',fits);shell.style.height=fits?h+'px':'';};
+ shell.style.height=Math.floor(window.innerHeight-nav-16-(shell.getBoundingClientRect().top-anchor.getBoundingClientRect().top))+'px';
+ window.scrollTo({top:window.scrollY+anchor.getBoundingClientRect().top-nav-6,behavior:'instant'});
+ size();
 }
-// Start lines the game up under the nav so the whole ride is on screen.
-function mtLockView(){
- mtFit();const shell=document.getElementById('mt-stage')?.closest('.mt-shell');if(!shell||document.fullscreenElement)return;
- window.scrollTo({top:window.scrollY+shell.getBoundingClientRect().top-mtNavBottom()-6,behavior:'instant'});
-}
+function mtShowExtra(open){const x=document.getElementById('mt-extra'),b=document.getElementById('mt-info-btn');if(!x)return;x.hidden=!open;b?.setAttribute('aria-expanded',String(open));}
 function mtKeyFor(code){return {KeyW:1,ArrowUp:1,KeyS:2,ArrowDown:2,KeyA:4,ArrowLeft:4,KeyD:8,ArrowRight:8}[code]||0;}
 function mtSyncKeys(){mtKeys=0;for(const k of mtKeyboard)mtKeys|=mtKeyFor(k);for(const k of mtPointers.values())mtKeys|=k;document.querySelectorAll('[data-mt-key]').forEach(b=>b.dataset.held=String(!!(mtKeys&Number(b.dataset.mtKey))));}
 function mtClearKeys(){mtKeyboard.clear();mtPointers.clear();mtSyncKeys();}
@@ -97,8 +100,8 @@ function mtRenderBoards(data){
  const list=document.getElementById(id);list.replaceChildren();for(const r of rows){const li=document.createElement('li'),name=document.createElement('span'),score=document.createElement('strong');name.textContent=r.rank+'. '+r.nick;score.textContent=mtResultText(r);li.append(name,score);list.append(li);}if(!rows.length){const li=document.createElement('li');li.textContent='Pierwszy ślad może być twój.';list.append(li);}
  }
 }
-// The ranking the player is racing in (this week, or the course records in arcade/practice)
-// minus themselves; each ghost is that rival's ranked run, picked with the views' own ORDER BY.
+// The top 3 of the ranking the player is racing in (this week, or the course records in
+// arcade/practice) other than themselves, plus the player's own best run; each ghost is that rival's ranked run, picked with the views' own ORDER BY.
 // Every stored log was already replayed by moto-trial-action, so it reproduces exactly here.
 function mtLoadGhosts(courseId,mode,board){
  if(window.MOTO_LOCAL||typeof sb==='undefined')return;
@@ -109,15 +112,16 @@ async function mtFetchGhosts(courseId,mode,board){
  try{
   let rows=mode==='season'?board.weekly:board.records;
   if(mtTraining()){const {data,error}=await sb.from('moto_trial_all_time').select('rank,user_id,nick,score').eq('course_id',courseId).order('rank').limit(4);if(error)throw error;rows=data;}
-  const top=(rows||[]).filter(r=>r.user_id&&r.user_id!==me?.id&&r.score>0).slice(0,3);
-  const list=await Promise.all(top.map(async(r,i)=>{
+  const riders=(rows||[]).filter(r=>r.user_id&&r.user_id!==me?.id&&r.score>0).slice(0,3).map((r,i)=>({user_id:r.user_id,name:r.rank+'. '+r.nick,color:MT_GHOST_COLORS[i]}));
+  if(me?.id)riders.push({user_id:me.id,name:'Ty · rekord',color:MT_GHOST_SELF});
+  const list=await Promise.all(riders.map(async r=>{
    let q=sb.from('moto_trial_scores').select('client_meta,duration_ms,completed,completion_ms').eq('user_id',r.user_id).eq('course_id',courseId).eq('version',MT_VERSION);
    if(mode==='season')q=q.eq('mode','season').eq('week_start',week);
    const {data,error}=await q.order('score',{ascending:false}).order('completion_ms',{ascending:true,nullsFirst:false}).order('submitted_at').order('id').limit(1);
    if(error||!data?.[0])return null;
    let meta=data[0].client_meta;if(typeof meta==='string')meta=JSON.parse(meta);
    if(!Array.isArray(meta?.moves))return null;
-   return {name:r.rank+'. '+r.nick,color:MT_GHOST_COLORS[i],moves:meta.moves,ticks:Math.ceil(data[0].duration_ms*MT_HZ/1000),completion_ms:data[0].completed?data[0].completion_ms:null};
+   return {name:r.name,color:r.color,moves:meta.moves,ticks:Math.ceil(data[0].duration_ms*MT_HZ/1000),completion_ms:data[0].completed?data[0].completion_ms:null};
   }));
   mtGhostData={courseId,mode,list:list.filter(Boolean)};
  }catch(e){console.warn('Moto Trial ghosts:',e);}
@@ -149,7 +153,7 @@ async function mtStartRun(){
  const requestedAt=performance.now();const data=await mtInvoke({action:'start',mode:mtMode(),courseId:mtSelected});if(gen!==mtGeneration||!mtVisible())return;
  // A Start pressed right after opening the tab must not outrun the rivals' replays.
  if(mtGhostTask)await Promise.race([mtGhostTask,new Promise(r=>setTimeout(r,2000))]);if(gen!==mtGeneration||!mtVisible())return;
- mtSelected=data.round.course_id;const course=mtCourse(mtSelected);mtMount(course);mtLockView();
+ mtSelected=data.round.course_id;const course=mtCourse(mtSelected);mtShowExtra(false);mtMount(course);
  motoTrialRuntime={playing:true,course,st:mtInit(course),moves:[],lastKeys:-1,round:data.round,acc:0,last:performance.now(),raf:0,deadline:requestedAt+Math.max(0,new Date(data.round.expires_at)-new Date(data.calendar.server_now))-1000,ghosts:mtGhostsFor(course)};
  const ghosts=motoTrialRuntime.ghosts;
  mtView?.draw(motoTrialRuntime.st,null,1,0,mtGhostsOn?ghosts:null);mtStatus(ghosts.length?'Ścigasz się z duchami: '+ghosts.map(g=>g.name).join(', ')+'.':'Gaz i równowaga. Powodzenia!');if(!mtMuted)mtAudioStart();mtLoop(performance.now());
