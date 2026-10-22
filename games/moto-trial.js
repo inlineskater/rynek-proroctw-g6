@@ -3,7 +3,7 @@ let mtDepsPromise, mtView, mtBoard, mtSelected='quarry_v3', mtKeys=0, mtPointers
 let mtGeneration=0, mtAudio=null, mtMuted=true, mtPending=null, mtStateBusy=false, mtSaveTask=null;
 let mtPractice=true, mtLocalRound=null, mtLocalBest={};
 // Ghosts: the best runs of the top 3 rivals, replayed in lockstep from their stored inputs.
-let mtGhostData=null, mtGhostsOn=true;
+let mtGhostData=null, mtGhostTask=null, mtGhostsOn=true;
 try{mtGhostsOn=localStorage.getItem('rp_mt_ghosts')!=='0';}catch{}
 const MT_GHOST_COLORS=['#c99712','#6f7f8c','#b0652c'];
 function mtTraining(){return allGamesMode && mtPractice;}
@@ -79,8 +79,11 @@ function mtRenderBoards(data){
 // The ranking the player is racing in (this week, or the course records in arcade/practice)
 // minus themselves; each ghost is that rival's ranked run, picked with the views' own ORDER BY.
 // Every stored log was already replayed by moto-trial-action, so it reproduces exactly here.
-async function mtLoadGhosts(courseId,mode,board){
+function mtLoadGhosts(courseId,mode,board){
  if(window.MOTO_LOCAL||typeof sb==='undefined')return;
+ return mtGhostTask=mtFetchGhosts(courseId,mode,board);
+}
+async function mtFetchGhosts(courseId,mode,board){
  const week=String(board?.calendar?.week_start||'').slice(0,10);
  try{
   let rows=mode==='season'?board.weekly:board.records;
@@ -123,6 +126,8 @@ async function mtStartRun(){
  if(mtPending){await mtSavePending();if(mtPending)throw new Error('Najpierw zapisz poprzedni wynik.');}
  await mtDependencies();if(!mtVisible())return;
  const requestedAt=performance.now();const data=await mtInvoke({action:'start',mode:mtMode(),courseId:mtSelected});if(gen!==mtGeneration||!mtVisible())return;
+ // A Start pressed right after opening the tab must not outrun the rivals' replays.
+ if(mtGhostTask)await Promise.race([mtGhostTask,new Promise(r=>setTimeout(r,2000))]);if(gen!==mtGeneration||!mtVisible())return;
  mtSelected=data.round.course_id;const course=mtCourse(mtSelected);mtMount(course);mtClearKeys();
  motoTrialRuntime={playing:true,course,st:mtInit(course),moves:[],lastKeys:-1,round:data.round,acc:0,last:performance.now(),raf:0,deadline:requestedAt+Math.max(0,new Date(data.round.expires_at)-new Date(data.calendar.server_now))-1000,ghosts:mtGhostsFor(course)};
  const ghosts=motoTrialRuntime.ghosts;

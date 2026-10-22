@@ -12436,7 +12436,9 @@ function ensureGameScript(gameType) {
   if (_gameScriptPromises[gameType]) return _gameScriptPromises[gameType];
   _gameScriptPromises[gameType] = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = src;
+    // Versioned per deploy, like ensureTabModule(): an un-versioned URL kept
+    // serving the pre-ghost Moto Trial for up to 10 min after a deploy.
+    s.src = IS_DEPLOYED_BUILD ? src + '?v=' + BUILD_ID : src;
     s.onload = () => resolve();
     s.onerror = () => { delete _gameScriptPromises[gameType]; reject(new Error('Nie udało się wczytać ' + src)); };
     document.body.appendChild(s);
