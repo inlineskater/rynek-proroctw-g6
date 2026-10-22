@@ -27,7 +27,8 @@
 --    🦗 szarancza  bad   a locust swarm: +6 h on every growing plot whose owner
 --                        has no scarecrow (the scarecrow finally matters)
 --    ⚡ burza      good  lightning strikes up to 5 random growing plots: ripe NOW
---    🌧️ zloty_deszcz good golden rain: every growing plot's remaining time halved
+--    🌦️ deszcz     good „Deszcz urodzaju”: every growing plot's remaining time halved
+--                        (renamed from „Złoty deszcz” — a double entendre in Polish; never use it)
 --    🐝 roj        good  bees pollinate ~40% of growing plots: −8 h each
 --  Good and bad are weighted 50/50. Growth only changes WHEN a crop arrives;
 --  revenue still runs through the demand-throttled NPC budget, so events
@@ -51,7 +52,7 @@ LANGUAGE sql IMMUTABLE AS $c$
          ('tornado',      17, false, '🌪️', 'Tornado nad Ogródkiem!'),
          ('szarancza',    16, false, '🦗',  'Nalot szarańczy!'),
          ('burza',        16, true,  '⚡',  'Burza z piorunami!'),
-         ('zloty_deszcz', 17, true,  '🌧️', 'Złoty deszcz!'),
+         ('deszcz',       17, true,  '🌦️', 'Deszcz urodzaju!'),
          ('roj',          17, true,  '🐝',  'Rój pszczół!')
 $c$;
 
@@ -182,7 +183,7 @@ BEGIN
   ELSIF p_kind = 'burza' THEN
     UPDATE _fwe_g g SET delta_min = -ceil(EXTRACT(EPOCH FROM (g.ready_at - now())) / 60)::int
      WHERE (g.x, g.y) IN (SELECT x, y FROM _fwe_g ORDER BY random() LIMIT 5);
-  ELSIF p_kind = 'zloty_deszcz' THEN
+  ELSIF p_kind = 'deszcz' THEN
     UPDATE _fwe_g SET delta_min = -floor(EXTRACT(EPOCH FROM (ready_at - now())) / 60 / 2)::int;
   ELSIF p_kind = 'roj' THEN
     UPDATE _fwe_g SET delta_min = -LEAST(8 * 60, floor(EXTRACT(EPOCH FROM (ready_at - now())) / 60))::int
@@ -215,7 +216,7 @@ BEGIN
     WHEN 'tornado'      THEN 'Trąba powietrzna przeszła przez ' || public.farm_pl_grzadki(jsonb_array_length(v_plots)) || ' — +8 h do zbioru.'
     WHEN 'szarancza'    THEN 'Szarańcza obsiadła ' || public.farm_pl_grzadki(jsonb_array_length(v_plots)) || ' bez stracha na wróble — +6 h do zbioru.'
     WHEN 'burza'        THEN 'Pioruny trafiły w ' || public.farm_pl_grzadki(jsonb_array_length(v_plots)) || ' — dojrzały od razu!'
-    WHEN 'zloty_deszcz' THEN 'Złoty deszcz podlał ' || public.farm_pl_grzadki(jsonb_array_length(v_plots)) || ' — czas do zbioru o połowę krótszy!'
+    WHEN 'deszcz'       THEN 'Deszcz urodzaju podlał ' || public.farm_pl_grzadki(jsonb_array_length(v_plots)) || ' — czas do zbioru o połowę krótszy!'
     WHEN 'roj'          THEN 'Pszczoły zapyliły ' || public.farm_pl_grzadki(jsonb_array_length(v_plots)) || ' — −8 h do zbioru!'
   END
   || CASE WHEN v_names IS NOT NULL

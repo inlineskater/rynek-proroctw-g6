@@ -60,10 +60,10 @@ const FEV_STYLE = {
   tornado:      { c: '#94a3b8', tint: [24, 26, 32],   tintA: .66 },
   szarancza:    { c: '#84cc16', tint: [34, 30, 6],    tintA: .55 },
   burza:        { c: '#a5b4fc', tint: [6, 8, 30],     tintA: .74 },
-  zloty_deszcz: { c: '#facc15', tint: [70, 50, 0],    tintA: .28 },
+  deszcz:       { c: '#38bdf8', tint: [10, 45, 70],   tintA: .30 },
   roj:          { c: '#fbbf24', tint: [50, 36, 0],    tintA: .22 },
 };
-const FEV_EMOJI = { pozar: '🔥', tornado: '🌪️', szarancza: '🦗', burza: '⚡', zloty_deszcz: '🌧️', roj: '🐝' };
+const FEV_EMOJI = { pozar: '🔥', tornado: '🌪️', szarancza: '🦗', burza: '⚡', deszcz: '🌦️', roj: '🐝' };
 
 function fevSeenKey(id) { return 'fev_seen_' + id; }
 function fevSeen(id) { try { return localStorage.getItem(fevSeenKey(id)) === '1'; } catch (e) { return true; } }
@@ -434,9 +434,9 @@ const FEV_SCENES = {
     } };
   },
 
-  // 🌧️ Molten-gold rain over the whole farm, a warm sun breaking through and
+  // 🌦️ „Deszcz urodzaju”: a warm summer shower over the whole farm, the sun breaking through and
   // sparkles bursting on every watered plot.
-  zloty_deszcz() {
+  deszcz() {
     const R = Array.from({ length: 220 }, () => ({ x: fevRand(0, window.innerWidth), y: fevRand(-window.innerHeight, 0), l: fevRand(14, 30), v: fevRand(520, 820) }));
     const S = [];
     return { step(ctx, s) {
@@ -448,12 +448,12 @@ const FEV_SCENES = {
       R.forEach(r => {
         r.y += r.v * s.dt; if (r.y > s.H) { r.y = fevRand(-80, -10); r.x = fevRand(0, s.W); }
         const lg = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.l);
-        lg.addColorStop(0, 'rgba(255,215,80,0)'); lg.addColorStop(1, 'rgba(255,225,120,' + 0.85 * s.env + ')');
+        lg.addColorStop(0, 'rgba(150,210,255,0)'); lg.addColorStop(1, 'rgba(190,230,255,' + 0.85 * s.env + ')');
         ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x, r.y + r.l); ctx.stroke();
       });
       if (s.t > 0.8) s.cells.forEach(c => { if (Math.random() < 0.35) S.push({ x: c.x + fevRand(-c.w / 2, c.w / 2), y: c.y + fevRand(-c.h / 2, c.h / 2), life: 0, max: fevRand(0.4, 0.9), r: fevRand(2, 5) }); });
       S.forEach(p => { const k = p.life / p.max, r = p.r * (1 - k);
-        ctx.fillStyle = 'rgba(255,245,180,' + (1 - k) * s.env + ')';
+        ctx.fillStyle = 'rgba(220,255,230,' + (1 - k) * s.env + ')';
         ctx.beginPath(); ctx.moveTo(p.x, p.y - r * 3); ctx.lineTo(p.x + r, p.y); ctx.lineTo(p.x, p.y + r * 3); ctx.lineTo(p.x - r, p.y); ctx.fill();
         ctx.beginPath(); ctx.moveTo(p.x - r * 3, p.y); ctx.lineTo(p.x, p.y + r); ctx.lineTo(p.x + r * 3, p.y); ctx.lineTo(p.x, p.y - r); ctx.fill(); });
       ctx.restore();
