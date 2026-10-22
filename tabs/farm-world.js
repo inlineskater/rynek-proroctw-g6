@@ -331,8 +331,10 @@ async function fwFillOrder(o, btn) {
     if (error) { showToast('❌ ' + fmErr(error)); return; }
     if (typeof data.coins === 'number') { me.coins = data.coins; setText(headerCoins, me.coins); }
     const tax = Number(data.tax_paid || 0);
+    const loan = data.net != null ? Math.max(0, Number(data.reward || 0) - tax - Number(data.net)) : 0;
     showToast('📋 ' + o.customer + ': +' + fmtNum(data.reward) + ' 🪙'
-      + (tax > 0 ? ' (−' + fmtNum(tax) + ' 🪙 na podatek gruntowy)' : ''));
+      + (tax > 0 ? ' (−' + fmtNum(tax) + ' 🪙 na podatek gruntowy)' : '')
+      + (loan > 0 ? ' (−' + fmtNum(loan) + ' 🪙 spłata kredytu)' : ''));
     o.mine = true;   // instant feedback; the refetch below is authoritative
     scheduleFarmInventoryReconcile();
     fwOrdersAt = 0;

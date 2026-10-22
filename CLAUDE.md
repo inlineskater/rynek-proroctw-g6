@@ -216,16 +216,9 @@ Backend is `supabase/bank.sql` (see the file list above), frontend is entirely
 `tabs/bank.js` — `index.html` holds only the shell div, the nav button, the
 `.bk-*` CSS, and the `stopBankTimer()` teardown stub.
 
-**The UI is deliberately not the app's house style.** A bank statement is a
-reference document you read a column of numbers off, so the tab is built as one:
-a navy statement header with a KPI strip, a sub-tab bar, and dense tables with
-tabular figures and right-aligned money columns — closer to Business Central
-than to the rest of the portal. Every product page follows the same order:
-a four-cell „Warunki produktu" strip, the order form, then the positions table.
-There is a published `Tabela oprocentowania` comparing every product on one
-screen (it reads its caps from the server payload, not the client constants) and
-a `Regulamin` section that carries all the prose. Conventions are in
-docs/farm-ui-conventions.md's sibling, docs/bank.md.
+**The UI was redesigned on 2026-10-23 to match the Ogródek** (owner's brief: "better, easier to understand, more like the Ogródek"); the old Business-Central statement look and its `.bk-*` CSS in `index.html` are gone. `tabs/bank.js` now injects its own CSS (`#bank-ui-css`, `.bq-*`): an illustrated bank front with three friendly numbers (cash · in the Bank · per day, plus „Do spłaty" with an open loan), big icon tiles with badges instead of a sub-tab bar, and every product as a card that says in one sentence what happens to your coins, with an amount picker (input + slider + 25/50/Maks.), a live preview and progress bars instead of tables. Pages: 🏠 Pulpit · 🐷 Skarbonka · 🔒 Lokata · 📜 Obligacje · 🤝 Kredyt (`supabase/bank-loans.sql`) · 📄 Wyciąg (`supabase/bank-statement.sql`) · 🏛️ RPP (`supabase/bank-rpp-notes.sql`, gauge + communiqués + decision history) · 🔁 Rynek (bonds only) · ❓ Jak to działa (FAQ). `loadBank()` fetches `bank_state`, `bank_loan_state` and the last 7 `bank_rpp_notes` in parallel and degrades if either new piece is missing.
+
+**🤝 Kredyt (`supabase/bank-loans.sql`, ⚠️ supersedes `farm_apply_land_tax_autopay()` from `farm.sql` and `bank_user_assets()` from `bank.sql` — re-run after either):** only players whose `farm_net_worth()` is below the median of players active in 14 days; limit = 7 days of their own crop/order/watering income clamped 5 000–30 000; a flat 10% fee, never interest; one open loan; none while in land-tax debt. Repaid automatically inside `farm_apply_land_tax_autopay()` AFTER land tax (50% of every sale/order/marketplace payout until the 14-day term, 100% after) plus manual `bank_loan_repay`. The outstanding amount is a NEGATIVE term in `bank_user_assets()`, so borrowing moves net worth by exactly the fee. Reasons `bank_loan_open`/`bank_loan_repay` are in `tabs/stats.js` NEUTRAL + labels and deliberately not in `ACT_COIN_REASONS`. **🏛️ RPP (`supabase/bank-rpp-notes.sql`):** cron `bank_rpp_note` (hourly :12, gated to Warsaw 09:00, one per date) posts the day's `bank_limits` decisions, the NPC buyer's rate and the loan threshold to chat as „🏛️ RPP G6"; `bank_rpp_note_preview()` is a no-post dry run. **📄 Wyciąg (`supabase/bank-statement.sql`):** `bank_statement(month)` groups the month's ledger into income / spending / Bank transfers (which change cash, not wealth) + casino net, a daily series, top inflows and the player's rank by net result.
 
 **Limits are recomputed daily from measured economy data** (supply, the whole game's net minting over 30 days, active player count) and frozen for the day in `bank_limits`, with the full derivation and a week of history shown to players in a „Limity i budżet" tab — the Bank throttles itself when the game is already inflating. Rates are fixed and stored per position, so limit changes are never retroactive. **Where the inflation is:** the four bank products together mint ~1 250
 coins/day at absolute maximum, against a ~2 951/day casino burn — the Sygnet
