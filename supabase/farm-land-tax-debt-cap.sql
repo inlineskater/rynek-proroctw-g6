@@ -22,7 +22,66 @@
 --
 --  Also forgives the interest Adam accrued (one-time, guarded by a
 --  'forgiveness' event so a re-run does nothing).
+--
+--  ── Tax relief (2026-10-23) ─────────────────────────────────────────────────
+--  ⚠️ Also supersedes farm_land_tax_participant_count() from farm.sql.
+--  Measured that day: the fair share was ceil(40 / 11) = 4 plots, but 3 of the
+--  11 „participants" had not played since July/August (Maks, De, dupa_szefa),
+--  and the flat 1000 × excess² took 5% of Kornel's farm income, 40% of Yurii's,
+--  81% of Seb's and 107% of Maciek's. Two changes:
+--   1. Only players active in the last farm_land_tax_active_days() (30) count
+--      toward the fair share → ceil(40 / 8) = 5 plots each.
+--   2. A player's daily tax is capped at farm_land_tax_income_share() (25%) of
+--      their own 14-day average farm income (crop sales + order payouts, gross),
+--      but never below farm_land_tax_min_per_excess() (250) per extra plot, so
+--      an idle plot is never free to hold.
+--  Effect on the day: total tax 15,000 → 3,000/day; Filip, Maciek, Adam → 0;
+--  Kornel, Yurii, Seb 4,000 → 1,000 (one plot over). Land tax is in
+--  farm_burn_per_day(), so the NPC crop budget falls by ~0.9 × the difference —
+--  the cost of the relief, accepted by the owner.
 -- ════════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.farm_land_tax_active_days()
+RETURNS integer LANGUAGE sql IMMUTABLE AS $c$ SELECT 30 $c$;
+CREATE OR REPLACE FUNCTION public.farm_land_tax_income_share()
+RETURNS numeric LANGUAGE sql IMMUTABLE AS $c$ SELECT 0.25::numeric $c$;
+CREATE OR REPLACE FUNCTION public.farm_land_tax_min_per_excess()
+RETURNS integer LANGUAGE sql IMMUTABLE AS $c$ SELECT 250 $c$;
+
+-- farm.sql's copy + only players active in the last N days.
+CREATE OR REPLACE FUNCTION public.farm_land_tax_participant_count()
+RETURNS integer
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $c$
+  SELECT greatest(1, COALESCE(count(*), 0))::integer
+    FROM public.profiles p
+   WHERE NOT p.is_admin
+     AND p.last_active_at > now() - make_interval(days => public.farm_land_tax_active_days())
+     AND (
+       EXISTS (SELECT 1 FROM public.farm_user_state fus WHERE fus.user_id = p.id)
+       OR EXISTS (
+         SELECT 1 FROM public.farm_tiles ft
+          WHERE ft.owner_id = p.id AND ft.acquired_via <> 'migration'
+       )
+     );
+$c$;
+
+-- Average daily farm income over 14 days, gross (what the tax cap scales with).
+CREATE OR REPLACE FUNCTION public.farm_land_tax_income_per_day(p_uid uuid)
+RETURNS numeric
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $c$
+  SELECT COALESCE(sum(delta), 0) / 14.0
+    FROM public.coin_transactions
+   WHERE user_id = p_uid AND delta > 0
+     AND created_at > now() - interval '14 days'
+     AND reason IN ('farm_crop_sale', 'farm_order_payout');
+$c$;
+REVOKE ALL ON FUNCTION public.farm_land_tax_income_per_day(uuid) FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.farm_land_tax_debt_cap_days()
 RETURNS integer LANGUAGE sql IMMUTABLE AS $fn$ SELECT 14 $fn$;
@@ -44,6 +103,7 @@ DECLARE
   v_daily integer := 0;
   v_interest integer := 0;
   v_debt_cap integer := 0;
+  v_income numeric := 0;
   v_first_tax_day date := DATE '2026-07-02';
   v_first_payment_day date := DATE '2026-07-03';
 BEGIN
@@ -53,6 +113,13 @@ BEGIN
   v_debt := COALESCE(v_debt, 0);
   v_excess := greatest(0, v_owned - v_cap);
   v_daily := 1000 * v_excess * v_excess;
+  -- Tax relief: at most 25% of the player's own farm income, never below 250
+  -- per extra plot.
+  IF v_excess > 0 THEN
+    v_income := public.farm_land_tax_income_per_day(p_uid);
+    v_daily := LEAST(v_daily, GREATEST(public.farm_land_tax_min_per_excess() * v_excess,
+                                       floor(v_income * public.farm_land_tax_income_share())::integer));
+  END IF;
   -- farm-land-tax-debt-cap.sql: the debt may never pass the cap (N days of
   -- this player's own daily tax), and interest only fills the room below it.
   -- Without this 10%/day compounded forever: one excess plot = 51,596 owed.
@@ -71,6 +138,9 @@ BEGIN
     'excess_tiles', v_excess,
     'tax_per_excess_sq', 1000,
     'daily_tax', v_daily,
+    'daily_tax_full', 1000 * v_excess * v_excess,
+    'income_per_day', round(v_income),
+    'income_share', public.farm_land_tax_income_share(),
     'debt', v_debt,
     'interest_next', v_interest,
     'debt_cap', v_debt_cap,

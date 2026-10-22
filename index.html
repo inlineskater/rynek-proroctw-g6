@@ -21476,6 +21476,9 @@ function applyFarmTaxQuote(q) {
     excess_tiles: Number(q.excess_tiles || 0),
     tax_per_excess_sq: Number(q.tax_per_excess_sq || FARM_TAX_PER_EXCESS_SQ),
     daily_tax: Number(q.daily_tax || 0),
+    // farm-land-tax-debt-cap.sql relief: the uncapped tax and the income it is capped against.
+    daily_tax_full: Number(q.daily_tax_full ?? q.daily_tax ?? 0),
+    income_per_day: Number(q.income_per_day || 0),
     debt: Number(q.debt || 0),
     interest_next: Number(q.interest_next || 0),
     first_tax_day: q.first_tax_day || FARM_TAX_FIRST_TAX_DAY,
@@ -23002,6 +23005,8 @@ function farmTaxQuoteLocal() {
     excess_tiles: excess,
     tax_per_excess_sq: taxPer,
     daily_tax: Number(fmTax?.daily_tax ?? (taxPer * excess * excess)),
+    daily_tax_full: Number(fmTax?.daily_tax_full ?? (taxPer * excess * excess)),
+    income_per_day: Number(fmTax?.income_per_day || 0),
     debt,
     interest_next: Number(fmTax?.interest_next || (debt > 0 ? Math.ceil(debt * 0.10) : 0)),
     first_tax_day: fmTax?.first_tax_day || FARM_TAX_FIRST_TAX_DAY,
@@ -23064,14 +23069,17 @@ function farmTaxStatusCard(opts = {}) {
 
   const rows = el('div', { className: 'farm-tax-rows' });
   rows.append(farmTaxRow('Limit bez podatku', q.fair_cap + ' ' + plCount(q.fair_cap, 'działka', 'działki', 'działek'),
-    { hint: q.normal_capacity + ' pól ÷ ' + q.participants + ' graczy' }));
+    { hint: q.normal_capacity + ' pól ÷ ' + q.participants + ' aktywnych graczy (30 dni)' }));
   if (over) {
+    const relief = Number(q.daily_tax_full || 0) > Number(q.daily_tax || 0);
     rows.append(farmTaxRow('Podatek dzienny', q.daily_tax + ' 🪙',
-      { hint: q.tax_per_excess_sq + ' × ' + q.excess_tiles + '² (nadmiar)' }));
+      { hint: relief
+          ? '🤝 ulga: zamiast ' + q.daily_tax_full + ' 🪙 płacisz maks. 25% swoich zarobków z farmy (' + q.income_per_day + ' 🪙/dzień)'
+          : q.tax_per_excess_sq + ' × ' + q.excess_tiles + '² (nadmiar)' }));
   }
   if (owing) {
     rows.append(farmTaxRow('Zaległy podatek', q.debt + ' 🪙',
-      { cls: 'is-debt', hint: 'Rośnie o 10% dziennie i blokuje kupno kolejnych działek' }));
+      { cls: 'is-debt', hint: 'Rośnie o 10% dziennie (najwyżej do 14 dni podatku) i blokuje kupno kolejnych działek' }));
   }
   card.append(rows);
 
@@ -23079,8 +23087,9 @@ function farmTaxStatusCard(opts = {}) {
   help.append(el('summary', {}, 'Jak to działa?'));
   const ul = el('ul', {});
   [
-    'Limit to sprawiedliwy udział: wszystkie pola farmy podzielone przez liczbę graczy z działkami. Im więcej graczy, tym niższy limit.',
+    'Limit to sprawiedliwy udział: wszystkie pola farmy podzielone przez liczbę graczy z działkami, którzy grali w ostatnich 30 dniach. Im więcej aktywnych graczy, tym niższy limit.',
     'Za każdą działkę ponad limit płacisz ' + q.tax_per_excess_sq + ' 🪙 × nadmiar² dziennie — 1 ponad limit to ' + q.tax_per_excess_sq + ' 🪙, 2 to ' + (q.tax_per_excess_sq * 4) + ' 🪙, 3 to ' + (q.tax_per_excess_sq * 9) + ' 🪙.',
+    '🤝 Ulga: podatek nigdy nie przekracza 25% Twoich średnich zarobków z farmy (sprzedaż plonów i zamówienia, ostatnie 14 dni), ale wynosi co najmniej 250 🪙 za każdą działkę ponad limit.',
     'Naliczamy o północy (czasu warszawskiego) za poprzedni zakończony dzień. Podatek ściągamy automatycznie z przychodów ze sprzedaży plonów i z Targowiska.',
     'Nadmiar jest dozwolony — nikt nie zabroni Ci kupować. Dopiero NIESPŁACONY dług blokuje zakup kolejnych działek. Sadzenie nie jest blokowane nigdy.',
     'Działki z roślinkami Ogródka (stare, migrowane) nie liczą się do limitu.',
@@ -27644,7 +27653,7 @@ function renderFarmHelpInto(bodyEl) {
       P('Pole to kawałek ziemi na własność — na nim sadzisz rośliny. Kupujesz je, klikając puste pole na siatce.'),
       P('Każde kolejne pole jest droższe: pierwsze ', b(tile1 + ' 🪙'), ', drugie ', b(tile2 + ' 🪙'), ', trzecie ', b(tile3 + ' 🪙'), ' itd.'),
       P(b('📜 Podatek gruntowy (kataster): '), 'normalne działki mają wspólny limit na gracza — liczony jako ', b('pojemność pola ÷ liczba aktywnych rolników'), '. Wszystko ponad ten limit to ', b('nadmiar'), '.'),
-      P(b('Ile płacisz: '), b(FARM_TAX_PER_EXCESS_SQ + ' × nadmiar² 🪙 dziennie'), ' — koszt ', b('rośnie z kwadratem'), ' nadmiaru, więc kto chomikuje hektary, ten płaci najwięcej. Niezapłacone zaległości rosną o ', b('10% dziennie'), '.'),
+      P(b('Ile płacisz: '), b(FARM_TAX_PER_EXCESS_SQ + ' × nadmiar² 🪙 dziennie'), ' — koszt ', b('rośnie z kwadratem'), ' nadmiaru, więc kto chomikuje hektary, ten płaci najwięcej. ', b('Ulga:'), ' nigdy więcej niż 25% Twoich zarobków z farmy (min. 250 🪙 za działkę ponad limit). Niezapłacone zaległości rosną o ', b('10% dziennie'), ', ale najwyżej do 14 dni podatku.'),
       P(b('Kiedy: '), 'naliczanie rusza o ', b('00:00 (czas polski)'), ' za poprzedni zakończony dzień. Pierwsza płatność: ', b('piątek 03.07.2026 o 00:00'), ' za ', b('czwartek 02.07.2026'), '.'),
       farmTaxStatusCard({ pay: false }),
       farmTerritoryPriceTable()),
