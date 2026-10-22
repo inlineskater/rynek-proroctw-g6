@@ -12,10 +12,11 @@
 --  466 coins/day office-wide. Three clicks a day 5 h apart was a chore, not a
 --  decision.
 --
---  Now: ONE watering per Warsaw day paying exactly what three used to at most,
---  45 + 9/streak-day capped at 90. Nobody who watered every time earns less;
---  anyone who managed 1–2 a day earns more. Projected on the same 258
---  garden-days: ~770 coins/day (+~300/day), noise next to the farm's ~100k/day.
+--  Now: ONE watering per Warsaw day paying 50 + 10/streak-day capped at 100 —
+--  a little more than three old max waterings (90), rounded at the owner's
+--  request. Nobody who watered every time earns less; anyone who managed 1–2 a
+--  day earns more. Projected on the same 258 garden-days: ~860 coins/day
+--  (+~400/day), noise next to the farm's ~100k/day.
 --  Streak and stage rules are unchanged. The 5 h cooldown check stays in place
 --  and can no longer bite.
 -- ════════════════════════════════════════════════════════════════════════════
@@ -25,7 +26,7 @@ RETURNS integer LANGUAGE sql IMMUTABLE AS $c$ SELECT 1 $c$;
 
 CREATE OR REPLACE FUNCTION public.garden_water_reward(p_streak integer)
 RETURNS integer LANGUAGE sql IMMUTABLE AS $c$
-  SELECT LEAST(45 + (GREATEST(p_streak, 1) - 1) * 9, 90)
+  SELECT LEAST(50 + (GREATEST(p_streak, 1) - 1) * 10, 100)
 $c$;
 
 CREATE OR REPLACE FUNCTION public.water_plant_core(p_user uuid, p_slot_index integer DEFAULT 1)

@@ -14,7 +14,7 @@ Nawigacja: drewniany pasek nad polem ma przyciski **🎒 Mój Majątek / 📖 Ka
 
 ## Siatka i działki
 
-Plansza ma **13 × 4 = 52 pola**. Typy: wolne (brak wpisu w `farm_tiles`), migracyjne (`acquired_via='migration'` — rośliny zen z dawnego Ogródka, podlewane raz dziennie za 45 + 9 🪙 za dzień serii, maks. 90 (od 22.10.2026, wcześniej 3× dziennie po maks. 30 — `garden-water-once.sql`); limit dnia resetuje się o **00:00 Europe/Warsaw**, nie według UTC; nie da się na nich sadzić upraw), kupione (`purchase`), z vouchera (`lootbox`), z Targowiska (`marketplace`).
+Plansza ma **13 × 4 = 52 pola**. Typy: wolne (brak wpisu w `farm_tiles`), migracyjne (`acquired_via='migration'` — rośliny zen z dawnego Ogródka, podlewane raz dziennie za 50 + 10 🪙 za dzień serii, maks. 100 (od 22.10.2026, wcześniej 3× dziennie po maks. 30 — `garden-water-once.sql`); limit dnia resetuje się o **00:00 Europe/Warsaw**, nie według UTC; nie da się na nich sadzić upraw), kupione (`purchase`), z vouchera (`lootbox`), z Targowiska (`marketplace`).
 
 Cena kolejnej działki podwaja się (`buy_farm_tile`, BURN `farm_tile_buy`):
 
