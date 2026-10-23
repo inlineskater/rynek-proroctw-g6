@@ -125,6 +125,15 @@ crashed ghost disappears after 1.5 s; a finished one stays at the line with its 
 **Duchy** button turns them off (`rp_mt_ghosts` in localStorage). Ghosts are render-only
 and never touch your run.
 
+**▶ Oglądaj najlepszych** (2026-10-23) plays the same ghost list as a video, with no round
+and no bike of your own: `mtStartWatch()` steps every ghost at 60 Hz (1×/2×/4×, pause)
+and the camera follows one of them, drawn in full colour, while the rest stay pale. A chip
+per rider, ←/→ or 1–9 switch who is followed; Space pauses, Esc closes. When the followed
+rider crashes or finishes, the camera cuts to whoever is furthest along and still riding,
+and the replay ends when everyone is out. The rider chips take the place of the touch
+controls (`.mt-watching`). With no stored runs on the course it falls back to the
+solver's `MT_GOLDEN` run. Nothing is sent to the server; Start/R stops the replay first.
+
 ## Golden replays and tests
 
 ```sh
