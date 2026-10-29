@@ -768,6 +768,8 @@ function fwEnsureNbRealtime() {
       fwNbAt = 0;
       fwNbRefresh(true).then(() => { if (farmModalEl && farmHubTab === 'neighbours') renderFarmHubBody(); });
     })
+    // 🎪 A full Spichlerz bar starts a Festyn for everyone.
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'farm_festivals' }, () => fwGranaryRefresh())
     .subscribe();
 }
 
@@ -1182,12 +1184,15 @@ function ogCropDonateSection(close) {
 }
 
 
-// ── 🏛️ Spichlerz biura (supabase/farm-granary.sql) ─────────────────────────
-// A permanent crop sink at full market value with no target and no coins back:
-// the reward is the ranking and a title. It takes over the #og-goal slot in the
-// sky band whenever no Wspólny Cel is open, and the second button in the sell
-// dialog. Titles and thresholds come from the server (farm_granary_state).
+// ── 🏛️ Spichlerz biura (supabase/farm-granary.sql + farm-granary-festival.sql) ──
+// A permanent crop sink at full market value, no coins back. Every full bar
+// (festival.threshold of crops) starts a 🎪 Festyn plonów: +10% on every
+// harvest for EVERY player for 24 h — that is what the whole office gets out
+// of one player's surplus. Rankings and titles ride along. It takes over the
+// #og-goal slot whenever no Wspólny Cel is open, and the second button in the
+// sell dialog. Every number comes from the server (farm_granary_state).
 let fwGranary = null;     // farm_granary_state() payload
+let fwGranaryTimer = 0;   // re-render when a festival starts or ends
 
 async function fwGranaryRefresh() {
   try {
@@ -1196,7 +1201,23 @@ async function fwGranaryRefresh() {
     fwGranary = data || null;
   } catch (e) { fwGranary = null; }
   renderOfficeGoalBar();
+  clearTimeout(fwGranaryTimer);
+  const f = fwGranary?.festival;
+  const next = [f?.active?.ends_at, f?.queued?.[0]?.starts_at].filter(Boolean)
+    .map(t => new Date(t).getTime() - Date.now()).filter(ms => ms > 0);
+  if (next.length) fwGranaryTimer = setTimeout(fwGranaryRefresh, Math.min(...next) + 2000);
   return fwGranary;
+}
+
+function fwFestivalTime(t) {
+  const d = new Date(t);
+  const today = new Date().toDateString() === d.toDateString();
+  return (today ? '' : d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' }) + ' ')
+    + d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fwFestivalPct(f) {
+  return f ? Math.min(100, Math.round(Number(f.progress || 0) / Number(f.threshold || 1) * 100)) : 0;
 }
 
 function granaryNextTitle(total) {
@@ -1204,22 +1225,25 @@ function granaryNextTitle(total) {
 }
 
 function granaryRenderBar(bar) {
-  if (!fwGranary) { bar.classList.add('hidden'); return; }
-  const top = (fwGranary.all_time || [])[0];
-  const mine = Number(fwGranary.my_total || 0);
-  const next = granaryNextTitle(mine);
-  bar.classList.remove('hidden', 'done');
+  const f = fwGranary?.festival;
+  if (!fwGranary || !f) { bar.classList.add('hidden'); return; }
+  const live = f.active;
+  const pct = fwFestivalPct(f);
+  bar.classList.remove('hidden');
+  bar.classList.toggle('done', !!live);
   bar.replaceChildren(
-    el('span', { className: 'og-goal-ic' }, '🏛️'),
+    el('span', { className: 'og-goal-ic' }, live ? '🎪' : '🏛️'),
     el('div', { className: 'og-goal-main' },
       el('div', { className: 'og-goal-title' },
-        el('b', {}, 'Spichlerz biura'),
-        el('span', { className: 'og-goal-num' }, ogCoins(fwGranary.total) + ' 🪙 plonów')),
-      el('div', { className: 'fw-gr-sub' },
-        (top ? '1. ' + top.nick + (top.title ? ' ' + top.title.emoji : '') + ' · ' : '')
-        + (mine ? 'Ty: ' + ogCoins(mine) + ' 🪙' : 'Oddaj nadwyżkę plonów po pełnej cenie')
-        + (next && mine ? ' · do ' + next.emoji + ' brakuje ' + ogCoins(next.min - mine) : ''))),
-    el('span', { className: 'og-goal-cta' }, 'Zobacz'));
+        el('b', {}, live
+          ? 'Festyn plonów: +' + Math.round(f.bonus * 100) + '% do zbiorów do ' + fwFestivalTime(live.ends_at)
+          : 'Spichlerz → Festyn plonów'),
+        el('span', { className: 'og-goal-num' }, live
+          ? 'następny: ' + ogCoins(Math.min(f.progress, f.threshold)) + ' / ' + ogCoins(f.threshold) + ' 🪙'
+          : ogCoins(Math.min(f.progress, f.threshold)) + ' / ' + ogCoins(f.threshold) + ' 🪙')),
+      el('div', { className: 'og-goal-track' },
+        el('div', { className: 'og-goal-fill' + (live ? ' done' : ''), style: { width: pct + '%' } }))),
+    el('span', { className: 'og-goal-cta' }, live ? 'Zobacz' : 'Oddaj plony'));
 }
 
 async function fwDonateGranary(crop, qty, btn) {
@@ -1235,13 +1259,17 @@ async function fwDonateGranary(crop, qty, btn) {
     if (btn) btn.disabled = false;
     return null;
   }
+  const festivalsBefore = Number(fwGranary?.festival?.count || 0);
   await reloadFarmInventory();
   await fwGranaryRefresh();
   await invalidateFarmAssetBreakdown({ reload: true });
   const name = farmCropIdentity(crop).name;
   const t = data.title;
   const promoted = t && Number(t.min) > before;
-  toast(promoted
+  const fest = fwGranary?.festival;
+  if (fest && Number(fest.count) > festivalsBefore) {
+    toast('🎪 Spichlerz pełny — Festyn plonów dla całego biura! +' + Math.round(fest.bonus * 100) + '% do każdego zbioru.');
+  } else toast(promoted
     ? '🎉 Nowy tytuł: ' + t.emoji + ' ' + t.name + '! Spichlerz przyjął ' + data.donated_qty + '× ' + name + '.'
     : '🏛️ Spichlerz przyjął ' + data.donated_qty + '× ' + name + ' — ' + ogCoins(data.value) + ' 🪙 wartości.');
   renderFarmMarket();
@@ -1256,10 +1284,14 @@ function granaryDonateButton(crop, getQty, close, afterSell) {
   wrap._sync = (qty, q) => {
     const over = !!q && q.fairPct < 100;
     btn.classList.toggle('is-better', over);
-    btn.replaceChildren('🏛️ Oddaj do Spichlerza · ' + ogCoins(farmDonationValue(crop, qty)) + ' 🪙 wartości');
-    hint.replaceChildren(over
-      ? '⚖️ Ponad uczciwym udziałem skup płaci Ci tylko ' + q.fairPct + '% — w Spichlerzu plony liczą się po pełnej cenie, do rankingu i tytułu.'
-      : 'Plony liczą się do rankingu Spichlerza po cenie rynkowej. Nie dostajesz za nie monet.');
+    btn.replaceChildren('🏛️ Oddaj do Spichlerza · ' + ogCoins(farmDonationValue(crop, qty)) + ' 🪙 na Festyn');
+    const f = fwGranary?.festival;
+    const left = f ? Math.max(0, Number(f.threshold) - Number(f.progress)) : 0;
+    hint.replaceChildren((over
+      ? '⚖️ Ponad uczciwym udziałem skup płaci Ci tylko ' + q.fairPct + '%. W Spichlerzu plony liczą się po pełnej cenie. '
+      : 'Nie dostajesz za nie monet. ')
+      + (f ? 'Pełny Spichlerz = 🎪 Festyn: +' + Math.round(f.bonus * 100) + '% do zbiorów dla całego biura przez ' + f.hours + ' h'
+        + (left ? ' (brakuje ' + ogCoins(left) + ' 🪙).' : '.') : ''));
   };
   btn.addEventListener('click', async () => {
     const d = await fwDonateGranary(crop, getQty(), btn);
@@ -1281,14 +1313,35 @@ async function openGranaryModal() {
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
   const box = el('div', { className: 'modal og-modal' });
-  box.append(el('h3', {}, '🏛️ Spichlerz biura'));
+  const f = gr.festival;
+  box.append(el('h3', {}, (f?.active ? '🎪 ' : '🏛️ ') + 'Spichlerz biura'));
   box.append(el('p', { className: 'og-sub' },
-    'Oddajesz plony, a Spichlerz liczy je po aktualnej cenie skupu — bez obniżki za uczciwy udział. ',
-    'Nie dostajesz monet: dostajesz miejsce w rankingu i tytuł widoczny w Twoim profilu.'));
+    'Oddajesz plony, których nie opłaca się sprzedać, a Spichlerz liczy je po aktualnej cenie skupu. ',
+    'Monet za nie nie dostajesz — za to każde ' + ogCoins(f?.threshold || 0) + ' 🪙 oddanych plonów ',
+    'włącza 🎪 Festyn plonów: +' + Math.round((f?.bonus || 0) * 100) + '% do każdego zbioru dla całego biura przez ' + (f?.hours || 24) + ' h.'));
+
+  if (f) {
+    const pct = fwFestivalPct(f);
+    const fb = el('div', { className: 'og-reward' });
+    if (f.active) fb.append(el('b', {}, '🎪 Festyn trwa do ' + fwFestivalTime(f.active.ends_at) + '. '),
+      'Każdy zbiór daje teraz +' + Math.round(f.bonus * 100) + '% plonów.',
+      f.active.donors ? ' Dzięki: ' + f.active.donors + '.' : '');
+    else fb.append(el('b', {}, 'Do następnego Festynu: '),
+      ogCoins(Math.max(0, f.threshold - f.progress)) + ' 🪙 plonów.');
+    (f.queued || []).forEach(q => fb.append(el('div', { className: 'fw-gr-sub' },
+      '⏭️ Kolejny Festyn już opłacony: ' + fwFestivalTime(q.starts_at) + ' – ' + fwFestivalTime(q.ends_at))));
+    box.append(fb);
+    box.append(el('div', { className: 'og-goal-track big' },
+      el('div', { className: 'og-goal-fill' + (f.active ? ' done' : ''), style: { width: pct + '%' } })));
+    box.append(el('div', { className: 'og-goal-nums' },
+      el('span', {}, ogCoins(Math.min(f.progress, f.threshold)) + ' / ' + ogCoins(f.threshold) + ' 🪙'),
+      el('span', {}, f.count ? 'było już Festynów: ' + f.count : 'pierwszy Festyn przed nami')));
+  }
 
   const mine = Number(gr.my_total || 0);
   const myTitle = [...(gr.titles || [])].reverse().find(t => mine >= Number(t.min));
   const next = granaryNextTitle(mine);
+  box.append(el('div', { className: 'fw-don-title' }, '🏅 Twój tytuł'));
   box.append(el('div', { className: 'og-reward' },
     el('b', {}, 'Twój wkład: '), ogCoins(mine) + ' 🪙',
     myTitle ? ' · ' + myTitle.emoji + ' ' + myTitle.name : '',
