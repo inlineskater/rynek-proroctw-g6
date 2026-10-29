@@ -7075,6 +7075,7 @@
       background: rgba(255,255,255,.86); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
     .farm-sky-bar > .og-goal .og-goal-ic, .farm-sky-bar .fw-wx-ic { font-size: 18px; }
     .farm-sky-bar > .og-goal .og-goal-title { margin-bottom: 4px; }
+    .og-goal.og-goal-below { margin: 10px 0 0; }
     .farm-sky-bar > .farm-starter-chip { position: static; align-self: center; justify-self: start; max-width: 100%; }
     /* Ogródek ⇄ tabela view switch */
     /* Sits beside the field filter in the top bar (farmFieldFilter moves it). */
@@ -11496,7 +11497,7 @@
         <div class="farm-stage">
           <div class="garden-sky">
             <div class="garden-glow"></div><div class="garden-stars"></div>
-            <!-- The weather and the office goal live IN the sky (2026-10-03): a
+            <!-- The weather lives IN the sky (2026-10-03): a
                  separate strip row plus a decorative sky band cost the board
                  ~200px of height, which is what sizes the plants. -->
             <div class="farm-strips farm-sky-bar">
@@ -11505,9 +11506,6 @@
                 <span class="farm-starter-text"><strong>Prezent od serwera</strong><span>Darmowe skrzynki za 0 🪙</span></span>
                 <button class="farm-starter-action" id="farm-starter-btn" type="button">Otwórz</button>
               </div>
-              <div class="og-goal hidden" id="og-goal" role="button" tabindex="0"
-                   onclick="openOfficeGoalModal()"
-                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
               <div class="hidden" id="fw-banner"></div>
             </div>
           </div>
@@ -11519,6 +11517,11 @@
           </div>
         </div>
         <div class="farm-table-wrap hidden" id="farm-table-wrap"></div>
+        <!-- Wspólny Cel / 🏛️ Spichlerz → Festyn bar sits under the board (2026-10-29):
+             the sky band above the field keeps just the weather. -->
+        <div class="og-goal og-goal-below hidden" id="og-goal" role="button" tabindex="0"
+             onclick="openOfficeGoalModal()"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
         <!-- moved into the top bar's filter row by farmFieldFilter() -->
         <button class="farm-view-toggle" id="farm-view-toggle" type="button" title="Pokaż działki jako tabelę">📋 Tabela</button>
       </div>
