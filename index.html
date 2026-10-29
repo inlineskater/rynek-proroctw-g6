@@ -8853,7 +8853,8 @@
       </div>
     </div>
     <button class="nav-tab" data-tab="bank">🏦 Bank G6</button>
-    <button class="nav-tab" data-tab="community">🗳️ Głos Biura <span class="nav-new-badge">Nowość</span></button>
+    <button class="nav-tab" data-tab="community">🗳️ Pomysły <span class="nav-new-badge">Nowość</span></button>
+    <button class="nav-tab" data-tab="bugs">🐞 Zgłoszenia</button>
     <button class="nav-tab" data-tab="leaderboard">📈 Statystyki</button>
     <button class="nav-tab" data-tab="bug-jumper-test" id="nav-bug-jumper-test" style="display:none">🧪 Bug Test</button>
     <button class="nav-tab" data-tab="invoice-horde-test" id="nav-invoice-horde-test" style="display:none">🧪 Tickety Test</button>
@@ -9007,10 +9008,19 @@
     </main>
   </div>
 
-  <!-- 🗳️ Głos Biura — ideas, votes, bug tickets; rendered by tabs/community.js. -->
+  <!-- 🗳️ Pomysły (Głos Biura) — ideas and votes; rendered by tabs/community.js. -->
   <div id="tab-community" class="hidden">
     <main>
       <div id="community-body">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 🐞 Zgłoszenia — bug tickets; the same tabs/community.js module renders it. -->
+  <div id="tab-bugs" class="hidden">
+    <main>
+      <div id="bugs-body">
         <div class="loading-center"><div class="spinner"></div></div>
       </div>
     </main>
@@ -12290,7 +12300,7 @@ const TAB_MODULES = {
   farmevents:  'tabs/farm-events.js', // not a tab: 🌪️ random farm events (animations + banner)
   farmnft:     'tabs/farm-nft.js',   // not a tab: NFT cards, calendar, merge, breeding, explorer
   archive:     'tabs/archive.js',    // 📦 Archiwum: read-only history of ARCHIVED_TABS
-  community:   'tabs/community.js',  // 🗳️ Głos Biura: ideas, votes, bug tickets, public log
+  community:   'tabs/community.js',  // 🗳️ Pomysły AND 🐞 Zgłoszenia — one module, two tabs (like plinko)
 };
 const _tabModulePromises = {};
 let _tabActivationId = 0;
@@ -13795,6 +13805,7 @@ function switchTab(tab) {
   const tWl = document.getElementById('tab-wheel');
   const tBk = document.getElementById('tab-bank');
   const tCo = document.getElementById('tab-community');
+  const tBg = document.getElementById('tab-bugs');
   const tAr = document.getElementById('tab-archive');
   const tHl = document.getElementById('tab-hilo');
   const tTw = document.getElementById('tab-tower');
@@ -13813,6 +13824,7 @@ function switchTab(tab) {
   hide(tWl);
   hide(tBk);
   hide(tCo);
+  hide(tBg);
   hide(tAr);
   hide(tHl);
   hide(tTw);
@@ -13885,6 +13897,10 @@ function switchTab(tab) {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tCo);
     withTabModule('community', () => loadCommunity(), 'community');
+  } else if (tab === 'bugs') {
+    hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
+    show(tBg);
+    withTabModule('community', () => loadCommunity(), 'bugs');
   } else if (tab === 'bank') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tBk);
@@ -14699,8 +14715,8 @@ function setupRealtime() {
       // while they watch, and a completion has to reveal the new plots at once.
       refreshOfficeGoal();
     })
-    // 🗳️ Głos Biura: every RPC writes a community_log row, and votes move
-    // community_ideas. The module renders only while its tab is showing.
+    // 🗳️ Pomysły / 🐞 Zgłoszenia: every RPC writes a community_log row, and
+    // votes move community_ideas. The module renders only while a tab shows.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'community_ideas' }, () => communityOnChange())
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_log' }, () => communityOnChange())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'canvas_pixels' }, (payload) => {
@@ -15759,9 +15775,9 @@ function closeActivityModal() { stopActivityLive(); hide(afOverlay); document.bo
 document.getElementById('activity-btn').addEventListener('click', openActivityModal);
 // 🐞 from any tab: remember where the player was, then open the ticket form.
 document.getElementById('report-bug-btn').addEventListener('click', () => {
-  window.communityReportFrom = activeTab;
-  window.communityOpenView = 'bugs';
-  switchTab('community');
+  if (activeTab !== 'bugs') window.communityReportFrom = activeTab;
+  window.communityOpenView = 'report';
+  switchTab('bugs');
 });
 document.getElementById('btn-activity-all').addEventListener('click', openActivityModal);
 document.getElementById('af-close').addEventListener('click', closeActivityModal);

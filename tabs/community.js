@@ -1,6 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
-//  🗳️ Głos Biura — ideas, votes, bug tickets and the public log.
-//  Lazy module: TAB_MODULES.community. Backend: supabase/community.sql.
+//  🗳️ Pomysły + 🐞 Zgłoszenia („Głos Biura") — ideas, votes, bug tickets and
+//  the public log. ONE module, TWO nav tabs (`community`, `bugs`), like
+//  plinko.js serves Plinko and Koło Żubra. Backend: supabase/community.sql.
 //
 //  Everything comes from one call, community_state(). The writes are three
 //  player RPCs (submit idea, toggle vote, submit ticket); everything that
@@ -10,7 +11,9 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 let coState = null;
-let coView = 'ideas';          // ideas | winners | bugs | log
+// Sub-view per nav tab.  community: ideas | winners | log
+//                       bugs:      report | list | log
+const coView = { community: 'ideas', bugs: 'report' };
 let coLoading = null;
 let coRefreshTimer = null;
 
@@ -46,7 +49,7 @@ const CO_ERRORS = {
 (function communityCss() {
   const s = document.createElement('style');
   s.textContent = `
-    #tab-community main { max-width: 980px; }
+    #tab-community main, #tab-bugs main { max-width: 980px; }
     .co-head h2 { margin: 0 0 4px; font-size: 22px; }
     .co-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.5; }
     .co-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
@@ -88,9 +91,12 @@ function coErr(e) {
 }
 function coN(n) { return Math.round(Number(n) || 0).toLocaleString('pl-PL'); }
 
+function coTab() { return activeTab === 'bugs' ? 'bugs' : 'community'; }
+function coShowing() { return activeTab === 'community' || activeTab === 'bugs'; }
+
 async function loadCommunity() {
-  if (window.communityOpenView) { coView = window.communityOpenView; window.communityOpenView = null; }
-  if (!coState) renderCommunity();
+  if (window.communityOpenView) { coView[coTab()] = window.communityOpenView; window.communityOpenView = null; }
+  renderCommunity();
   await coFetch();
 }
 
@@ -101,13 +107,13 @@ async function coFetch() {
     if (error) {
       console.error('community_state', error);
       if (!coState) {
-        const body = document.getElementById('community-body');
+        const body = document.getElementById(coTab() + '-body');
         if (body) body.replaceChildren(el('p', { className: 'co-muted' }, 'Głos Biura nie jest jeszcze gotowy po stronie serwera. Spróbuj później.'));
       }
       return;
     }
     coState = data;
-    if (activeTab === 'community') renderCommunity();
+    if (coShowing()) renderCommunity();
   })();
   try { await coLoading; } finally { coLoading = null; }
 }
@@ -115,7 +121,7 @@ async function coFetch() {
 // Called by the realtime handler in index.html for every idea/log change.
 // State is only worth fetching while someone is looking at it.
 function communityOnChange() {
-  if (activeTab !== 'community') { coState = null; return; }
+  if (!coShowing()) { coState = null; return; }
   clearTimeout(coRefreshTimer);
   coRefreshTimer = setTimeout(coFetch, 400);
 }
@@ -132,33 +138,41 @@ function coWeekEnds() {
 }
 
 function renderCommunity() {
-  const body = document.getElementById('community-body');
+  const tab = coTab();
+  const body = document.getElementById(tab + '-body');
   if (!body) return;
-  const tabs = [
-    ['ideas', '💡 Pomysły'], ['winners', '🏆 Zwycięzcy'],
-    ['bugs', '🐞 Zgłoszenia'], ['log', '📜 Dziennik'],
-  ];
+  const reward = coState?.reward ?? 5000, bugReward = coState?.bug_reward ?? 500;
+  const tabs = tab === 'bugs'
+    ? [['report', '🐞 Zgłoś błąd'], ['list', '📋 Wszystkie zgłoszenia'], ['log', '📜 Dziennik']]
+    : [['ideas', '💡 Pomysły'], ['winners', '🏆 Zwycięzcy'], ['log', '📜 Dziennik']];
+  const view = coView[tab];
   const nav = el('div', { className: 'co-tabs' });
   tabs.forEach(([k, label]) => nav.append(el('button', {
-    className: 'co-tab' + (coView === k ? ' on' : ''),
-    onclick: () => { coView = k; renderCommunity(); },
+    className: 'co-tab' + (view === k ? ' on' : ''),
+    onclick: () => { coView[tab] = k; renderCommunity(); },
   }, label)));
 
-  const reward = coState?.reward ?? 5000, bugReward = coState?.bug_reward ?? 500;
-  const head = el('div', { className: 'co-head' },
-    el('h2', {}, '🗳️ Głos Biura'),
-    el('p', { className: 'co-lead' },
-      'Wy decydujecie, co powstanie na portalu. Zgłaszaj pomysły i głosuj — co poniedziałek pomysł z największą liczbą głosów '
-      + 'jest budowany automatycznie przez Claude, a jego autor dostaje ' + coN(reward) + ' 🪙. Znalazłeś błąd? Zgłoś go — '
-      + 'Claude co noc analizuje zgłoszenia, a za prawdziwy błąd płaci ' + coN(bugReward) + ' 🪙 (za „to nie błąd” — nic). '
-      + 'Wszystko, łącznie z decyzjami i uzasadnieniem, jest jawne w 📜 Dzienniku.'));
+  const head = tab === 'bugs'
+    ? el('div', { className: 'co-head' },
+        el('h2', {}, '🐞 Zgłoszenia'),
+        el('p', { className: 'co-lead' },
+          'Coś nie działa? Zgłoś to. Claude co noc analizuje każde zgłoszenie i naprawia potwierdzone błędy. '
+          + 'Za prawdziwy błąd dostajesz ' + coN(bugReward) + ' 🪙 (tylko pierwsze zgłoszenie danego błędu; '
+          + 'za „to nie błąd" — nic). Każda decyzja z uzasadnieniem jest jawna w 📜 Dzienniku.'))
+    : el('div', { className: 'co-head' },
+        el('h2', {}, '🗳️ Pomysły — Głos Biura'),
+        el('p', { className: 'co-lead' },
+          'Wy decydujecie, co powstanie na portalu. Zgłaszaj pomysły i głosuj — co poniedziałek pomysł z największą '
+          + 'liczbą głosów jest budowany automatycznie przez Claude, a jego autor dostaje ' + coN(reward) + ' 🪙. '
+          + 'Wszystkie decyzje są jawne w 📜 Dzienniku.'));
 
   const content = el('div', {});
   if (!coState) content.append(el('div', { className: 'loading-center' }, el('div', { className: 'spinner' })));
-  else if (coView === 'ideas') coRenderIdeas(content);
-  else if (coView === 'winners') coRenderWinners(content);
-  else if (coView === 'bugs') coRenderBugs(content);
-  else coRenderLog(content);
+  else if (view === 'ideas') coRenderIdeas(content);
+  else if (view === 'winners') coRenderWinners(content);
+  else if (view === 'report') coRenderReport(content);
+  else if (view === 'list') coRenderTickets(content);
+  else coRenderLog(content, tab === 'bugs' ? 'ticket' : 'idea');
   body.replaceChildren(head, nav, content);
 }
 
@@ -242,8 +256,8 @@ function coRenderWinners(root) {
   root.append(sec);
 }
 
-// ── 🐞 Zgłoszenia ──────────────────────────────────────────────────────────
-function coRenderBugs(root) {
+// ── 🐞 Zgłoś błąd ──────────────────────────────────────────────────────────
+function coRenderReport(root) {
   const fromTab = window.communityReportFrom || '';
   const kind = el('select', {},
     ...Object.entries(CO_KINDS).map(([k, l]) => el('option', { value: k }, l)));
@@ -265,6 +279,7 @@ function coRenderBugs(root) {
     if (error) { toast(coErr(error)); btn.disabled = false; return; }
     window.communityReportFrom = '';
     toast('Dzięki! Claude przeanalizuje zgłoszenie tej nocy.');
+    coView.bugs = 'list';
     await coFetch();
   };
   const form = el('div', { className: 'co-sec' },
@@ -273,13 +288,27 @@ function coRenderBugs(root) {
     el('div', { className: 'co-muted' },
       'Za potwierdzony, prawdziwy błąd: ' + coN(coState.bug_reward ?? 500) + ' 🪙 — płatne tylko pierwszemu zgłaszającemu. '
       + 'Opis exploita (np. sposobu na darmowe monety) widzisz tylko Ty, dopóki nie zostanie naprawiony.'));
+  root.append(form);
+  const mine = (coState.tickets || []).filter(t => t.author_id === me.id);
+  if (mine.length) {
+    const sec = el('div', { className: 'co-sec' }, el('h3', {}, 'Twoje zgłoszenia'));
+    mine.forEach(t => sec.append(coTicketRow(t)));
+    root.append(sec);
+  }
+}
 
+// ── 📋 Wszystkie zgłoszenia ────────────────────────────────────────────────
+function coRenderTickets(root) {
   const list = el('div', { className: 'co-sec' }, el('h3', {}, 'Wszystkie zgłoszenia'));
   const tickets = coState.tickets || [];
   if (!tickets.length) list.append(el('p', { className: 'co-muted' }, 'Brak zgłoszeń.'));
-  tickets.forEach(t => {
+  tickets.forEach(t => list.append(coTicketRow(t)));
+  root.append(list);
+}
+
+function coTicketRow(t) {
     const st = CO_TICKET_STATUS[t.status] || ['', t.status];
-    list.append(el('div', { className: 'co-row' }, el('div', { className: 'co-main' },
+    return el('div', { className: 'co-row' }, el('div', { className: 'co-main' },
       el('div', { className: 'co-title' }, st[0] + ' ' + t.title),
       el('div', { className: 'co-muted' },
         el('span', { className: 'co-pill' }, CO_KINDS[t.kind] || t.kind),
@@ -289,20 +318,19 @@ function coRenderBugs(root) {
         t.rewarded_at ? el('span', { className: 'co-coins' }, ' · +' + coN(coState.bug_reward ?? 500) + ' 🪙') : null),
       t.body ? el('div', { className: 'co-body' }, t.body)
         : t.kind === 'exploit' ? el('div', { className: 'co-muted' }, '🔒 Szczegóły ukryte do czasu naprawy.') : null,
-      t.note ? el('div', { className: 'co-note' }, '🤖 ' + t.note) : null)));
-  });
-  root.append(form, list);
+      t.note ? el('div', { className: 'co-note' }, '🤖 ' + t.note) : null));
 }
 
 // ── 📜 Dziennik ────────────────────────────────────────────────────────────
-function coRenderLog(root) {
-  const rows = coState.log || [];
+function coRenderLog(root, kind) {
+  // The ideas log also carries week closures; each tab shows only its own half.
+  const rows = (coState.log || []).filter(r => kind === 'ticket' ? r.ref_kind === 'ticket' : r.ref_kind !== 'ticket');
   const sec = el('div', { className: 'co-sec' },
-    el('h3', {}, 'Dziennik — każda decyzja i wypłata'),
+    el('h3', {}, (kind === 'ticket' ? 'Dziennik zgłoszeń' : 'Dziennik pomysłów') + ' — każda decyzja i wypłata'),
     el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'));
   if (!rows.length) sec.append(el('p', { className: 'co-muted' }, 'Pusto.'));
   rows.forEach(r => {
-    const what = r.event === 'submitted' ? (r.ref_kind === 'idea' ? '💡 zgłosił pomysł' : '🐞 zgłosił błąd')
+    const what = r.event === 'submitted' ? (r.ref_kind === 'idea' ? '💡 zgłosił pomysł' : '🐞 wysłał zgłoszenie')
       : r.event === 'won' ? '🏆 pomysł wygrał tydzień'
       : r.event === 'lost' ? '· pomysł nie wygrał'
       : r.event === 'closed' ? '🗓️ tydzień zamknięty'
