@@ -368,29 +368,16 @@ async function fwFillOrder(o, btn) {
   const s = document.createElement('style');
   s.id = 'farm-weather-css';
   s.textContent = `
-    /* One line, the height of the Wspólny Cel bar it sits beside (.farm-strips
-       in index.html); the forecast tiles and the crop table open on demand and
-       then take the whole row. A container query drops the mini forecast when
-       the strip shares its row on a narrow screen. */
-    #fw-banner { display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box; margin: 0; min-width: 0;
-      padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); color: var(--text);
-      container-type: inline-size; }
-    #fw-banner.hidden { display: none; }
-    #fw-banner.fw-open { grid-column: 1 / -1; }
+    /* Weather: a chip on the sky (#fw-chip, CSS in index.html) + this window. */
     .fw-wx-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .fw-wx-ic { font-size: 22px; line-height: 1; flex: 0 0 auto; }
     .fw-wx-main { flex: 1 1 auto; min-width: 0; }
     .fw-wx-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fw-wx-sub { font-size: 12px; color: var(--muted); line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .fw-wx-mini { display: flex; gap: 4px; flex: 0 0 auto; }
-    .fw-wx-mini > span { display: flex; flex-direction: column; align-items: center; min-width: 38px; padding: 2px 4px; border-radius: 7px;
-      background: var(--surface); border: 1px solid var(--border); font-size: 10px; line-height: 1.25; color: var(--muted); font-variant-numeric: tabular-nums; }
-    .fw-wx-mini b { font-size: 13px; }
-    @container (max-width: 470px) { .fw-wx-mini { display: none; } }
+    .fw-wx-modal .fw-wx-title, .fw-wx-modal .fw-wx-sub { white-space: normal; }
     .fw-wx-sub b { color: var(--text); }
     .fw-wx-good { color: #16a34a; font-weight: 700; }
     .fw-wx-bad { color: #dc2626; font-weight: 700; }
-    .fw-wx-btn { flex: 0 0 auto; font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 4px 0; white-space: nowrap; }
     .fw-wx-strip { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
     .fw-wx-strip::-webkit-scrollbar { display: none; }
     .fw-wx-cell { flex: 1 0 44px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px;
@@ -441,7 +428,6 @@ const FW_WX_STALE_MS = 10 * 60 * 1000;
 let fwWx = null;            // { hours: [{ms, c, t}], byCrop: Map(crop -> Map(cat -> mult)), bounds, current }
 let fwWxAt = 0;
 let fwWxLoading = null;
-let fwWxOpen = false;
 
 function loadFarmWeather() {
   if (fwWxLoading) return fwWxLoading;
@@ -563,19 +549,28 @@ function fwSyncSky() {
   }
 }
 
+// Weather is a chip on the garden's sky (#fw-chip: „☀️ 7°C"); the full card —
+// which crops it helps, the 48 h forecast and the per-crop table — opens in a
+// window from it (fwOpenWeatherModal). It used to be a card on the 📰 Tablica
+// board beside the field, which cost the plants a quarter of the width.
 function fwRenderWeatherBanner() {
-  const host = document.getElementById('fw-banner');
-  if (!host) return;
+  const chip = document.getElementById('fw-chip');
   const cur = fwWx?.current;
-  if (!fwWx || !cur) { host.classList.add('hidden'); return; }
-  host.classList.remove('hidden');
+  if (!chip) return;
+  if (!fwWx || !cur) { chip.classList.add('hidden'); return; }
   fwSyncSky();
   const lab = FW_WX_LABELS[cur.category] || FW_WX_LABELS.cloudy;
+  const temp = cur.temp_c != null ? Math.round(cur.temp_c) + '°C' : lab.name;
+  chip.classList.remove('hidden');
+  chip.replaceChildren(el('span', { 'aria-hidden': 'true' }, lab.ic), temp);
+  chip.title = 'Wrocław: ' + lab.name + (cur.temp_c != null ? ', ' + temp : '') + ' — kliknij: prognoza i wpływ na plony';
+  if (!chip._fwBound) { chip._fwBound = true; chip.addEventListener('click', fwOpenWeatherModal); }
+}
 
+function fwWxSub(category) {
   const crops = fwWxCrops();
-  const good = crops.map(ct => [ct, fwWxMult(ct, cur.category)]).filter(x => x[1] > 1).sort((a, b) => b[1] - a[1]);
-  const bad = crops.map(ct => [ct, fwWxMult(ct, cur.category)]).filter(x => x[1] < 1).sort((a, b) => a[1] - b[1]);
-
+  const good = crops.map(ct => [ct, fwWxMult(ct, category)]).filter(x => x[1] > 1).sort((a, b) => b[1] - a[1]);
+  const bad = crops.map(ct => [ct, fwWxMult(ct, category)]).filter(x => x[1] < 1).sort((a, b) => a[1] - b[1]);
   const sub = el('div', { className: 'fw-wx-sub' });
   if (good.length) {
     sub.append('Lepiej: ');
@@ -587,25 +582,25 @@ function fwRenderWeatherBanner() {
     bad.forEach(([ct, m]) => sub.append(fwWxCropChip(ct, m), ' '));
   }
   if (!good.length && !bad.length) sub.append('Ta pogoda nie sprzyja ani nie szkodzi żadnej uprawie.');
+  return sub;
+}
 
-  const btn = el('button', { className: 'fw-wx-btn', type: 'button', title: 'Prognoza i to, jak pogoda działa na uprawy' },
-    fwWxOpen ? 'Zwiń ▴' : 'Więcej ▾');
-  btn.addEventListener('click', () => { fwWxOpen = !fwWxOpen; fwRenderWeatherBanner(); });
-
+function fwOpenWeatherModal() {
+  const cur = fwWx?.current;
+  if (!cur) return;
+  const lab = FW_WX_LABELS[cur.category] || FW_WX_LABELS.cloudy;
   const temp = cur.temp_c != null ? ', ' + Math.round(cur.temp_c) + '°C' : '';
-  host.classList.toggle('fw-open', fwWxOpen);
-  const blocks = fwWxBlocks(fwWxOpen ? 8 : 4);
-  const mini = el('div', { className: 'fw-wx-mini', 'aria-hidden': 'true' });
-  if (!fwWxOpen) blocks.slice(1).forEach(b => mini.append(el('span', { title: b.name }, el('b', {}, b.ic), b.temp, ' ' + b.label)));
-  host.replaceChildren(
+  const body = openFarmModalShell('🌦️ Pogoda we Wrocławiu');
+  const wrap = el('div', { className: 'fw-wx-modal' });
+  wrap.append(
     el('div', { className: 'fw-wx-row' },
       el('span', { className: 'fw-wx-ic' }, lab.ic),
       el('div', { className: 'fw-wx-main' },
-        el('div', { className: 'fw-wx-title', title: 'Pogoda we Wrocławiu' }, 'Wrocław: ' + lab.name + temp),
-        sub),
-      mini,
-      btn));
-  if (fwWxOpen) host.append(fwWxStrip(blocks), fwWxDetails(crops));
+        el('div', { className: 'fw-wx-title' }, 'Teraz: ' + lab.name + temp),
+        fwWxSub(cur.category))),
+    fwWxStrip(fwWxBlocks(8)),
+    fwWxDetails(fwWxCrops()));
+  body.append(wrap);
 }
 
 // The next n 6-hour blocks, each shown as its most common condition.
@@ -1252,6 +1247,9 @@ function granaryRenderBar(bar) {
   if (!fwGranary || !f) { bar.classList.add('hidden'); return; }
   const live = f.active;
   const pct = fwFestivalPct(f);
+  // The sky only carries news: a running Festyn. The bar's progress lives in
+  // the Spichlerz window („☰ Więcej → 🏛️ Spichlerz").
+  if (!live) { bar.classList.add('hidden'); return; }
   bar.classList.remove('hidden');
   bar.classList.toggle('done', !!live);
   bar.replaceChildren(
@@ -1259,7 +1257,7 @@ function granaryRenderBar(bar) {
     el('div', { className: 'og-goal-main' },
       el('div', { className: 'og-goal-title' },
         el('b', {}, live
-          ? 'Festyn plonów: +' + Math.round(f.bonus * 100) + '% do zbiorów do ' + fwFestivalTime(live.ends_at)
+          ? 'Festyn +' + Math.round(f.bonus * 100) + '% do ' + fwFestivalTime(live.ends_at)
           : 'Spichlerz → Festyn plonów'),
         el('span', { className: 'og-goal-num' }, live
           ? 'następny: ' + ogCoins(Math.min(f.progress, f.threshold)) + ' / ' + ogCoins(f.threshold) + ' 🪙'

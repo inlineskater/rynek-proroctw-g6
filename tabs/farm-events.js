@@ -98,7 +98,7 @@ function fevEnsureRealtime() {
 }
 
 function fevRenderBanner() {
-  const host = document.getElementById('fw-banner')?.parentElement;
+  const host = document.getElementById('farm-sky-info');
   if (!host) return;
   let b = document.getElementById('fev-banner');
   const ev = fevLast;
