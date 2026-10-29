@@ -418,6 +418,8 @@ async function towerAct(fn) {
 function towerStart() {
   const bet = Math.trunc(Number(towerBet ?? towerState?.defaultBet ?? 50));
   if (!(bet >= 1)) { toast('Podaj stawkę.'); return; }
+  const maxBet = Number(towerState?.maxBet);
+  if (maxBet > 0 && bet > maxBet) { toast('Maksymalna stawka to ' + towerCoins(maxBet) + ' 🪙 — wyżej nawet szeroki blok przebiłby sufit wypłaty.'); return; }
   towerAct(async () => {
     const res = await invokeTower('start', { bet });
     towerState = { ...towerState, round: res.round, coins: res.coins };
@@ -468,6 +470,11 @@ function towerCashOut() {
   towerAct(async () => {
     const res = await invokeTower('cash_out');
     towerState = { ...towerState, round: null, coins: res.coins };
+    if (res.result === 'refunded') {
+      toast('↩️ Zwrócono stawkę ' + towerCoins(res.payout) + ' 🪙.');
+      refreshMeCoins();
+      return;
+    }
     towerCelebrate(res.payout, res.floors, res.multiplier);
     refreshMeCoins();
     loadTowerBoards();
@@ -562,7 +569,9 @@ function renderTowerControls() {
     }, towerCoins(v))));
     row.append(chips);
     row.append(el('input', {
-      className: 'tw-bet-input', type: 'number', min: '1', value: String(towerBet ?? ''),
+      className: 'tw-bet-input', type: 'number', min: '1',
+      ...(towerState.maxBet ? { max: String(towerState.maxBet), title: 'Maks. ' + towerCoins(towerState.maxBet) + ' 🪙' } : {}),
+      value: String(towerBet ?? ''),
       oninput: e => { towerBet = Math.trunc(Number(e.target.value) || 0); },
     }));
     host.append(row);
@@ -575,9 +584,9 @@ function renderTowerControls() {
       towerBusy ? 'Dźwig pracuje…' : TOWER_LOOK[towerTier].icon + ' Postaw piętro');
     build.disabled = towerBusy || !r.options[towerTier]?.allowed;
     const cash = el('button', { className: 'tw-btn is-gold', onclick: towerCashOut },
-      'Sprzedaj za ' + towerCoins(r.cashOut) + ' 🪙');
-    cash.disabled = towerBusy || r.floors < 1;
-    if (r.floors < 1) cash.title = 'Postaw przynajmniej jedno piętro.';
+      r.refundable ? '↩️ Zwróć stawkę ' + towerCoins(r.bet) + ' 🪙' : 'Sprzedaj za ' + towerCoins(r.cashOut) + ' 🪙');
+    cash.disabled = towerBusy || (r.floors < 1 && !r.refundable);
+    if (r.floors < 1 && !r.refundable) cash.title = 'Postaw przynajmniej jedno piętro.';
     host.append(el('div', { className: 'tw-actions' }, build, cash));
     host.append(el('div', { className: 'tw-note' },
       'Stawka ' + towerCoins(r.bet) + ' 🪙 · sufit przy tej stawce ' + towerMult(r.maxMultiplier)

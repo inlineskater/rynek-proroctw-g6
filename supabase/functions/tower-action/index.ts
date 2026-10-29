@@ -149,6 +149,16 @@ function anyAllowed(opts) {
   return TIER_ORDER.some(k => opts[k].allowed);
 }
 
+// The largest stake that can still build a first floor. Above it even the
+// widest block crosses the ceiling, so a round would start with nothing on
+// offer and no way to sell (an empty plot can't be sold) — the stake would be
+// stuck forever. That happened on prod on 2026-10-29 (a 300 000 stake).
+function maxBetFor(houseFactor) {
+  let m = Math.min(MAX_BET, Math.floor(MAX_PAYOUT * TIERS.wide.pm / (1000 * Number(houseFactor))));
+  while (m > 0 && !anyAllowed(optionsFor(m, 1, houseFactor, 0))) m--;
+  return m;
+}
+
 async function casinoLuckFactor(tx) {
   try {
     const rows = await tx`
@@ -187,6 +197,9 @@ function roundOut(row) {
     maxMultiplier: floor4(capMultiplier(row.bet, houseFactor)),
     maxPayout: MAX_PAYOUT,
     maxFloors: MAX_FLOORS,
+    // An empty plot with nothing on offer (only a round started before the
+    // stake limit existed): the stake can be taken back, see handleCashOut.
+    refundable: floors < 1 && !anyAllowed(optionsFor(Number(row.bet), multiplier, houseFactor, floors)),
   };
 }
 
@@ -252,6 +265,7 @@ async function handleState(user) {
       tiers: Object.fromEntries(TIER_ORDER.map(k => [k, { p: TIERS[k].pm / 1000, step: floor4(1000 / TIERS[k].pm) }])),
       maxPayout: MAX_PAYOUT,
       maxFloors: MAX_FLOORS,
+      maxBet: maxBetFor(factor),
       casinoLuck: factor !== HOUSE_FACTOR,
       houseFactor: factor,
     };
@@ -266,6 +280,12 @@ async function handleStart(user, payload) {
     const coins = await coinsOf(tx, user.id, true);
     if (coins < bet) throw gameError("Za mało monet.");
     const factor = await casinoLuckFactor(tx);
+    const maxBet = maxBetFor(factor);
+    if (bet > maxBet) {
+      throw gameError("Maksymalna stawka to " + maxBet.toLocaleString("pl-PL") +
+        " 🪙 — przy wyższej nawet szeroki blok przebiłby sufit wypłaty (" +
+        MAX_PAYOUT.toLocaleString("pl-PL") + " 🪙).");
+    }
     await tx`update public.profiles set coins = coins - ${bet} where id = ${user.id}`;
     const rows = await tx`
       insert into public.tower_rounds (user_id, bet, house_factor)
@@ -335,6 +355,22 @@ async function handleCashOut(user) {
   return await db.begin(async tx => {
     const round = await activeRound(tx, user.id, true);
     if (!round) throw gameError("Nie masz budowy w toku.");
+    if (Number(round.floors) < 1 &&
+        !anyAllowed(optionsFor(Number(round.bet), Number(round.multiplier), Number(round.house_factor), 0))) {
+      // A stake too big to build even one floor (started before handleStart
+      // capped it): give the whole stake back. No tower_spins row — nothing
+      // was played, and the stake was never booked anywhere but that table.
+      await tx`
+        update public.tower_rounds set status = 'cashed', ended_at = now()
+         where id = ${round.id} and status = 'active'
+      `;
+      const rows = await tx`
+        update public.profiles set coins = coins + ${round.bet}
+         where id = ${user.id} returning coins
+      `;
+      return { ok: true, result: "refunded", payout: Number(round.bet), coins: Number(rows[0].coins),
+               floors: 0, multiplier: 1 };
+    }
     if (Number(round.floors) < 1) {
       // Cashing out an empty plot would just refund 95% of the stake — a
       // guaranteed loss nobody means to take.
