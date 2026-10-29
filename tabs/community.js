@@ -156,7 +156,7 @@ function renderCommunity() {
 
   const head = tab === 'bugs'
     ? el('div', { className: 'co-head' },
-        el('h2', {}, '🐞 Zgłoszenia'),
+        el('h2', {}, '🐞 Zgłoszenia Bugów'),
         el('p', { className: 'co-lead' },
           'Coś nie działa? Zgłoś to. Claude co noc analizuje każde zgłoszenie i naprawia potwierdzone błędy. '
           + 'Za prawdziwy błąd dostajesz ' + coN(bugReward) + ' 🪙 (tylko pierwsze zgłoszenie danego błędu; '
