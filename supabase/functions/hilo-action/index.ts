@@ -129,6 +129,18 @@ function capMultiplier(bet, houseFactor) {
   return Math.min(MAX_MULT, MAX_PAYOUT / (Number(bet) * Number(houseFactor)));
 }
 
+// The largest stake whose safest real call (12/13, ×1.0833) still fits under
+// the ceiling. Above it every win is clamped to MAX_PAYOUT, so the published
+// odds stop being true from the first card — and past MAX_PAYOUT / houseFactor
+// no cash-out can even return the stake. Same rule as Wieżowiec's maxBetFor
+// (added there after a 300 000 stake got stuck on 2026-10-29).
+function maxBetFor(houseFactor) {
+  const safest = RANKS / (RANKS - 1);
+  let m = Math.min(MAX_BET, Math.floor(MAX_PAYOUT / (safest * Number(houseFactor))));
+  while (m > 0 && safest > capMultiplier(m, houseFactor)) m--;
+  return m;
+}
+
 async function casinoLuckFactor(tx) {
   try {
     const rows = await tx`
@@ -227,6 +239,7 @@ async function handleState(user) {
       defaultBet: DEFAULT_BET,
       maxPayout: MAX_PAYOUT,
       maxMultiplier: MAX_MULT,
+      maxBet: maxBetFor(factor),
       casinoLuck: factor !== HOUSE_FACTOR,
       houseFactor: factor,
     };
@@ -241,6 +254,12 @@ async function handleStart(user, payload) {
     const coins = await coinsOf(tx, user.id, true);
     if (coins < bet) throw gameError("Za mało monet.");
     const factor = await casinoLuckFactor(tx);
+    const maxBet = maxBetFor(factor);
+    if (bet > maxBet) {
+      throw gameError("Maksymalna stawka to " + maxBet.toLocaleString("pl-PL") +
+        " 🪙 — przy wyższej już pierwsza wygrana przebiłaby sufit wypłaty (" +
+        MAX_PAYOUT.toLocaleString("pl-PL") + " 🪙).");
+    }
     const card = drawCard();
     await tx`update public.profiles set coins = coins - ${bet} where id = ${user.id}`;
     const rows = await tx`
