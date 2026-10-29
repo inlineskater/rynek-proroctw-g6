@@ -6519,7 +6519,7 @@
       background: linear-gradient(180deg, var(--g-grass-a, #cbe9bf) 0%, var(--g-grass-b, #b7d7a8) 100%); transition: background 1.5s linear; }
     /* Sky band scales with the viewport so short screens (MacBook Air) spend the
        height on tiles, not decoration; min keeps the starter chip readable. */
-    .farm-stage > .garden-sky { position: relative; flex: 0 0 auto; height: auto; min-height: 40px; margin: 0; border-radius: 11px 11px 0 0; overflow: hidden; box-shadow: inset 0 -9px 16px -8px rgba(0,0,0,.14);
+    .farm-stage > .garden-sky { position: relative; flex: 0 0 auto; height: auto; min-height: clamp(56px, 9vh, 96px); margin: 0; border-radius: 11px 11px 0 0; overflow: hidden; box-shadow: inset 0 -9px 16px -8px rgba(0,0,0,.14);
       background: linear-gradient(180deg, var(--g-sky-a, #bfe6f6) 0%, var(--g-sky-b, #a6d6ee) 100%); }
     .farm-stage > .garden-sky::before { content: ''; position: absolute; left: -4%; right: -4%; bottom: -2px; height: 44px; opacity: .7; filter: blur(.4px);
       background: radial-gradient(58% 150% at 24% 100%, var(--g-grass-b, #aed79e) 0 56%, transparent 58%), radial-gradient(66% 150% at 72% 100%, var(--g-grass-a, #cbe9bf) 0 54%, transparent 56%); }
@@ -6626,6 +6626,7 @@
       .zen-fold-label { writing-mode: horizontal-tb; transform: none; }
       .farm-divider { display: none; }
       .farm-split .farm-field { flex: 0 0 auto; align-items: center; overflow: visible; }
+      .farm-side { flex: 0 0 auto; width: 100%; max-width: 640px; box-sizing: border-box; }
     }
     /* Phones: the field runs nearly edge to edge — every px of gutter is
        divided between only 5 columns of plants. */
@@ -7075,7 +7076,17 @@
       background: rgba(255,255,255,.86); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
     .farm-sky-bar > .og-goal .og-goal-ic, .farm-sky-bar .fw-wx-ic { font-size: 18px; }
     .farm-sky-bar > .og-goal .og-goal-title { margin-bottom: 4px; }
-    .og-goal.og-goal-below { margin: 10px 0 0; }
+    /* 📰 Tablica: the right-hand board (weather, events, Spichlerz/Wspólny Cel). */
+    .farm-side { flex: 0 0 280px; width: 280px; min-width: 0; display: flex; flex-direction: column; gap: 8px;
+      border-radius: 10px; padding: 6px; background: rgba(255,255,255,.08); }
+    .farm-side > .og-goal, .farm-side > #fw-banner, .farm-side > #fev-banner { margin: 0; padding: 8px 10px; border-color: rgba(255,255,255,.7);
+      background: rgba(255,255,255,.9); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
+    .farm-side .og-goal-ic, .farm-side .fw-wx-ic { font-size: 18px; }
+    .farm-side .fw-wx-title, .farm-side .fw-wx-sub { white-space: normal; }
+    .farm-side .fw-wx-row { flex-wrap: wrap; gap: 8px; }
+    /* Nothing to show → no empty board and no fence. */
+    .farm-side:not(:has(> :not(.hidden):not(.plot-sign))),
+    .farm-split:has(.farm-side:not(:has(> :not(.hidden):not(.plot-sign)))) .farm-side-divider { display: none; }
     .farm-sky-bar > .farm-starter-chip { position: static; align-self: center; justify-self: start; max-width: 100%; }
     /* Ogródek ⇄ tabela view switch */
     /* Sits beside the field filter in the top bar (farmFieldFilter moves it). */
@@ -11497,7 +11508,9 @@
         <div class="farm-stage">
           <div class="garden-sky">
             <div class="garden-glow"></div><div class="garden-stars"></div>
-            <!-- The weather lives IN the sky (2026-10-03): a
+            <!-- The sky is just sky again (2026-10-29): the weather card, events and
+                 the Spichlerz/Wspólny Cel live on the 📰 board right of the field.
+                 Earlier (2026-10-03): a
                  separate strip row plus a decorative sky band cost the board
                  ~200px of height, which is what sizes the plants. -->
             <div class="farm-strips farm-sky-bar">
@@ -11506,7 +11519,6 @@
                 <span class="farm-starter-text"><strong>Prezent od serwera</strong><span>Darmowe skrzynki za 0 🪙</span></span>
                 <button class="farm-starter-action" id="farm-starter-btn" type="button">Otwórz</button>
               </div>
-              <div class="hidden" id="fw-banner"></div>
             </div>
           </div>
           <div class="garden-weather"></div>
@@ -11514,14 +11526,20 @@
             <div class="zen-zone" id="zen-zone"></div>
             <div class="farm-divider" aria-hidden="true"></div>
             <div class="farm-field"><div class="plot-sign">🌾 Farma</div><div class="farm-board" id="farm-board"></div></div>
+            <!-- A third board, right of the field: weather (#fw-banner, and
+                 tabs/farm-events.js prepends #fev-banner to its parent) plus the
+                 Wspólny Cel / 🏛️ Spichlerz → Festyn bar. scaleFarmPots budgets it. -->
+            <div class="farm-divider farm-side-divider" aria-hidden="true"></div>
+            <aside class="farm-side" id="farm-side">
+              <div class="plot-sign">📰 Tablica</div>
+              <div class="hidden" id="fw-banner"></div>
+              <div class="og-goal hidden" id="og-goal" role="button" tabindex="0"
+                   onclick="openOfficeGoalModal()"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
+            </aside>
           </div>
         </div>
         <div class="farm-table-wrap hidden" id="farm-table-wrap"></div>
-        <!-- Wspólny Cel / 🏛️ Spichlerz → Festyn bar sits under the board (2026-10-29):
-             the sky band above the field keeps just the weather. -->
-        <div class="og-goal og-goal-below hidden" id="og-goal" role="button" tabindex="0"
-             onclick="openOfficeGoalModal()"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOfficeGoalModal();}"></div>
         <!-- moved into the top bar's filter row by farmFieldFilter() -->
         <button class="farm-view-toggle" id="farm-view-toggle" type="button" title="Pokaż działki jako tabelę">📋 Tabela</button>
       </div>
@@ -22820,7 +22838,10 @@ function scaleFarmPots() {
       // scrollbar on the field.
       // A folded zen is a ZEN_FOLD_W tab instead of zc columns.
       const zc = zenFolded ? 0 : zenColsFor();
-      const usable = split.clientWidth - 74 - 8 - (zenFolded ? ZEN_FOLD_W : (zc - 1) * gap) - (maxCols - 1) * gap;
+      // The 📰 Tablica board on the right: its width + fence + two more gaps.
+      const side = split.querySelector('.farm-side');
+      const sideW = side && side.offsetWidth ? side.offsetWidth + 34 : 0;
+      const usable = split.clientWidth - 74 - 8 - sideW - (zenFolded ? ZEN_FOLD_W : (zc - 1) * gap) - (maxCols - 1) * gap;
       byW = usable / (zc + maxCols);
     } else {
       // Stacked mobile layout: budget from the split container, NOT the field —
