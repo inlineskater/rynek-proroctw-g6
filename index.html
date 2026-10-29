@@ -23351,7 +23351,7 @@ function farmToolbar() {
       const b = el('button', { className: 'ftb-btn', type: 'button', title: t.label },
         el('span', { className: 'ftb-ic', 'aria-hidden': 'true' }, words[0]),
         el('span', { className: 'ftb-txt' }, short));
-      if (id === 'boxes' || id === 'inventory') b.dataset.badge = id;
+      b.dataset.badge = id;
       b.addEventListener('click', () => openFarmHub(t.id));
       row.append(b);
     });
@@ -23364,23 +23364,45 @@ function farmToolbar() {
   return bar;
 }
 
-// Count badges on the hub buttons: sealed boxes on 📦, a „!" on 🎒 while a
-// land-tax debt is outstanding. Re-checked by the 1s tick, so opening a box
-// in the hub updates the badge without re-rendering the bar.
-function syncFarmToolbarBadges(nav) {
+// „Something to do here" badges on the hub buttons. Red = needs you (land-tax
+// debt, crops rotting within 24 h); green = you can do something there right
+// now (sealed boxes, a card ready to level up, an order you can fill, a ripe
+// forgotten crop you may steal from). Re-checked by the 1s tick from data the
+// farm already holds, so opening a box or filling an order updates the badge
+// without re-rendering the bar. Tabs with nothing to do show nothing.
+function farmToolbarActions(now = Date.now()) {
+  const out = {};
   const boxes = Number(fmBoxes || 0) + Number(fmGoldBoxes || 0);
-  const debt = Number(fmTax?.debt || 0) > 0;
+  if (boxes > 0) out.boxes = { text: String(boxes), title: plBoxes(boxes) + ' do otwarcia' };
+
+  const rotting = [...fmInventoryExp.entries()]
+    .filter(([crop, iso]) => Number(fmInventory.get(crop) || 0) > 0 && new Date(iso).getTime() - now < 86400000).length;
+  const levelUps = (fmCollection || []).filter(c => {
+    const d = fmDefs.get(c.species);
+    return d && d.edition_size == null && c.count >= 2 * c.level
+      && (me?.coins || 0) >= farmLevelUpCoinCost(c.species, c.level);
+  }).length;
+  if (Number(fmTax?.debt || 0) > 0) out.inventory = { text: '!', warn: true, title: 'Zaległy podatek gruntowy' };
+  else if (rotting) out.inventory = { text: '!', warn: true, title: rotting + ' ' + plCount(rotting, 'plon zgnije', 'plony zgniją', 'plonów zgnije') + ' w ciągu 24 h — sprzedaj' };
+  else if (levelUps) out.inventory = { text: String(levelUps), title: levelUps + ' ' + plCount(levelUps, 'karta', 'karty', 'kart') + ' do ulepszenia' };
+
+  const orders = farmOrdersFillableCount();
+  if (orders) out.orders = { text: String(orders), title: orders + ' ' + plCount(orders, 'zamówienie', 'zamówienia', 'zamówień') + ' do zrealizowania z magazynu' };
+  const steals = farmStealableCount(now);
+  if (steals) out.neighbours = { text: String(steals), title: steals + ' ' + plCount(steals, 'zapomniana roślina', 'zapomniane rośliny', 'zapomnianych roślin') + ' do podebrania 🥷' };
+  return out;
+}
+
+function syncFarmToolbarBadges(nav) {
+  const acts = farmToolbarActions();
   nav.querySelectorAll('.ftb-btn[data-badge]').forEach(b => {
-    const want = b.dataset.badge === 'boxes' ? (boxes > 0 ? String(boxes) : '') : (debt ? '!' : '');
+    const a = acts[b.dataset.badge];
     let badge = b.querySelector('.ftb-badge');
-    if ((badge?.textContent || '') === want) return;
-    if (!want) { badge?.remove(); return; }
-    if (!badge) {
-      badge = el('span', { className: 'ftb-badge' + (b.dataset.badge === 'inventory' ? ' warn' : '') });
-      b.append(badge);
-    }
-    badge.textContent = want;
-    badge.title = b.dataset.badge === 'boxes' ? plBoxes(boxes) + ' do otwarcia' : 'Zaległy podatek gruntowy';
+    if (!a) { badge?.remove(); return; }
+    if (!badge) { badge = el('span', { className: 'ftb-badge' }); b.append(badge); }
+    badge.classList.toggle('warn', !!a.warn);
+    if (badge.textContent !== a.text) badge.textContent = a.text;
+    if (badge.title !== a.title) badge.title = a.title;
   });
 }
 
@@ -24482,6 +24504,9 @@ function farmPerDayIncome(d, price, level = 1) {
 function farmWeatherYieldMult() { return 1; }
 function farmNeighbourYieldMult() { return 1; }
 function farmWorldDecorateCell() {}
+// Toolbar badge counts (fillable 📋 orders, 🥷 stealable plots) — tabs/farm-world.js.
+function farmOrdersFillableCount() { return 0; }
+function farmStealableCount() { return 0; }
 // 🎯 crop donations to the Wspólny Cel — implemented in tabs/farm-world.js.
 function farmGoalDonateButton() { return ''; }
 function ogCropDonateSection() { return ''; }

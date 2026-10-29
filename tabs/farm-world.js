@@ -204,6 +204,14 @@ function buildFarmOrdersBody(bodyEl) {
   fwRenderOrders(bodyEl);
 }
 
+// index.html toolbar badge: open orders I have not done and could fill from my barn now.
+function farmOrdersFillableCount() {
+  if (!fwOrders?.orders) return 0;
+  const now = Date.now();
+  return fwOrders.orders.filter(o => !o.mine && new Date(o.expires_at).getTime() > now
+    && (o.lines || []).length && o.lines.every(l => fwHave(l) >= l.qty)).length;
+}
+
 // What I hold of a crop right now. The board's own `have` is a snapshot from the
 // last fetch; fmInventory is patched live on every harvest and sale, so prefer it
 // once the farm data is loaded.
@@ -504,7 +512,10 @@ function farmWeatherYieldMult(def, over, growMin) {
 // Entry point from loadFarm(): everything the board shows outside the hub.
 async function fwRefresh() {
   fwEnsureNbRealtime();
-  await Promise.all([fwWeatherRefresh(), fwNbRefresh(), fwGranaryRefresh()]);
+  fwEnsureRealtime();
+  // Orders are fetched up front too: the 📋 toolbar badge counts the ones I can fill.
+  const orders = !fwOrders || Date.now() - fwOrdersAt > FW_ORDERS_STALE_MS ? loadFarmOrders() : null;
+  await Promise.all([fwWeatherRefresh(), fwNbRefresh(), fwGranaryRefresh(), orders]);
 }
 
 async function fwWeatherRefresh() {
@@ -787,6 +798,14 @@ function fwTileStealable(tile, key, now) {
   if (ev?.stolen_by_me) return false;
   if ((ev?.thieves || 0) >= (fwNb.limits?.steal_thieves_per_cycle || 3)) return false;
   return true;
+}
+
+// index.html toolbar badge: plots I may steal from right now (0 once today's thefts are used).
+function farmStealableCount(now = Date.now()) {
+  if (!fwNb || (fwNb.me?.steal_used || 0) >= (fwNb.limits?.steal_per_day || 5)) return 0;
+  let n = 0;
+  fmTiles.forEach((t, k) => { if (fwTileStealable(t, k, now)) n++; });
+  return n;
 }
 
 // index.html hook, end of buildFarmDisplayCell() for every owned plot.
