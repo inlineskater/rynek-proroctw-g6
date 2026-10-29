@@ -6743,6 +6743,33 @@
     .farm-plant-cell.mine { outline: none; }
     /* Own tiles/plants always stand out: bright gold ring + soft outer glow */
     .farm-cell.mine, .farm-plant-cell.mine { z-index: 1; box-shadow: inset 0 0 0 2.5px #f5b301; }
+    /* ── Meadow pass (2026-10-29, design critique) ──────────────────────────
+       The field read as a spreadsheet: 40 bordered boxes, each with a dark name
+       label, inside panels inside a panel. Now plots are soil beds on the
+       grass (no box border), names of OTHER players appear on hover only (the
+       tooltip / tap popup always have them), and the zen half and the farm
+       share one meadow with no panel behind either. What stays loud: your
+       amber ring + „Ty", the ripe glow, and actions (🥷, FOR SALE). */
+    .farm-cell:not(.unowned):not(.zen-invite) { border: 0; border-radius: 10px;
+      background: radial-gradient(120% 95% at 50% 38%, #8a6a45 0%, #6f5236 62%, #5c432c 100%);
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,.16), inset 0 2px 0 rgba(255,255,255,.07); }
+    .farm-cell.unowned { border: 1.5px dashed rgba(255,255,255,.28); border-radius: 10px; background: transparent; }
+    .farm-cell.unowned::after { color: rgba(255,255,255,.55); }
+    .farm-cell.mine:not(.unowned) { box-shadow: inset 0 0 0 2.5px #f5b301, inset 0 -3px 0 rgba(0,0,0,.16); }
+    .farm-cell.other.fm-same { box-shadow: inset 0 0 0 2px rgba(255,255,255,.9); }
+    .farm-cell.other .farm-cell-owner, .farm-plant-cell:not(.mine) .farm-cell-owner { opacity: 0; transition: opacity .15s; }
+    .farm-cell.other:hover .farm-cell-owner, .farm-cell.other.fm-same .farm-cell-owner,
+    .farm-plant-cell:not(.mine):hover .farm-cell-owner { opacity: 1; }
+    .farm-plant-cell { border: 0; border-radius: 12px;
+      background: radial-gradient(75% 60% at 50% 70%, rgba(255,255,255,.12) 0%, rgba(255,255,255,.05) 70%, transparent 100%); }
+    .farm-plant-cell.zen-reserved .garden-pot.placeholder { opacity: .35; }
+    .zen-zone:not(.zen-folded) { background: none; padding: 0 6px; }
+    .farm-field > .plot-sign { display: none; }
+    .farm-divider::before { opacity: .45; width: 3px; }
+    /* The plant scales with its bed (container units), so a 75px plot isn't a
+       small icon in a big brown square. */
+    #farm-board .farm-cell { container-type: size; }
+    #farm-board .farm-cell .farm-cell-emoji { font-size: clamp(16px, 50cqmin, 64px); }
     .farm-plant-cell .garden-pot { position: absolute; top: 50%; left: 50%; width: 108px; min-height: 112px; padding: 0 6px 6px; justify-content: flex-end; transform: translate(-50%, -50%) scale(calc(var(--pot-scale, .32) * 1.18)); transform-origin: center; pointer-events: none; margin: 0; background: none; border-color: transparent; box-shadow: none; }
     .farm-plant-cell .garden-pot::before { display: none; }
     .farm-plant-cell .garden-pot .gp-info,
@@ -7140,8 +7167,10 @@
     .farm-split.side-below .farm-side > .plot-sign { align-self: center; }
     .farm-split.side-below .farm-side > :not(.plot-sign) { flex: 1 1 260px; }
     /* Nothing to show → no empty board and no fence. */
-    .farm-side:not(:has(> :not(.hidden):not(.plot-sign))),
-    .farm-split:has(.farm-side:not(:has(> :not(.hidden):not(.plot-sign)))) .farm-side-divider { display: none; }
+    /* (A :has() nested in :has() is invalid and drops the whole rule — which
+       is how an empty board used to stay on screen.) */
+    .farm-split:not(:has(.farm-side > :not(.hidden):not(.plot-sign))) .farm-side,
+    .farm-split:not(:has(.farm-side > :not(.hidden):not(.plot-sign))) .farm-side-divider { display: none; }
     .farm-sky-bar > .farm-starter-chip { position: static; align-self: center; justify-self: start; max-width: 100%; }
     /* Ogródek ⇄ tabela view switch */
     /* Sits beside the field filter in the top bar (farmFieldFilter moves it). */
