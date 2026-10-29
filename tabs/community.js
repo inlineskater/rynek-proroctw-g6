@@ -50,7 +50,7 @@ const CO_ERRORS = {
 (function communityCss() {
   const s = document.createElement('style');
   s.textContent = `
-    #tab-community main, #tab-bugs main { max-width: 980px; }
+    #tab-community main, #tab-bugs main { max-width: 1240px; }
     .co-head h2 { margin: 0 0 4px; font-size: 22px; }
     .co-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.5; }
     .co-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
@@ -76,8 +76,6 @@ const CO_ERRORS = {
     .co-form input, .co-form textarea, .co-form select { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: inherit; width: 100%; box-sizing: border-box; }
     .co-form textarea { min-height: 84px; resize: vertical; }
     .co-form button { justify-self: start; }
-    .co-log-row { display: grid; grid-template-columns: 84px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-    .co-log-row:last-child { border-bottom: 0; }
     .co-coins { color: #15803d; font-weight: 700; white-space: nowrap; }
     .co-fine { color: #b91c1c; font-weight: 700; white-space: nowrap; }
     .co-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
@@ -88,11 +86,12 @@ const CO_ERRORS = {
     .co-table tr:last-child td { border-bottom: 0; }
     .co-table td.nw { white-space: nowrap; }
     .co-table td.wide { min-width: 200px; }
+    .co-table td.mid { min-width: 170px; }
+    .co-table-wrap { overflow-x: auto; }
+    .co-desc { font-size: 12px; color: var(--muted); margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
     .co-st-fixed, .co-st-shipped { border-color: #16a34a; }
     .co-st-confirmed, .co-st-fixing, .co-st-won, .co-st-building { border-color: #2563eb; }
     .co-st-abuse, .co-st-rejected { border-color: #b91c1c; }
-    details.co-sec > summary { cursor: pointer; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
-    @media (max-width: 520px) { .co-log-row { grid-template-columns: 1fr; gap: 2px; } }
     /* Phones: each ticket becomes a small card, every cell labelled. */
     @media (max-width: 700px) {
       .co-table thead { display: none; }
@@ -379,7 +378,13 @@ function coCoinsCell(rewarded, fined, amount) {
     : fined ? el('span', { className: 'co-fine' }, 'kara') : '—';
 }
 
-function coWhen(ts) { return el('span', { title: fmtDateTime(ts) }, relTime(ts)); }
+function coWhen(ts) { return ts ? el('span', { title: fmtDateTime(ts) }, relTime(ts)) : '—'; }
+const CO_SEVERITY = { low: 'niska', medium: 'średnia', high: 'wysoka', critical: 'krytyczna' };
+// The player's own description, clamped to a few lines (full text on hover).
+function coDesc(text, hiddenNote) {
+  if (text) return el('div', { className: 'co-desc', title: text }, text);
+  return hiddenNote ? el('div', { className: 'co-muted' }, hiddenNote) : null;
+}
 
 function coTicketTable(root) {
   const tickets = coState.tickets || [];
@@ -388,16 +393,21 @@ function coTicketTable(root) {
     el('div', { className: 'co-muted' }, 'Każde zgłoszenie, jego status i rozwiązanie. Nowe zgłoszenia automat analizuje co noc o 02:13.'));
   if (!tickets.length) sec.append(el('p', { className: 'co-muted' }, 'Brak zgłoszeń.'));
   else sec.append(coTable(
-    [{ label: 'Data', cls: 'nw' }, { label: 'Zgłaszający', cls: 'nw' }, { label: 'Zgłoszony błąd' },
-     { label: 'Status' }, { label: 'Rozwiązanie', cls: 'wide' }, { label: '🪙', cls: 'nw' }],
+    [{ label: 'Zgłoszono', cls: 'nw' }, { label: 'Zgłaszający', cls: 'nw' }, { label: 'Zgłoszony błąd', cls: 'mid' },
+     { label: 'Status / waga' }, { label: 'Rozwiązanie', cls: 'wide' }, { label: 'Ostatnia zmiana', cls: 'nw' },
+     { label: '🪙', cls: 'nw' }],
     tickets.map(t => {
       const st = CO_TICKET_STATUS[t.status] || ['', t.status];
       return [
         coWhen(t.created_at),
         t.author_nick || 'Gracz',
-        [el('b', {}, t.title), el('div', { className: 'co-muted' }, (CO_KINDS[t.kind] || t.kind) + (t.tab ? ' · ' + t.tab : ''))],
-        el('span', { className: 'co-pill co-st-' + t.status }, st[0] + ' ' + st[1]),
+        [el('b', {}, t.title),
+         el('div', { className: 'co-muted' }, (CO_KINDS[t.kind] || t.kind) + (t.tab ? ' · gdzie: ' + t.tab : '')),
+         coDesc(t.body, t.kind === 'exploit' ? '🔒 Opis ukryty do czasu naprawy.' : null)],
+        [el('span', { className: 'co-pill co-st-' + t.status }, st[0] + ' ' + st[1]),
+         t.severity ? el('div', { className: 'co-muted' }, 'waga: ' + (CO_SEVERITY[t.severity] || t.severity)) : null],
         coSolution(t.note, t.commit_sha, t.status === 'new' ? 'Czeka na analizę.' : '—'),
+        t.updated_at && t.updated_at !== t.created_at ? coWhen(t.updated_at) : '—',
         coCoinsCell(t.rewarded_at, t.fined_at, coState.bug_reward ?? 500),
       ];
     })));
@@ -413,51 +423,30 @@ function coIdeaTable(root) {
     el('div', { className: 'co-muted' }, 'Każdy pomysł, liczba głosów, status i realizacja. Głosowanie zamyka się w poniedziałek o 00:47.'));
   if (!ideas.length) sec.append(el('p', { className: 'co-muted' }, 'Brak pomysłów.'));
   else sec.append(coTable(
-    [{ label: 'Tydzień', cls: 'nw' }, { label: 'Autor', cls: 'nw' }, { label: 'Pomysł' }, { label: 'Głosy', cls: 'nw' },
-     { label: 'Status' }, { label: 'Realizacja', cls: 'wide' }, { label: '🪙', cls: 'nw' }],
+    [{ label: 'Tydzień', cls: 'nw' }, { label: 'Zgłoszono', cls: 'nw' }, { label: 'Autor', cls: 'nw' },
+     { label: 'Pomysł', cls: 'mid' }, { label: 'Głosy', cls: 'nw' }, { label: 'Status' },
+     { label: 'Realizacja', cls: 'wide' }, { label: 'Decyzja', cls: 'nw' }, { label: 'Wdrożono', cls: 'nw' },
+     { label: '🪙', cls: 'nw' }],
     ideas.map(i => {
       const st = CO_IDEA_STATUS[i.status] || ['', i.status];
       const ws = String(i.week_start || '');
       return [
-        ws ? ws.slice(8, 10) + '.' + ws.slice(5, 7) : coWhen(i.created_at),
+        ws ? ws.slice(8, 10) + '.' + ws.slice(5, 7) : '—',
+        coWhen(i.created_at),
         i.author_nick || 'Gracz',
-        el('b', {}, i.title),
+        [el('b', {}, i.title), coDesc(i.body)],
         String(i.votes ?? 0),
         el('span', { className: 'co-pill co-st-' + i.status }, st[0] + ' ' + st[1]),
         coSolution(i.note, i.commit_sha, i.status === 'open' ? 'Trwa głosowanie.' : '—'),
+        coWhen(i.decided_at),
+        coWhen(i.shipped_at),
         coCoinsCell(i.rewarded_at, i.fined_at, coState.reward ?? 5000),
       ];
     })));
   root.append(sec);
 }
 
-// ── 📜 Dziennik ────────────────────────────────────────────────────────────
+// ── 📜 Dziennik: the table IS the log (owner's call — no separate event history) ──
 function coRenderLog(root, kind) {
-  // The ideas log also carries week closures; each tab shows only its own half.
-  const rows = (coState.log || []).filter(r => kind === 'ticket' ? r.ref_kind === 'ticket' : r.ref_kind !== 'ticket');
   if (kind === 'ticket') coTicketTable(root); else coIdeaTable(root);
-  // The table is the log; the raw event history folds away under it.
-  const sec = el('details', { className: 'co-sec' },
-    el('summary', {}, 'Historia zdarzeń — każda decyzja i wypłata'),
-    el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'));
-  if (!rows.length) sec.append(el('p', { className: 'co-muted' }, 'Pusto.'));
-  rows.forEach(r => {
-    const what = r.event === 'submitted' ? (r.ref_kind === 'idea' ? '💡 zgłosił pomysł' : '🐞 wysłał zgłoszenie')
-      : r.event === 'won' ? '🏆 pomysł wygrał tydzień'
-      : r.event === 'lost' ? '· pomysł nie wygrał'
-      : r.event === 'closed' ? '🗓️ tydzień zamknięty'
-      : r.event === 'reward' ? '💰 wypłata'
-      : r.event === 'fine' ? '⚖️ kara za próbę wyłudzenia'
-      : (r.ref_kind === 'idea' ? (CO_IDEA_STATUS[r.status] || ['', r.status]).join(' ')
-                               : (CO_TICKET_STATUS[r.status] || ['', r.status]).join(' '));
-    sec.append(el('div', { className: 'co-log-row' },
-      el('div', { className: 'co-muted', title: fmtDateTime(r.created_at) }, relTime(r.created_at)),
-      el('div', {},
-        (r.actor === 'player' ? '👤 ' : '🤖 '), el('b', {}, r.nick || ''), (r.nick ? ' · ' : ''), what,
-        r.title ? ': „' + r.title + '”' : '',
-        r.coins ? el('span', { className: r.coins > 0 ? 'co-coins' : 'co-fine' },
-          ' ' + (r.coins > 0 ? '+' : '−') + coN(Math.abs(r.coins)) + ' 🪙') : null,
-        r.note ? el('div', { className: 'co-muted' }, r.note) : null)));
-  });
-  root.append(sec);
 }
