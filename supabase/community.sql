@@ -34,7 +34,15 @@
 --  ⚠️ The automation RPCs (close_week / mark_idea / mark_ticket) have NO client
 --  grant. Only service_role / the SQL editor can call them, so a player cannot
 --  mark their own idea shipped and collect the reward.
---  ⚠️ `community_idea_reward` and `community_bug_reward` are MINTS: it is in economy-stats.sql's
+--  ABUSE FINE (owner's call, 2026-10-29): a ticket or idea that tries to get
+--  something for nothing — "give me 1 000 000 coins", "make me admin", an
+--  instruction aimed at the bot — is fined community_abuse_fine() = 500 🪙 by
+--  community_fine(), once per item (`fined_at IS NULL` guard), never below 0
+--  coins. The player gets a whisper explaining why and the room is told.
+--  Honest feature/balance requests ("farm should pay more") are NOT abuse.
+--
+--  ⚠️ `community_idea_reward` and `community_bug_reward` are MINTS; the fine
+--  (`community_abuse_fine`) is a BURN: it is in economy-stats.sql's
 --  ledger_minted, tabs/stats.js's label chain (not NEUTRAL — it is income) and
 --  ACT_COIN_REASONS in index.html.
 -- ════════════════════════════════════════════════════════════════════════════
@@ -42,6 +50,7 @@
 -- ── Policy knobs ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.community_idea_reward()     RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT 5000 $$;
 CREATE OR REPLACE FUNCTION public.community_bug_reward()      RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT 500 $$;
+CREATE OR REPLACE FUNCTION public.community_abuse_fine()      RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT 500 $$;
 CREATE OR REPLACE FUNCTION public.community_ideas_per_week()  RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT 2 $$;
 CREATE OR REPLACE FUNCTION public.community_tickets_per_day() RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT 5 $$;
 
@@ -99,7 +108,7 @@ CREATE TABLE IF NOT EXISTS public.community_tickets (
   tab         text,
   client_meta jsonb NOT NULL DEFAULT '{}'::jsonb,
   status      text NOT NULL DEFAULT 'new'
-              CHECK (status IN ('new','confirmed','fixing','fixed','not_a_bug','wontfix','duplicate','needs_info')),
+              CHECK (status IN ('new','confirmed','fixing','fixed','not_a_bug','wontfix','duplicate','needs_info','abuse')),
   severity    text CHECK (severity IN ('low','medium','high','critical')),
   note        text,                         -- Claude's assessment, player-facing
   pr_url      text,
@@ -112,7 +121,9 @@ CREATE TABLE IF NOT EXISTS public.community_tickets (
 -- The status CHECK changed after the first version of this file; re-assert it.
 ALTER TABLE public.community_tickets DROP CONSTRAINT IF EXISTS community_tickets_status_check;
 ALTER TABLE public.community_tickets ADD CONSTRAINT community_tickets_status_check
-  CHECK (status IN ('new','confirmed','fixing','fixed','not_a_bug','wontfix','duplicate','needs_info'));
+  CHECK (status IN ('new','confirmed','fixing','fixed','not_a_bug','wontfix','duplicate','needs_info','abuse'));
+ALTER TABLE public.community_tickets ADD COLUMN IF NOT EXISTS fined_at timestamptz;
+ALTER TABLE public.community_ideas   ADD COLUMN IF NOT EXISTS fined_at timestamptz;
 
 -- The public log: one row per submission, decision, status change and payout.
 -- Written only by the RPCs below; everyone reads it.
@@ -122,7 +133,7 @@ CREATE TABLE IF NOT EXISTS public.community_log (
   ref_id     uuid,
   user_id    uuid REFERENCES public.profiles(id) ON DELETE SET NULL,  -- whom it concerns
   actor      text NOT NULL DEFAULT 'claude' CHECK (actor IN ('claude','player')),
-  event      text NOT NULL,      -- submitted / won / lost / status / reward / closed
+  event      text NOT NULL,      -- submitted / won / lost / status / reward / fine / closed
   status     text,
   title      text,
   note       text,
@@ -150,7 +161,7 @@ CREATE POLICY community_votes_select ON public.community_idea_votes
 DROP POLICY IF EXISTS community_tickets_select ON public.community_tickets;
 CREATE POLICY community_tickets_select ON public.community_tickets
   FOR SELECT TO authenticated
-  USING (kind <> 'exploit' OR status IN ('fixed','not_a_bug','wontfix','duplicate')
+  USING (kind <> 'exploit' OR status IN ('fixed','not_a_bug','wontfix','duplicate','abuse')
          OR author_id = auth.uid() OR public.is_admin(auth.uid()));
 DROP POLICY IF EXISTS community_log_select ON public.community_log;
 CREATE POLICY community_log_select ON public.community_log
@@ -319,16 +330,17 @@ RETURNS json LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $f
         -- Every ticket is listed; only an OPEN exploit's body is withheld.
         SELECT t.id, t.kind, t.title,
                CASE WHEN t.kind = 'exploit'
-                     AND t.status NOT IN ('fixed','not_a_bug','wontfix','duplicate')
+                     AND t.status NOT IN ('fixed','not_a_bug','wontfix','duplicate','abuse')
                      AND t.author_id IS DISTINCT FROM auth.uid()
                      AND NOT public.is_admin(auth.uid())
                     THEN NULL ELSE t.body END AS body,
                t.tab, t.status, t.severity, t.note, t.commit_sha, t.duplicate_of,
-               t.rewarded_at, t.created_at, t.updated_at, t.author_id, p.nick AS author_nick
+               t.rewarded_at, t.fined_at, t.created_at, t.updated_at, t.author_id, p.nick AS author_nick
           FROM public.community_tickets t JOIN public.profiles p ON p.id = t.author_id
          ORDER BY t.created_at DESC LIMIT 80
       ) x), '[]'::json),
     'bug_reward', public.community_bug_reward(),
+    'abuse_fine', public.community_abuse_fine(),
     'log', COALESCE((
       SELECT json_agg(x ORDER BY x.created_at DESC) FROM (
         SELECT l.id, l.ref_kind, l.ref_id, l.actor, l.event, l.status, l.title, l.note,
@@ -525,6 +537,65 @@ BEGIN
   RETURN json_build_object('ok', true, 'status', p_status, 'paid', v_paid);
 END;
 $fn$;
+
+-- Fine an abuse attempt. p_ref_kind = 'ticket' | 'idea'. Marks the item
+-- ('abuse' / 'rejected'), burns up to community_abuse_fine() coins ONCE, whispers
+-- the player and announces it in the room.
+CREATE OR REPLACE FUNCTION public.community_fine(p_ref_kind text, p_id uuid, p_note text)
+RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
+DECLARE
+  v_user  uuid;
+  v_title text;
+  v_fine  integer;
+  v_nick  text;
+  v_admin uuid;
+BEGIN
+  IF coalesce(btrim(p_note), '') = '' THEN RAISE EXCEPTION 'note_required'; END IF;
+  IF p_ref_kind = 'ticket' THEN
+    UPDATE public.community_tickets
+       SET status = 'abuse', note = p_note, fined_at = now(), updated_at = now()
+     WHERE id = p_id AND fined_at IS NULL
+    RETURNING author_id, title INTO v_user, v_title;
+  ELSIF p_ref_kind = 'idea' THEN
+    UPDATE public.community_ideas
+       SET status = 'rejected', note = p_note, fined_at = now(), decided_at = coalesce(decided_at, now())
+     WHERE id = p_id AND fined_at IS NULL
+    RETURNING author_id, title INTO v_user, v_title;
+  ELSE
+    RAISE EXCEPTION 'bad_ref_kind';
+  END IF;
+  IF v_user IS NULL THEN RETURN json_build_object('ok', true, 'already_fined', true); END IF;
+
+  -- Never below 0 coins: take the fine or whatever is left, whichever is less.
+  SELECT nick, LEAST(GREATEST(coins, 0), public.community_abuse_fine())::integer
+    INTO v_nick, v_fine
+    FROM public.profiles WHERE id = v_user FOR UPDATE;
+  UPDATE public.profiles SET coins = coins - v_fine WHERE id = v_user;
+  IF v_fine > 0 THEN
+    INSERT INTO public.coin_transactions (user_id, delta, reason, meta)
+    VALUES (v_user, -v_fine, 'community_abuse_fine',
+            jsonb_build_object('ref_kind', p_ref_kind, 'ref_id', p_id, 'title', v_title, 'note', p_note));
+  END IF;
+  PERFORM public.community_log_event(p_ref_kind, p_id, v_user, 'claude', 'fine',
+    CASE WHEN p_ref_kind = 'ticket' THEN 'abuse' ELSE 'rejected' END, v_title, p_note, -v_fine);
+
+  IF to_regclass('public.chat_messages') IS NOT NULL THEN
+    SELECT id INTO v_admin FROM public.profiles WHERE is_admin ORDER BY created_at LIMIT 1;
+    IF v_admin IS NOT NULL AND v_admin <> v_user THEN
+      INSERT INTO public.chat_messages (sender_id, recipient_id, sender_nick, body)
+      VALUES (v_admin, v_user, '🗳️ Głos Biura', left(
+        '⚖️ Kara ' || v_fine || ' 🪙 za zgłoszenie „' || v_title || '”. Powód: ' || p_note
+        || ' Zgłoszenia i pomysły służą do ulepszania portalu, nie do wyłudzania monet.', 1000));
+    END IF;
+  END IF;
+  PERFORM public.community_announce('⚖️ ' || coalesce(v_nick, 'Gracz') || ' dostaje karę ' || v_fine
+    || ' 🪙 za próbę wyłudzenia przez ' || CASE WHEN p_ref_kind = 'ticket' THEN 'zgłoszenie' ELSE 'pomysł' END
+    || ' („' || v_title || '”). ' || p_note);
+  RETURN json_build_object('ok', true, 'fined', v_fine, 'user', v_user);
+END;
+$fn$;
+REVOKE ALL ON FUNCTION public.community_fine(text, uuid, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.community_fine(text, uuid, text) TO service_role;
 
 REVOKE ALL ON FUNCTION public.community_close_week(date) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.community_mark_idea(uuid, text, text, text, text) FROM PUBLIC, anon, authenticated;

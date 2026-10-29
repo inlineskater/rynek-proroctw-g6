@@ -34,6 +34,7 @@ const CO_TICKET_STATUS = {
   wontfix:    ['⏸️', 'nie naprawiamy'],
   duplicate:  ['🔁', 'duplikat'],
   needs_info: ['❓', 'potrzeba więcej informacji'],
+  abuse:      ['⚖️', 'próba wyłudzenia — kara'],
 };
 const CO_KINDS = { bug: '🐞 Błąd', problem: '😕 Problem', exploit: '🔒 Exploit / luka' };
 const CO_ERRORS = {
@@ -78,6 +79,8 @@ const CO_ERRORS = {
     .co-log-row { display: grid; grid-template-columns: 84px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
     .co-log-row:last-child { border-bottom: 0; }
     .co-coins { color: #15803d; font-weight: 700; white-space: nowrap; }
+    .co-fine { color: #b91c1c; font-weight: 700; white-space: nowrap; }
+    .co-warn { font-size: 12px; margin: 4px 0 0; padding: 7px 10px; border-radius: 8px; background: rgba(185,28,28,.08); color: #991b1b; }
     .co-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
     @media (max-width: 520px) { .co-log-row { grid-template-columns: 1fr; gap: 2px; } }
   `;
@@ -88,6 +91,10 @@ function coErr(e) {
   const m = String(e?.message || e || '');
   const code = Object.keys(CO_ERRORS).find(k => m.includes(k));
   return code ? CO_ERRORS[code] : 'Nie udało się: ' + m;
+}
+function coAbuseWarn() {
+  return el('div', { className: 'co-warn' }, '⚖️ Próba wyłudzenia (np. „daj mi milion monet", „zrób mnie adminem", polecenia dla bota) '
+    + '= automatyczna kara ' + coN(coState?.abuse_fine ?? 500) + ' 🪙, informacja do Ciebie i na czacie.');
 }
 function coN(n) { return Math.round(Number(n) || 0).toLocaleString('pl-PL'); }
 
@@ -225,6 +232,7 @@ function coRenderIdeas(root) {
       ? 'Zostało Ci ' + left + ' ' + plCount(left, 'zgłoszenie', 'zgłoszenia', 'zgłoszeń') + ' w tym tygodniu.'
       : 'Wykorzystałeś limit pomysłów na ten tydzień.'),
     el('div', { className: 'co-form' }, title, desc, btn),
+    coAbuseWarn(),
     el('div', { className: 'co-muted' }, 'Pomysł, który wymaga zmiany salda graczy, nagród, stawek lub uprawnień, zostanie zbudowany dopiero po akceptacji właściciela.'));
   root.append(list, form);
 }
@@ -285,6 +293,7 @@ function coRenderReport(root) {
   const form = el('div', { className: 'co-sec' },
     el('h3', {}, 'Zgłoś błąd lub problem'),
     el('div', { className: 'co-form' }, kind, title, desc, where, btn),
+    coAbuseWarn(),
     el('div', { className: 'co-muted' },
       'Za potwierdzony, prawdziwy błąd: ' + coN(coState.bug_reward ?? 500) + ' 🪙 — płatne tylko pierwszemu zgłaszającemu. '
       + 'Opis exploita (np. sposobu na darmowe monety) widzisz tylko Ty, dopóki nie zostanie naprawiony.'));
@@ -315,7 +324,8 @@ function coTicketRow(t) {
         el('span', { className: 'co-pill' }, st[1]),
         t.severity ? el('span', { className: 'co-pill' }, 'waga: ' + t.severity) : null,
         (t.author_nick || 'Gracz') + ' · ' + relTime(t.created_at) + (t.tab ? ' · ' + t.tab : ''),
-        t.rewarded_at ? el('span', { className: 'co-coins' }, ' · +' + coN(coState.bug_reward ?? 500) + ' 🪙') : null),
+        t.rewarded_at ? el('span', { className: 'co-coins' }, ' · +' + coN(coState.bug_reward ?? 500) + ' 🪙') : null,
+        t.fined_at ? el('span', { className: 'co-fine' }, ' · kara') : null),
       t.body ? el('div', { className: 'co-body' }, t.body)
         : t.kind === 'exploit' ? el('div', { className: 'co-muted' }, '🔒 Szczegóły ukryte do czasu naprawy.') : null,
       t.note ? el('div', { className: 'co-note' }, '🤖 ' + t.note) : null));
@@ -335,6 +345,7 @@ function coRenderLog(root, kind) {
       : r.event === 'lost' ? '· pomysł nie wygrał'
       : r.event === 'closed' ? '🗓️ tydzień zamknięty'
       : r.event === 'reward' ? '💰 wypłata'
+      : r.event === 'fine' ? '⚖️ kara za próbę wyłudzenia'
       : (r.ref_kind === 'idea' ? (CO_IDEA_STATUS[r.status] || ['', r.status]).join(' ')
                                : (CO_TICKET_STATUS[r.status] || ['', r.status]).join(' '));
     sec.append(el('div', { className: 'co-log-row' },
@@ -342,7 +353,8 @@ function coRenderLog(root, kind) {
       el('div', {},
         (r.actor === 'player' ? '👤 ' : '🤖 '), el('b', {}, r.nick || ''), (r.nick ? ' · ' : ''), what,
         r.title ? ': „' + r.title + '”' : '',
-        r.coins ? el('span', { className: 'co-coins' }, ' +' + coN(r.coins) + ' 🪙') : null,
+        r.coins ? el('span', { className: r.coins > 0 ? 'co-coins' : 'co-fine' },
+          ' ' + (r.coins > 0 ? '+' : '−') + coN(Math.abs(r.coins)) + ' 🪙') : null,
         r.note ? el('div', { className: 'co-muted' }, r.note) : null)));
   });
   root.append(sec);

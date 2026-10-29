@@ -322,7 +322,9 @@ AS $$
                              -- bank_deposit_open / bank_bond_buy are escrow,
                              -- not burn, so they stay out (same treatment as
                              -- marketplace_bid_reserved).
-                             'bank_share_buy')
+                             'bank_share_buy',
+                             -- community.sql: Głos Biura abuse fine.
+                             'community_abuse_fine')
       ), 0::numeric) AS shop_burned,
 
       -- ── house (bank) P&L ────────────────────────────────────────────────

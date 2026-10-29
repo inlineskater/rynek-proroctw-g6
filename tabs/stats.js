@@ -1740,6 +1740,9 @@ function buildBalancePoints({ userId, coins, createdAt, trades = [], games = [],
       ? '🗳️ Głos Biura: ' + (t.meta?.title || 'pomysł')
       : t.reason === 'community_bug_reward'
       ? '🐞 Zgłoszony błąd: ' + (t.meta?.title || '?')
+      // A burned fine, so deliberately NOT in NEUTRAL either.
+      : t.reason === 'community_abuse_fine'
+      ? '⚖️ Kara: ' + (t.meta?.title || 'próba wyłudzenia')
       : t.reason === 'farm_order_payout'
       ? '📋 Zamówienie: ' + (t.meta?.customer || 'NPC')
       : t.reason === 'daily_interest'
