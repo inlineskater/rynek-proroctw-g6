@@ -6448,15 +6448,16 @@
        opened. Now a calm card with a green whisper, so the WOOD stays where it
        is actually scenery (sign board, plot sign, fence) and the chrome that
        carries buttons/stats reads as chrome. */
-    .farm-topbar { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px;
-      border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); box-shadow: var(--sh-sm); }
+    /* 2026-10-29: no card at all — the garden is the hero, the bar above it is
+       a quiet row of controls on the page background, not a second panel. */
+    .farm-topbar { display: flex; flex-direction: column; gap: 8px; padding: 0 2px 2px; }
     /* ── Top bar contents (2026-10-03, farmToolbar) ──
        Left: the field filter („Wszystkie / Moje N / Do zbioru N") + one line of
        what to do next. Right: hub buttons in four groups split by hairlines, flat
        (no fills, no indigo primary) so the only colours in the bar are the two
        that mean something: green = something to collect, red = debt. */
     .ftb { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; }
-    .ftb-field { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+    .ftb-field { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
     .ftb-field-row { display: flex; align-items: center; gap: 8px; }
     .ftb-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface); }
     .ftb-seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 7px;
@@ -6490,7 +6491,7 @@
     @media (max-width: 600px) {
       .farm-topbar { padding: 8px; }
       .ftb { flex-direction: column; align-items: stretch; gap: 8px; }
-      .ftb-field { align-items: stretch; gap: 6px; }
+      .ftb-field { flex-direction: column; align-items: stretch; gap: 6px; }
       .ftb-seg { display: flex; flex: 1 1 auto; min-width: 0; }
       .ftb-field-row { gap: 6px; }
       .farm-view-toggle { padding: 6px 8px; font-size: 12px; }
@@ -6519,7 +6520,7 @@
       background: linear-gradient(180deg, var(--g-grass-a, #cbe9bf) 0%, var(--g-grass-b, #b7d7a8) 100%); transition: background 1.5s linear; }
     /* Sky band scales with the viewport so short screens (MacBook Air) spend the
        height on tiles, not decoration; min keeps the starter chip readable. */
-    .farm-stage > .garden-sky { position: relative; flex: 0 0 auto; height: auto; min-height: clamp(56px, 9vh, 96px); margin: 0; border-radius: 11px 11px 0 0; overflow: hidden; box-shadow: inset 0 -9px 16px -8px rgba(0,0,0,.14);
+    .farm-stage > .garden-sky { position: relative; flex: 0 0 auto; height: auto; min-height: clamp(40px, 6vh, 72px); margin: 0; border-radius: 11px 11px 0 0; overflow: hidden; box-shadow: inset 0 -9px 16px -8px rgba(0,0,0,.14);
       background: linear-gradient(180deg, var(--g-sky-a, #bfe6f6) 0%, var(--g-sky-b, #a6d6ee) 100%); }
     .farm-stage > .garden-sky::before { content: ''; position: absolute; left: -4%; right: -4%; bottom: -2px; height: 44px; opacity: .7; filter: blur(.4px);
       background: radial-gradient(58% 150% at 24% 100%, var(--g-grass-b, #aed79e) 0 56%, transparent 58%), radial-gradient(66% 150% at 72% 100%, var(--g-grass-a, #cbe9bf) 0 54%, transparent 56%); }
@@ -6660,6 +6661,12 @@
     .farm-cell-owner { position: absolute; bottom: 1px; left: 2px; right: 2px; z-index: 8; text-align: center; font-size: 9px; font-weight: 800; color: #ffd97a; text-shadow: 0 1px 2px rgba(0,0,0,.65), 0 0 2px rgba(0,0,0,.5); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
     @media (max-width: 520px) { .farm-cell-owner { font-size: 7px; } }
     .farm-cell.crop .farm-cell-name, .farm-plant-cell .farm-cell-name { bottom: 12px; }
+    /* Zen plots are art-first like the crop board (2026-10-29): the plant's name
+       sat on top of the pot. It now shows on hover/focus; the tooltip and the
+       popup have it too. */
+    .farm-plant-cell .farm-cell-name { opacity: 0; transition: opacity .15s; }
+    .farm-plant-cell:hover .farm-cell-name, .farm-plant-cell:focus-visible .farm-cell-name { opacity: 1; }
+    @media (hover: none) { .farm-plant-cell .farm-cell-name { opacity: 1; } }
     .farm-cell-bar { position: absolute; left: 8%; right: 8%; bottom: 23px; height: 4px; background: rgba(0,0,0,.20); border-radius: 999px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,.10); }
     .farm-cell-bar-fill { height: 100%; background: linear-gradient(90deg, #fbbf24, #f59e0b); border-radius: 999px; transition: width .3s linear, background .3s; }
     .farm-cell-bar.ready .farm-cell-bar-fill { background: linear-gradient(90deg, #34d399, #16a34a); }
@@ -7072,6 +7079,7 @@
     .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; align-items: stretch; }
     /* .garden-sky is pointer-events:none (decor) — the cards inside it must opt back in. */
     .farm-sky-bar { position: relative; z-index: 5; padding: 10px 12px 18px; pointer-events: auto; }
+    .farm-sky-bar:not(:has(> :not(.hidden))) { padding: 0; }
     .farm-sky-bar > .og-goal, .farm-sky-bar > #fw-banner { margin: 0; padding: 7px 12px; border-color: rgba(255,255,255,.7);
       background: rgba(255,255,255,.86); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
     .farm-sky-bar > .og-goal .og-goal-ic, .farm-sky-bar .fw-wx-ic { font-size: 18px; }
@@ -7084,6 +7092,14 @@
     .farm-side .og-goal-ic, .farm-side .fw-wx-ic { font-size: 18px; }
     .farm-side .fw-wx-title, .farm-side .fw-wx-sub { white-space: normal; }
     .farm-side .fw-wx-row { flex-wrap: wrap; gap: 8px; }
+    /* Not enough width for field + Tablica side by side (scaleFarmPots decides):
+       the board moves under the field as one row of cards instead of squeezing
+       the plots below their minimum size and clipping the last column. */
+    .farm-split.side-below { flex-wrap: wrap; }
+    .farm-split.side-below .farm-side-divider { display: none; }
+    .farm-split.side-below .farm-side { flex: 1 0 100%; width: auto; flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+    .farm-split.side-below .farm-side > .plot-sign { align-self: center; }
+    .farm-split.side-below .farm-side > :not(.plot-sign) { flex: 1 1 260px; }
     /* Nothing to show → no empty board and no fence. */
     .farm-side:not(:has(> :not(.hidden):not(.plot-sign))),
     .farm-split:has(.farm-side:not(:has(> :not(.hidden):not(.plot-sign)))) .farm-side-divider { display: none; }
@@ -7963,17 +7979,6 @@
     .mlc-bid-input { flex: 1 1 auto; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 9px; font: inherit; }
     .mlc-bid-row .mlc-buy { width: auto; flex: 0 0 auto; }
     .mlc-bid-hint { font-size: 11px; color: var(--muted); line-height: 1.35; }
-    /* „Co nowego" one-shot release note */
-    /* .modal supplies background/border/radius/scroll — these only widen it. */
-    .rn-box { max-width: 520px; }
-    .rn-title { margin: 0 0 6px; }
-    .rn-intro { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-    .rn-list { display: flex; flex-direction: column; gap: 14px; max-height: 58vh; overflow-y: auto; }
-    .rn-item { display: flex; gap: 11px; align-items: flex-start; }
-    .rn-ic { font-size: 20px; line-height: 1.3; flex: 0 0 auto; }
-    .rn-item-title { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
-    .rn-item-body { font-size: 12.5px; line-height: 1.55; color: var(--muted); }
-    .rn-ok { width: 100%; margin-top: 16px; }
     /* „Drabina Kariery G6" — Hi-Lo (game logic in tabs/hilo.js) */
     .hl-wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
     .hl-hero { text-align: center; }
@@ -8852,7 +8857,7 @@
         <button class="nav-tab" data-tab="plinko">📌 Plinko G6</button>
         <button class="nav-tab" data-tab="hilo">🃏 Drabina Kariery</button>
         <button class="nav-tab" data-tab="tower">🏗️ Wieżowiec G6</button>
-        <button class="nav-tab" data-tab="coinpusher">🪙 Automat Monet <span class="nav-new-badge">Nowość</span></button>
+        <button class="nav-tab" data-tab="coinpusher">🪙 Automat Monet</button>
         <div class="nav-dropdown-label">Zręcznościowe</div>
         <button class="nav-tab" data-tab="whack-boss"><span class="seasonal-dot"></span> Gra Sezonowa</button>
         <button class="nav-tab" data-tab="all-games">🎮 Wszystkie Gry</button>
@@ -8872,8 +8877,15 @@
       </div>
     </div>
     <button class="nav-tab" data-tab="bank">🏦 Bank G6</button>
-    <button class="nav-tab" data-tab="community">🗳️ Pomysły <span class="nav-new-badge">Nowość</span></button>
-    <button class="nav-tab" data-tab="bugs">🐞 Zgłoszenia Bugów <span class="nav-new-badge">Nowość</span></button>
+    <!-- Głos Biura: two tabs, one nav slot (2026-10-29 declutter — two separate
+         „Nowość" tabs were the loudest thing in the bar). -->
+    <div class="nav-group" data-group="community">
+      <button class="nav-group-btn">🗳️ Głos Biura <span class="nav-chevron">▾</span></button>
+      <div class="nav-dropdown">
+        <button class="nav-tab" data-tab="community">💡 Pomysły</button>
+        <button class="nav-tab" data-tab="bugs">🐞 Zgłoszenia błędów</button>
+      </div>
+    </div>
     <button class="nav-tab" data-tab="leaderboard">📈 Statystyki</button>
     <button class="nav-tab" data-tab="bug-jumper-test" id="nav-bug-jumper-test" style="display:none">🧪 Bug Test</button>
     <button class="nav-tab" data-tab="invoice-horde-test" id="nav-invoice-horde-test" style="display:none">🧪 Tickety Test</button>
@@ -13119,66 +13131,6 @@ function showApp() {
   initSideRail();                              // rail modules 1 & 2: Konto + Twoja aktywność
   refreshShopNavCounts();                      // populate the Targowisko nav counters
   if (DOCUMENTS_ENABLED) loadMySignatures();   // populate „Moje Dokumenty" badge + gate state
-  setTimeout(maybeShowReleaseNote, 1200);      // „co nowego", once per release per browser
-}
-
-// ── „Co nowego" — one-shot release note ────────────────────────────────────
-// Shown once per RELEASE_NOTE.id per browser (localStorage, the same rp_* +
-// try/catch pattern the chat sound setting uses). Deliberately NOT a DB table:
-// a per-viewer convenience that nobody needs to read back later, and a private
-// window or a cleared profile simply seeing it again is harmless.
-//
-// The economy section is not marketing — crop prices, the Sygnet and the weekly
-// premium all changed in ways a player would otherwise read as the game being
-// broken. A number that moves for a reason nobody can see is indistinguishable
-// from an arbitrary one.
-const RELEASE_NOTE = {
-  // Bump this to re-show the note to everyone (it is the localStorage key).
-  id: '2026-08-28-wspolny-cel-2',
-  title: '📣 Co nowego w G6',
-  intro: 'Dwie nowe rzeczy i kilka zmian w gospodarce. Krótko:',
-  items: [
-    { icon: '🎯', title: 'Wspólny Cel Biura',
-      body: 'Zrzucamy się wszyscy na jeden cel. Pierwszy: 150 000 🪙 odblokowuje 5 NOWYCH DZIAŁEK na farmie — dla wszystkich, bo ziemi już nie ma (40 z 40 zajęte). Pasek celu jest na górze Ogródka. Monety są spalane, a spalanie podnosi budżet skupu NPC — czyli dorzucając się podnosisz ceny plonów całemu biuru.' },
-    { icon: '🃏', title: 'Drabina Kariery G6 — nowa gra',
-      body: 'Wyżej czy niżej? Na przycisku masz PRAWDZIWĄ szansę i dokładnie jej odwrotność jako mnożnik. Marża kasyna schodzi raz, przy wypłacie — nie co piętro — więc zwrot to równe 95% niezależnie od tego, czy wysiadasz na 1. czy na 12. piętrze i żadna strategia nie jest lepsza od innej. Zostaje sam wybór ryzyka.' },
-    { icon: '🌾', title: 'Skup NPC reaguje teraz na podaż',
-      body: 'Ceny plonów nie są już losowane w oderwaniu od tego, ile biuro sprzedaje. Im więcej zalewamy rynek, tym mniej płaci skup; im więcej biuro wydaje (skrzynki, ulepszenia, hodowla, podatek, kasyno), tym większy budżet skupu. Całe wyliczenie widać w zakładce 📈 Ceny. Stawka zmienia się stopniowo, maks. 15 pkt proc. na notowanie.' },
-    { icon: '💍', title: 'Sygnet i Pierścień Bankiera — limit 20 000',
-      body: '+2% dziennie liczy się teraz od pierwszych 20 000 monet salda (maks. 400 🪙 dziennie). Wcześniej było bez limitu i odsetki rosły od salda, które same tworzyły — jedyna taka pętla w grze.' },
-    { icon: '🏆', title: 'Premia z kontraktu tygodniowego — limit',
-      body: 'Stawka za sztukę była wyliczana dla gracza na 1. poziomie i wypłacana bez ograniczeń, więc najwięksi zbierali ~25× tego, co przewidywał projekt. Teraz premia obejmuje 3 tygodniowe „uczciwe" limity. Sprzedaż jest bez zmian — plony sprzedajesz normalnie, kończy się tylko dopłata. Do rankingu i do wspólnego paska liczy się dalej CAŁA sprzedaż.' },
-  ],
-};
-
-function maybeShowReleaseNote() {
-  let seen = null;
-  try { seen = localStorage.getItem('rp_release_note'); } catch (e) { return; }
-  if (seen === RELEASE_NOTE.id) return;
-  try { localStorage.setItem('rp_release_note', RELEASE_NOTE.id); } catch (e) { /* still show it once */ }
-  showReleaseNote();
-}
-
-function showReleaseNote() {
-  const overlay = el('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true' });
-  const close = () => { overlay.remove(); window.removeEventListener('keydown', esc); };
-  const esc = e => { if (e.key === 'Escape') close(); };
-  window.addEventListener('keydown', esc);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-
-  const box = el('div', { className: 'modal rn-box' });
-  box.append(el('h3', { className: 'rn-title' }, RELEASE_NOTE.title));
-  box.append(el('p', { className: 'rn-intro' }, RELEASE_NOTE.intro));
-  const list = el('div', { className: 'rn-list' });
-  RELEASE_NOTE.items.forEach(it => list.append(el('div', { className: 'rn-item' },
-    el('span', { className: 'rn-ic' }, it.icon),
-    el('div', {},
-      el('div', { className: 'rn-item-title' }, it.title),
-      el('div', { className: 'rn-item-body' }, it.body)))));
-  box.append(list);
-  box.append(el('button', { className: 'btn-primary rn-ok', onclick: close }, 'Jasne, gramy'));
-  overlay.append(box);
-  document.body.appendChild(overlay);
 }
 
 function updateAdminTestTabs() {
@@ -22744,9 +22696,13 @@ function buildFarmDisplayCell(cx, cy, now = Date.now()) {
       // the level, the nick pill says whose it is (hover outlines all of that
       // owner's plots — farmOwnerHover), and the full text is the tooltip and
       // the tap popup.
+      // Declutter (2026-10-29): the level badge and growth bar only on YOUR
+      // plots. On everyone else's they were 40 numbers and 40 bars of noise —
+      // the icon already grows 🌱 → 🌿 → crop, and the tooltip/popup has the rest.
       const lvl = tile.planted_level || 1;
+      const isMine = tile.owner_id === me?.id;
       cell.title = (def ? def.name : tile.planted_species) + ' · poziom ' + lvl + ' · ' + (tile.owner_id === me?.id ? 'Twoja' : (tile.nick || '?'));
-      cell.appendChild(el('span', { className: 'farm-cell-lvl' + (tile.planted_instance_id ? ' nft' : ''), 'aria-label': 'poziom ' + lvl }, String(lvl)));
+      if (isMine) cell.appendChild(el('span', { className: 'farm-cell-lvl' + (tile.planted_instance_id ? ' nft' : ''), 'aria-label': 'poziom ' + lvl }, String(lvl)));
       cell.appendChild(el('span', { className: 'farm-cell-owner' }, tile.owner_id === me?.id ? 'Ty' : (tile.nick || '?')));
       cell.appendChild(el('span', { className: 'farm-cell-emoji' }));
       const ready = tile.ready_at && now >= new Date(tile.ready_at).getTime();
@@ -22754,6 +22710,8 @@ function buildFarmDisplayCell(cx, cy, now = Date.now()) {
       if (tile.planted_at && tile.ready_at) {
         const t0 = new Date(tile.planted_at).getTime(), t1 = new Date(tile.ready_at).getTime();
         pct = t1 > t0 ? Math.max(0, Math.min(1, (now - t0) / (t1 - t0))) : 1;
+      }
+      if (isMine && tile.planted_at && tile.ready_at) {
         const bar = el('div', { className: 'farm-cell-bar' + (ready ? ' ready' : '') });
         bar.appendChild(el('div', { className: 'farm-cell-bar-fill', style: { width: (pct * 100) + '%' } }));
         cell.appendChild(bar);
@@ -22825,6 +22783,8 @@ function patchFarmTileViews(x, y) {
 
 // Size the board to a square fitting the grass field, then scale the mini pots
 // to one cell (natural pot ~140×190px). Measured after layout for responsive fit.
+const FARM_SIDE_W = 280;        // .farm-side's width beside the field (CSS)
+const FARM_SIDE_MIN_CELL = 58;  // smaller plots than this → the Tablica wraps below
 function scaleFarmPots() {
   const board = document.getElementById('farm-board');
   const field = board && board.parentElement;
@@ -22850,10 +22810,15 @@ function scaleFarmPots() {
       // A folded zen is a ZEN_FOLD_W tab instead of zc columns.
       const zc = zenFolded ? 0 : zenColsFor();
       // The 📰 Tablica board on the right: its width + fence + two more gaps.
+      // If keeping it beside the field would push plots under FARM_SIDE_MIN_CELL,
+      // it wraps below the field instead (.side-below).
       const side = split.querySelector('.farm-side');
-      const sideW = side && side.offsetWidth ? side.offsetWidth + 34 : 0;
-      const usable = split.clientWidth - 74 - 8 - sideW - (zenFolded ? ZEN_FOLD_W : (zc - 1) * gap) - (maxCols - 1) * gap;
-      byW = usable / (zc + maxCols);
+      const fit = sideW => (split.clientWidth - 74 - 8 - sideW - (zenFolded ? ZEN_FOLD_W : (zc - 1) * gap) - (maxCols - 1) * gap) / (zc + maxCols);
+      const sideShown = side && getComputedStyle(side).display !== 'none';
+      const besideW = sideShown ? FARM_SIDE_W + 34 : 0;
+      const below = sideShown && fit(besideW) < FARM_SIDE_MIN_CELL;
+      split.classList.toggle('side-below', below);
+      byW = fit(below ? 0 : besideW);
     } else {
       // Stacked mobile layout: budget from the split container, NOT the field —
       // the field shrinks to fit its content there, so measuring it would just

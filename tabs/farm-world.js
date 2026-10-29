@@ -814,9 +814,13 @@ function farmWorldDecorateCell(cell, tile, now) {
   const key = cell.dataset.xy;
   const ev = fwNb.tileMap.get(key);
   const badges = [];
-  if (ev?.waters) badges.push(el('span', { title: 'Podlana ' + ev.waters + '×' }, '💧' + (ev.waters > 1 ? ev.waters : '')));
-  if (ev?.stolen) badges.push(el('span', { title: 'Podebrano ' + ev.stolen + ' szt.' }, '🧺'));
-  if (fwNb.protectedSet.has(tile.owner_id) && tile.ready_at && now >= new Date(tile.ready_at).getTime()) {
+  // Passive history (watered / robbed / guarded) only on your own plots; on
+  // other people's it was decoration nobody could act on. 🥷 stays everywhere
+  // because it IS an action.
+  const mine = tile.owner_id === me?.id;
+  if (mine && ev?.waters) badges.push(el('span', { title: 'Podlana ' + ev.waters + '×' }, '💧' + (ev.waters > 1 ? ev.waters : '')));
+  if (mine && ev?.stolen) badges.push(el('span', { title: 'Podebrano ' + ev.stolen + ' szt.' }, '🧺'));
+  if (mine && fwNb.protectedSet.has(tile.owner_id) && tile.ready_at && now >= new Date(tile.ready_at).getTime()) {
     badges.push(el('span', { title: 'Pilnuje strach na wróble' }, '🧑‍🌾'));
   }
   if (fwTileStealable(tile, key, now)) badges.push(el('span', { className: 'fw-steal', title: 'Dojrzała i zapomniana — można podebrać' }, '🥷'));
