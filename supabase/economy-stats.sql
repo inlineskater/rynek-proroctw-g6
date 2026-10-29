@@ -261,7 +261,10 @@ AS $$
                              'bank_share_dividend',
                              -- bank-casino-share-removed.sql: the one-off
                              -- refund that offsets the burned bank_share_buy.
-                             'bank_share_buyback')
+                             'bank_share_buyback',
+                             -- community.sql: Głos Biura rewards (winning
+                             -- idea 5 000, confirmed bug 500).
+                             'community_idea_reward','community_bug_reward')
       ), 0::numeric) AS ledger_minted,
 
       -- weekly game prize payouts (game-defined top-three awards)
@@ -319,7 +322,9 @@ AS $$
                              -- bank_deposit_open / bank_bond_buy are escrow,
                              -- not burn, so they stay out (same treatment as
                              -- marketplace_bid_reserved).
-                             'bank_share_buy')
+                             'bank_share_buy',
+                             -- community.sql: Głos Biura abuse fine.
+                             'community_abuse_fine')
       ), 0::numeric) AS shop_burned,
 
       -- ── house (bank) P&L ────────────────────────────────────────────────
