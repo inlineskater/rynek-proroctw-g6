@@ -15014,6 +15014,15 @@ async function openPlayerWindow(userId) {
     el('span', {}, person?.lastAt ? 'ostatnio ' + relTime(person.lastAt) : 'brak aktywności'));
   const card = sideShowcase.get(userId);
   if (card) meta.append(el('span', {}, '·'), sideShowcaseBadge(userId), el('span', {}, (card.nft_name || '') + ' — ' + card.name + ' #' + card.serial_no));
+  // 🏛️ Spichlerz title (supabase/farm-granary.sql). Fire-and-forget: a missing
+  // view or a slow read just means no title, never a broken window.
+  sb.from('farm_granary_totals').select('title,total').eq('user_id', userId).maybeSingle()
+    .then(({ data }) => {
+      if (puPeerId !== userId || !data?.title || meta.querySelector('.pu-granary')) return;
+      meta.append(el('span', {}, '·'), el('span', { className: 'pu-granary',
+        title: 'Spichlerz biura: ' + ogCoins(data.total) + ' 🪙 oddanych plonów' },
+        data.title.emoji + ' ' + data.title.name));
+    }, () => {});
 
   const whisper = document.getElementById('pu-whisper');
   whisper.classList.toggle('hidden', isMe);
@@ -24426,6 +24435,9 @@ function farmWorldDecorateCell() {}
 // 🎯 crop donations to the Wspólny Cel — implemented in tabs/farm-world.js.
 function farmGoalDonateButton() { return ''; }
 function ogCropDonateSection() { return ''; }
+// 🏛️ Spichlerz biura (supabase/farm-granary.sql) — also in tabs/farm-world.js,
+// which takes over the #og-goal slot whenever no Wspólny Cel is open.
+function granaryRenderBar(bar) { bar.classList.add('hidden'); }
 function farmWorldTileActions() {}
 function farmPlantIncomeCalc(def, level, over) {
   const mkt = def && fmMarket.get(def.crop_type);
@@ -25224,28 +25236,26 @@ function renderOfficeGoalBar() {
   const bar = document.getElementById('og-goal');
   if (!bar) return;
   const g = fmOfficeGoal?.goal;
-  // Only an OPEN goal earns a card in the sky band. A finished one has nothing
-  // left to do, and there is no next goal queued (owner's call, 2026-10-29).
-  if (!g || g.status !== 'open') { bar.classList.add('hidden'); return; }
-  const done = false;
+  // Only an OPEN goal earns the card. With none open (no next goal is queued,
+  // owner's call 2026-10-29) the same slot shows the 🏛️ Spichlerz instead.
+  if (!g || g.status !== 'open') { granaryRenderBar(bar); return; }
   const pct = ogGoalPct(g);
-  bar.classList.remove('hidden');
-  bar.classList.toggle('done', done);
+  bar.classList.remove('hidden', 'done');
   bar.replaceChildren(
-    el('span', { className: 'og-goal-ic' }, done ? '🎉' : '🎯'),
+    el('span', { className: 'og-goal-ic' }, '🎯'),
     el('div', { className: 'og-goal-main' },
       el('div', { className: 'og-goal-title' },
-        el('b', {}, done ? 'Cel osiągnięty: ' + g.title : g.title),
+        el('b', {}, g.title),
         el('span', { className: 'og-goal-num' },
           ogCoins(g.raised_coins) + ' / ' + ogCoins(g.target_coins) + ' 🪙')),
       el('div', { className: 'og-goal-track' },
-        el('div', { className: 'og-goal-fill' + (done ? ' done' : ''), style: { width: pct + '%' } }))),
-    el('span', { className: 'og-goal-cta' }, done ? 'Zobacz' : 'Dorzuć się'));
+        el('div', { className: 'og-goal-fill', style: { width: pct + '%' } }))),
+    el('span', { className: 'og-goal-cta' }, 'Dorzuć się'));
 }
 
 function openOfficeGoalModal() {
   const g = fmOfficeGoal?.goal;
-  if (!g) return;
+  if (!g || g.status !== 'open') { withTabModule('farmworld', () => openGranaryModal()); return; }
   const done = g.status === 'completed';
   const remaining = Math.max(0, Number(g.target_coins) - Number(g.raised_coins));
   const overlay = el('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true' });

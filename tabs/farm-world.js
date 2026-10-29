@@ -504,7 +504,7 @@ function farmWeatherYieldMult(def, over, growMin) {
 // Entry point from loadFarm(): everything the board shows outside the hub.
 async function fwRefresh() {
   fwEnsureNbRealtime();
-  await Promise.all([fwWeatherRefresh(), fwNbRefresh()]);
+  await Promise.all([fwWeatherRefresh(), fwNbRefresh(), fwGranaryRefresh()]);
 }
 
 async function fwWeatherRefresh() {
@@ -1133,7 +1133,7 @@ async function fwDonateCrops(crop, qty, btn) {
 // Second button in the sell dialog. index.html calls btn._sync(qty, quote) on
 // every slider move, so the label tracks the chosen quantity.
 function farmGoalDonateButton(crop, getQty, close, afterSell) {
-  if (!fwOpenGoal()) return '';
+  if (!fwOpenGoal()) return granaryDonateButton(crop, getQty, close, afterSell);
   const wrap = el('div', {});
   const btn = el('button', { className: 'fw-don-btn', type: 'button' });
   const hint = el('div', { className: 'fw-don-hint' });
@@ -1180,3 +1180,181 @@ function ogCropDonateSection(close) {
     'gdzie skup płaci tylko 30% albo 5%. Cena rynkowa się przy tym nie zmienia.'));
   return box;
 }
+
+
+// ── 🏛️ Spichlerz biura (supabase/farm-granary.sql) ─────────────────────────
+// A permanent crop sink at full market value with no target and no coins back:
+// the reward is the ranking and a title. It takes over the #og-goal slot in the
+// sky band whenever no Wspólny Cel is open, and the second button in the sell
+// dialog. Titles and thresholds come from the server (farm_granary_state).
+let fwGranary = null;     // farm_granary_state() payload
+
+async function fwGranaryRefresh() {
+  try {
+    const { data, error } = await sb.rpc('farm_granary_state');
+    if (error) throw error;
+    fwGranary = data || null;
+  } catch (e) { fwGranary = null; }
+  renderOfficeGoalBar();
+  return fwGranary;
+}
+
+function granaryNextTitle(total) {
+  return (fwGranary?.titles || []).find(t => Number(t.min) > Number(total || 0)) || null;
+}
+
+function granaryRenderBar(bar) {
+  if (!fwGranary) { bar.classList.add('hidden'); return; }
+  const top = (fwGranary.all_time || [])[0];
+  const mine = Number(fwGranary.my_total || 0);
+  const next = granaryNextTitle(mine);
+  bar.classList.remove('hidden', 'done');
+  bar.replaceChildren(
+    el('span', { className: 'og-goal-ic' }, '🏛️'),
+    el('div', { className: 'og-goal-main' },
+      el('div', { className: 'og-goal-title' },
+        el('b', {}, 'Spichlerz biura'),
+        el('span', { className: 'og-goal-num' }, ogCoins(fwGranary.total) + ' 🪙 plonów')),
+      el('div', { className: 'fw-gr-sub' },
+        (top ? '1. ' + top.nick + (top.title ? ' ' + top.title.emoji : '') + ' · ' : '')
+        + (mine ? 'Ty: ' + ogCoins(mine) + ' 🪙' : 'Oddaj nadwyżkę plonów po pełnej cenie')
+        + (next && mine ? ' · do ' + next.emoji + ' brakuje ' + ogCoins(next.min - mine) : ''))),
+    el('span', { className: 'og-goal-cta' }, 'Zobacz'));
+}
+
+async function fwDonateGranary(crop, qty, btn) {
+  if (btn) btn.disabled = true;
+  const before = Number(fwGranary?.my_total || 0);
+  const { data, error } = await sb.rpc('donate_crops_to_granary', { p_crop_type: crop, p_qty: qty });
+  if (error) {
+    const m = String(error.message || error);
+    toast('❌ ' + (/not_enough_crops/.test(m) ? 'Nie masz już tylu plonów.'
+      : /no_market/.test(m) ? 'Tej uprawy nie ma w skupie.'
+      : /too_small/.test(m) ? 'Za mało — ta ilość jest warta mniej niż 1 🪙.'
+      : fmErr(error)));
+    if (btn) btn.disabled = false;
+    return null;
+  }
+  await reloadFarmInventory();
+  await fwGranaryRefresh();
+  await invalidateFarmAssetBreakdown({ reload: true });
+  const name = farmCropIdentity(crop).name;
+  const t = data.title;
+  const promoted = t && Number(t.min) > before;
+  toast(promoted
+    ? '🎉 Nowy tytuł: ' + t.emoji + ' ' + t.name + '! Spichlerz przyjął ' + data.donated_qty + '× ' + name + '.'
+    : '🏛️ Spichlerz przyjął ' + data.donated_qty + '× ' + name + ' — ' + ogCoins(data.value) + ' 🪙 wartości.');
+  renderFarmMarket();
+  if (farmModalEl) refreshFarmHub();
+  return data;
+}
+
+function granaryDonateButton(crop, getQty, close, afterSell) {
+  const wrap = el('div', {});
+  const btn = el('button', { className: 'fw-don-btn', type: 'button' });
+  const hint = el('div', { className: 'fw-don-hint' });
+  wrap._sync = (qty, q) => {
+    const over = !!q && q.fairPct < 100;
+    btn.classList.toggle('is-better', over);
+    btn.replaceChildren('🏛️ Oddaj do Spichlerza · ' + ogCoins(farmDonationValue(crop, qty)) + ' 🪙 wartości');
+    hint.replaceChildren(over
+      ? '⚖️ Ponad uczciwym udziałem skup płaci Ci tylko ' + q.fairPct + '% — w Spichlerzu plony liczą się po pełnej cenie, do rankingu i tytułu.'
+      : 'Plony liczą się do rankingu Spichlerza po cenie rynkowej. Nie dostajesz za nie monet.');
+  };
+  btn.addEventListener('click', async () => {
+    const d = await fwDonateGranary(crop, getQty(), btn);
+    if (d) { close(); if (afterSell) afterSell(); }
+  });
+  wrap.append(btn, hint);
+  wrap._sync(getQty(), null);
+  return wrap;
+}
+
+async function openGranaryModal() {
+  await fwGranaryRefresh();
+  const gr = fwGranary;
+  if (!gr) { toast('Spichlerz jest jeszcze zamknięty.'); return; }
+  const overlay = el('div', { className: 'modal-overlay', role: 'dialog', 'aria-modal': 'true' });
+  const close = () => { overlay.remove(); window.removeEventListener('keydown', esc); };
+  const esc = e => { if (e.key === 'Escape') close(); };
+  window.addEventListener('keydown', esc);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  const box = el('div', { className: 'modal og-modal' });
+  box.append(el('h3', {}, '🏛️ Spichlerz biura'));
+  box.append(el('p', { className: 'og-sub' },
+    'Oddajesz plony, a Spichlerz liczy je po aktualnej cenie skupu — bez obniżki za uczciwy udział. ',
+    'Nie dostajesz monet: dostajesz miejsce w rankingu i tytuł widoczny w Twoim profilu.'));
+
+  const mine = Number(gr.my_total || 0);
+  const myTitle = [...(gr.titles || [])].reverse().find(t => mine >= Number(t.min));
+  const next = granaryNextTitle(mine);
+  box.append(el('div', { className: 'og-reward' },
+    el('b', {}, 'Twój wkład: '), ogCoins(mine) + ' 🪙',
+    myTitle ? ' · ' + myTitle.emoji + ' ' + myTitle.name : '',
+    next ? ' · do ' + next.emoji + ' ' + next.name + ' brakuje ' + ogCoins(next.min - mine) + ' 🪙' : ''));
+  if (next) {
+    const prev = myTitle ? Number(myTitle.min) : 0;
+    const pct = Math.min(100, Math.round((mine - prev) / (Number(next.min) - prev) * 100));
+    box.append(el('div', { className: 'og-goal-track big' },
+      el('div', { className: 'og-goal-fill', style: { width: pct + '%' } })));
+  }
+
+  // My crops, biggest value first.
+  const crops = [...fmInventory.entries()].filter(([ct, qty]) => qty > 0 && fmMarket.has(ct))
+    .map(([ct, qty]) => ({ ct, qty, val: farmDonationValue(ct, qty) }))
+    .sort((a, b) => b.val - a.val);
+  if (crops.length) {
+    box.append(el('div', { className: 'fw-don-title' }, '🌾 Twoje plony'));
+    crops.forEach(c => {
+      const ident = farmCropIdentity(c.ct);
+      const btn = el('button', { className: 'farm-mini-btn', type: 'button' }, 'Oddaj');
+      btn.addEventListener('click', async () => {
+        if (!await uiConfirm('Oddać ' + c.qty + '× ' + ident.name + ' do Spichlerza (' + ogCoins(c.val) + ' 🪙 wartości)? Nie dostaniesz za nie monet.',
+          { okLabel: 'Oddaj' })) return;
+        if (await fwDonateGranary(c.ct, c.qty, btn)) { close(); openGranaryModal(); }
+      });
+      box.append(el('div', { className: 'fw-don-row' },
+        farmIcon(ident.emoji),
+        el('span', { className: 'fw-don-name' }, ident.name + ' ×' + c.qty),
+        el('span', { className: 'fw-don-val' }, ogCoins(c.val) + ' 🪙'),
+        btn));
+    });
+    box.append(el('div', { className: 'fw-don-hint' },
+      'Najbardziej opłaca się oddawać to, co sprzedałbyś ponad uczciwym udziałem — tam skup płaci tylko 30% albo 5%. ',
+      'Mniejszą ilość wybierzesz w oknie sprzedaży (📈 Cennik). Cena rynkowa się przy tym nie zmienia.'));
+  }
+
+  const ranking = (title, rows, withTitle) => {
+    if (!rows?.length) return;
+    box.append(el('div', { className: 'og-list-title' }, title));
+    const list = el('div', { className: 'og-list' });
+    rows.forEach((r, i) => list.append(el('div', { className: 'og-list-row' },
+      el('span', { className: 'og-rank' }, ['🥇', '🥈', '🥉'][i] || (i + 1) + '.'),
+      el('span', { className: 'og-nick' }, r.nick + (withTitle && r.title ? ' ' + r.title.emoji : ''),
+        withTitle && r.title ? el('span', { className: 'fw-gr-title' }, ' ' + r.title.name) : ''),
+      el('b', {}, ogCoins(r.total) + ' 🪙'))));
+    box.append(list);
+  };
+  ranking('📅 Ten tydzień · ' + ogCoins(gr.week_total) + ' 🪙', gr.week, false);
+  ranking('🏅 Wszech czasów · ' + ogCoins(gr.total) + ' 🪙', gr.all_time, true);
+
+  const titles = (gr.titles || []).map(t => t.emoji + ' ' + t.name + ' od ' + ogCoins(t.min) + ' 🪙').join(' · ');
+  if (titles) box.append(el('div', { className: 'og-hint' }, 'Tytuły: ' + titles + '. Liczą się też plony oddane na Wspólny Cel.'));
+
+  box.append(el('button', { className: 'btn-ghost', style: { width: '100%', marginTop: '10px' },
+    onclick: close }, 'Zamknij'));
+  overlay.append(box);
+  document.body.append(overlay);
+}
+
+(function fwGranaryCss() {
+  if (document.getElementById('fw-granary-css')) return;
+  const s = document.createElement('style');
+  s.id = 'fw-granary-css';
+  s.textContent = `
+    .fw-gr-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fw-gr-title { font-size: 11px; color: var(--muted); }
+  `;
+  document.head.appendChild(s);
+})();
