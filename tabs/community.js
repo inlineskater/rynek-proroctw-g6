@@ -86,10 +86,11 @@ const CO_ERRORS = {
     .co-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
     .co-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
     .co-table tr:last-child td { border-bottom: 0; }
-    .co-table td:first-child, .co-table td:nth-child(2), .co-table td:last-child { white-space: nowrap; }
-    .co-table td:nth-child(5) { min-width: 200px; }
-    .co-st-fixed { border-color: #16a34a; } .co-st-confirmed, .co-st-fixing { border-color: #2563eb; }
-    .co-st-abuse { border-color: #b91c1c; }
+    .co-table td.nw { white-space: nowrap; }
+    .co-table td.wide { min-width: 200px; }
+    .co-st-fixed, .co-st-shipped { border-color: #16a34a; }
+    .co-st-confirmed, .co-st-fixing, .co-st-won, .co-st-building { border-color: #2563eb; }
+    .co-st-abuse, .co-st-rejected { border-color: #b91c1c; }
     details.co-sec > summary { cursor: pointer; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
     @media (max-width: 520px) { .co-log-row { grid-template-columns: 1fr; gap: 2px; } }
     /* Phones: each ticket becomes a small card, every cell labelled. */
@@ -343,43 +344,90 @@ function coTicketRow(t) {
       t.note ? el('div', { className: 'co-note' }, '🤖 ' + t.note) : null));
 }
 
-// ── 📜 Dziennik zgłoszeń: one row per ticket ───────────────────────────────
-// Owner's brief: a table — the reported bug, its status and its solution.
+// ── 📜 Dziennik tables: one row per ticket / per idea ──────────────────────
+// Owner's brief: a table — what was reported, its status and its solution.
 const CO_REPO_URL = 'https://github.com/inlineskater/rynek-proroctw-g6';
+
+// cols: [{ label, cls }]; rows: arrays of cell contents (Node | string | array).
+// Each cell gets one wrapper div so the phone layout's (label | value) grid holds.
+function coTable(cols, rows) {
+  const table = el('table', { className: 'co-table' });
+  const hr = el('tr', {});
+  cols.forEach(c => hr.append(el('th', { className: c.cls || '' }, c.label)));
+  table.append(el('thead', {}, hr));
+  const tb = el('tbody', {});
+  rows.forEach(cells => {
+    const tr = el('tr', {});
+    cells.forEach((c, i) => tr.append(el('td', { className: cols[i].cls || '', 'data-label': cols[i].label },
+      el('div', {}, ...(Array.isArray(c) ? c : [c])))));
+    tb.append(tr);
+  });
+  table.append(tb);
+  return el('div', { className: 'co-table-wrap' }, table);
+}
+
+function coSolution(note, sha, emptyText) {
+  const out = [note ? note : el('span', { className: 'co-muted' }, emptyText)];
+  if (sha) out.push(el('div', {}, el('a', {
+    href: CO_REPO_URL + '/commit/' + sha, target: '_blank', rel: 'noopener',
+  }, 'zmiana ' + String(sha).slice(0, 7))));
+  return out;
+}
+
+function coCoinsCell(rewarded, fined, amount) {
+  return rewarded ? el('span', { className: 'co-coins' }, '+' + coN(amount))
+    : fined ? el('span', { className: 'co-fine' }, 'kara') : '—';
+}
+
+function coWhen(ts) { return el('span', { title: fmtDateTime(ts) }, relTime(ts)); }
+
 function coTicketTable(root) {
   const tickets = coState.tickets || [];
   const sec = el('div', { className: 'co-sec' },
     el('h3', {}, 'Dziennik zgłoszeń'),
     el('div', { className: 'co-muted' }, 'Każde zgłoszenie, jego status i rozwiązanie. Nowe zgłoszenia automat analizuje co noc o 02:13.'));
-  if (!tickets.length) { sec.append(el('p', { className: 'co-muted' }, 'Brak zgłoszeń.')); root.append(sec); return; }
-  const table = el('table', { className: 'co-table' });
-  const hr = el('tr', {});
-  ['Data', 'Zgłaszający', 'Zgłoszony błąd', 'Status', 'Rozwiązanie', '🪙'].forEach(h => hr.append(el('th', {}, h)));
-  table.append(el('thead', {}, hr));
-  const tb = el('tbody', {});
-  tickets.forEach(t => {
-    const st = CO_TICKET_STATUS[t.status] || ['', t.status];
-    const solution = el('div', {});
-    if (t.note) solution.append(t.note);
-    else solution.append(el('span', { className: 'co-muted' }, t.status === 'new' ? 'Czeka na analizę.' : '—'));
-    if (t.commit_sha) solution.append(el('div', {}, el('a', {
-      href: CO_REPO_URL + '/commit/' + t.commit_sha, target: '_blank', rel: 'noopener',
-    }, 'poprawka ' + String(t.commit_sha).slice(0, 7))));
-    const coins = t.rewarded_at ? el('span', { className: 'co-coins' }, '+' + coN(coState.bug_reward ?? 500))
-      : t.fined_at ? el('span', { className: 'co-fine' }, 'kara') : '—';
-    // One wrapper per cell, so the phone layout's two-column grid (label | value) holds.
-    const cell = (label, ...kids) => el('td', { 'data-label': label }, el('div', {}, ...kids));
-    tb.append(el('tr', {},
-      cell('Data', el('span', { title: fmtDateTime(t.created_at) }, relTime(t.created_at))),
-      cell('Zgłaszający', t.author_nick || 'Gracz'),
-      cell('Zgłoszony błąd', el('b', {}, t.title),
-        el('div', { className: 'co-muted' }, (CO_KINDS[t.kind] || t.kind) + (t.tab ? ' · ' + t.tab : ''))),
-      cell('Status', el('span', { className: 'co-pill co-st-' + t.status }, st[0] + ' ' + st[1])),
-      cell('Rozwiązanie', solution),
-      cell('🪙', coins)));
-  });
-  table.append(tb);
-  sec.append(el('div', { className: 'co-table-wrap' }, table));
+  if (!tickets.length) sec.append(el('p', { className: 'co-muted' }, 'Brak zgłoszeń.'));
+  else sec.append(coTable(
+    [{ label: 'Data', cls: 'nw' }, { label: 'Zgłaszający', cls: 'nw' }, { label: 'Zgłoszony błąd' },
+     { label: 'Status' }, { label: 'Rozwiązanie', cls: 'wide' }, { label: '🪙', cls: 'nw' }],
+    tickets.map(t => {
+      const st = CO_TICKET_STATUS[t.status] || ['', t.status];
+      return [
+        coWhen(t.created_at),
+        t.author_nick || 'Gracz',
+        [el('b', {}, t.title), el('div', { className: 'co-muted' }, (CO_KINDS[t.kind] || t.kind) + (t.tab ? ' · ' + t.tab : ''))],
+        el('span', { className: 'co-pill co-st-' + t.status }, st[0] + ' ' + st[1]),
+        coSolution(t.note, t.commit_sha, t.status === 'new' ? 'Czeka na analizę.' : '—'),
+        coCoinsCell(t.rewarded_at, t.fined_at, coState.bug_reward ?? 500),
+      ];
+    })));
+  root.append(sec);
+}
+
+function coIdeaTable(root) {
+  // all_ideas arrived with a later community_state(); fall back to what older
+  // servers send (this week + winners) rather than showing nothing.
+  const ideas = coState.all_ideas || [...(coState.ideas || []), ...(coState.history || [])];
+  const sec = el('div', { className: 'co-sec' },
+    el('h3', {}, 'Dziennik pomysłów'),
+    el('div', { className: 'co-muted' }, 'Każdy pomysł, liczba głosów, status i realizacja. Głosowanie zamyka się w poniedziałek o 00:47.'));
+  if (!ideas.length) sec.append(el('p', { className: 'co-muted' }, 'Brak pomysłów.'));
+  else sec.append(coTable(
+    [{ label: 'Tydzień', cls: 'nw' }, { label: 'Autor', cls: 'nw' }, { label: 'Pomysł' }, { label: 'Głosy', cls: 'nw' },
+     { label: 'Status' }, { label: 'Realizacja', cls: 'wide' }, { label: '🪙', cls: 'nw' }],
+    ideas.map(i => {
+      const st = CO_IDEA_STATUS[i.status] || ['', i.status];
+      const ws = String(i.week_start || '');
+      return [
+        ws ? ws.slice(8, 10) + '.' + ws.slice(5, 7) : coWhen(i.created_at),
+        i.author_nick || 'Gracz',
+        el('b', {}, i.title),
+        String(i.votes ?? 0),
+        el('span', { className: 'co-pill co-st-' + i.status }, st[0] + ' ' + st[1]),
+        coSolution(i.note, i.commit_sha, i.status === 'open' ? 'Trwa głosowanie.' : '—'),
+        coCoinsCell(i.rewarded_at, i.fined_at, coState.reward ?? 5000),
+      ];
+    })));
   root.append(sec);
 }
 
@@ -387,15 +435,11 @@ function coTicketTable(root) {
 function coRenderLog(root, kind) {
   // The ideas log also carries week closures; each tab shows only its own half.
   const rows = (coState.log || []).filter(r => kind === 'ticket' ? r.ref_kind === 'ticket' : r.ref_kind !== 'ticket');
-  if (kind === 'ticket') coTicketTable(root);
-  // On the bug tab the table is the log; the raw event history folds away under it.
-  const sec = kind === 'ticket'
-    ? el('details', { className: 'co-sec' },
-        el('summary', {}, 'Historia zdarzeń — każda decyzja i wypłata'),
-        el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'))
-    : el('div', { className: 'co-sec' },
-        el('h3', {}, 'Dziennik pomysłów — każda decyzja i wypłata'),
-        el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'));
+  if (kind === 'ticket') coTicketTable(root); else coIdeaTable(root);
+  // The table is the log; the raw event history folds away under it.
+  const sec = el('details', { className: 'co-sec' },
+    el('summary', {}, 'Historia zdarzeń — każda decyzja i wypłata'),
+    el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'));
   if (!rows.length) sec.append(el('p', { className: 'co-muted' }, 'Pusto.'));
   rows.forEach(r => {
     const what = r.event === 'submitted' ? (r.ref_kind === 'idea' ? '💡 zgłosił pomysł' : '🐞 wysłał zgłoszenie')
