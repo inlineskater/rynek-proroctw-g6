@@ -7519,6 +7519,17 @@
     .maj-summary-tile-value, .maj-summary-value { min-width: 0; margin-top: 1px; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
     .maj-summary-tile-sub, .maj-summary-sub { min-width: 0; margin-top: 1px; overflow: hidden; color: var(--muted); font-size: 9.5px; font-variant-numeric: tabular-nums; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 
+    .maj-fair { margin: 8px 0 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--card); }
+    .maj-fair-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font-size: 12.5px; }
+    .maj-fair-head span { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .maj-fair.warn .maj-fair-head span { color: #b45309; } .maj-fair.bad .maj-fair-head span { color: var(--no); }
+    .maj-fair-track { position: relative; height: 10px; margin: 7px 0 5px; border-radius: 999px; overflow: hidden; background: var(--border); }
+    .maj-fair-zone { position: absolute; top: 0; bottom: 0; }
+    .maj-fair-zone.z0 { background: color-mix(in srgb, #4caf50 22%, transparent); }
+    .maj-fair-zone.z1 { background: color-mix(in srgb, #f59e0b 25%, transparent); }
+    .maj-fair-zone.z2 { background: color-mix(in srgb, #ef4444 22%, transparent); }
+    .maj-fair-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; background: linear-gradient(90deg, #3d9440, #e0a419); opacity: .85; }
+    .maj-fair-note { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
     .maj-alerts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: -5px; }
     .maj-alert { display: inline-flex; min-height: 34px; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--r-sm);
       background: var(--surface-2); color: var(--text); font: inherit; font-size: 11px; font-weight: 600; line-height: 1.35; text-align: left; text-decoration: none; cursor: pointer;
@@ -25203,6 +25214,54 @@ async function refreshFarmMarketState() {
   return fmMarketState;
 }
 
+// „Do 1× udziału skup płaci 100%" etc. — from the server's tiers when loaded
+// (farm_fairness_state), with the shipped values as the fallback.
+function farmFairShareTierText(i) {
+  const t = fmFairness?.tiers || [{ upto_x: 1, rate: 1 }, { upto_x: 2, rate: 0.3 }, { upto_x: null, rate: 0.05 }];
+  const tier = t[i];
+  if (!tier) return '';
+  const from = i ? Number(t[i - 1].upto_x) : 0;
+  const pct = Math.round(Number(tier.rate) * 100) + '%';
+  return tier.upto_x == null
+    ? 'powyżej ' + from + '× udziału — skup płaci ' + pct
+    : (from ? 'od ' + from + '× do ' + tier.upto_x + '×' : 'do ' + tier.upto_x + '×') + ' udziału — skup płaci ' + pct;
+}
+
+// ⚖️ „Twój udział w skupie" meter for 🎒 Mój Majątek: how much of the 7-day
+// fair share is used and what the NPC pays for the next sale.
+function majFairShareMeter() {
+  const share = Number(fmFairness?.fair_share_7d || 0);
+  if (!share) return '';
+  const used = Math.max(0, Number(fmFairness.used_7d || 0));
+  const tiers = fmFairness.tiers || [];
+  const x = used / share;
+  const cur = tiers.find(t => t.upto_x == null || x < Number(t.upto_x)) || tiers[tiers.length - 1];
+  const rate = Math.round(Number(cur?.rate ?? 1) * 100);
+  const cap1 = share * Number(tiers[0]?.upto_x || 1);
+  const span = share * Math.max(2.5, x * 1.1);
+  const pctOf = v => Math.min(100, v / span * 100);
+  const nf = n => Math.round(n).toLocaleString('pl-PL');
+  const tone = rate >= 100 ? 'ok' : rate >= 30 ? 'warn' : 'bad';
+  const zones = el('div', { className: 'maj-fair-track' });
+  let from = 0;
+  tiers.forEach((t, i) => {
+    const to = t.upto_x == null ? span : share * Number(t.upto_x);
+    zones.append(el('div', { className: 'maj-fair-zone z' + i,
+      style: { left: pctOf(from) + '%', width: (pctOf(to) - pctOf(from)) + '%' } }));
+    from = to;
+  });
+  zones.append(el('div', { className: 'maj-fair-fill', style: { width: pctOf(used) + '%' } }));
+  return el('div', { className: 'maj-fair ' + tone },
+    el('div', { className: 'maj-fair-head' },
+      el('b', {}, '⚖️ Twój udział w skupie (7 dni)'),
+      el('span', {}, nf(used) + ' / ' + nf(share) + ' 🪙 · skup płaci teraz ' + rate + '%')),
+    zones,
+    el('div', { className: 'maj-fair-note' },
+      used < cap1
+        ? 'Jeszcze ' + nf(cap1 - used) + ' 🪙 sprzedasz po pełnej cenie. Potem: ' + farmFairShareTierText(1) + ', ' + farmFairShareTierText(2) + '.'
+        : 'Ponad udziałem lepiej oddać plony do 🏛️ Spichlerza (pełna cena → 🎪 Festyn dla biura) albo do 📋 Zamówień, które nie liczą się do udziału. Udział odnawia się, gdy sprzedaż sprzed 7 dni wypada z licznika.'));
+}
+
 async function refreshFarmFairness() {
   try {
     const { data, error } = await sb.rpc('farm_fairness_state');
@@ -26881,7 +26940,8 @@ function majCropsHero() {
     hero.append(el('div', { className: 'maj-crops-empty' },
       el('span', { className: 'mce-ico' }, '🧺'),
       el('b', {}, 'Brak plonów do sprzedaży'),
-      el('div', { className: 'mce-steps' }, '🌱 Zasadź kartę na działce → ⏳ poczekaj na wzrost → 🧺 zbierz → 💰 wróć tu i sprzedaj')));
+      el('div', { className: 'mce-steps' }, '🌱 Zasadź kartę na działce → ⏳ poczekaj na wzrost → 🧺 zbierz → 💰 wróć tu i sprzedaj')),
+      majFairShareMeter());
     return hero;
   }
 
@@ -26901,7 +26961,8 @@ function majCropsHero() {
         el('span', { className: 'maj-section-count' }, '· ' + totalQty + ' szt.')),
       totalEl),
     el('div', { className: 'maj-crops-sub' },
-      'Wypłata brutto za sprzedaż wszystkiego teraz (przed ewentualną spłatą podatku; uwzględnia wpływ partii na cenę) · przy cenach maks. ≈' + totalMax + ' 🪙'));
+      'Wypłata brutto za sprzedaż wszystkiego teraz (przed ewentualną spłatą podatku; uwzględnia wpływ partii na cenę) · przy cenach maks. ≈' + totalMax + ' 🪙'),
+    majFairShareMeter());
 
   rows.forEach((r, i) => hero.append(majCropCard(r.crop, r.qty, r.q, r.now, i)));
   majCountUp(totalEl, totalNow);
@@ -27726,10 +27787,17 @@ function renderFarmHelpInto(bodyEl) {
       P('⏳ ', b('Plony psują się!'), ' Każdy zbiór ', b('zgnije 5 dni po zebraniu'), ' — w 🎒 Moim Majątku widzisz licznik „🥀 zgnije za…". Nie zbieraj na zapas: zgniłe plony znikają bez coinów.')),
 
     farmHelpSection('🧺 5. Sprzedaż plonów',
-      P('Zebrane plony sprzedajesz automatowi (NPC) za coiny — w ekwipunku albo w panelu farmy.'),
-      P(b('Cena się waha.'), ' Cena w katalogu to ', b('cena MAKSYMALNA'), ' (pułap). NPC płaci ', b('od 30% do 100%'), ' tej kwoty, a poziom zmienia się ', b('2 razy na dobę: o 00:00 i 12:00'), ' (czas polski). Czasem trafi się ', b('wysoka stawka'), ' — to wtedy warto sprzedawać.'),
-      P(b('Śledź wykres.'), ' W zakładce ', b('📈 Ceny'), ' masz historię z 7 dni dla każdej rośliny (linia przerywana = cena maks.). Zgadnij dobry moment i sprzedaj, gdy słupek jest wysoko.'),
-      P(b('Sprzedaż obniża cenę.'), ' Każda transakcja chwilowo zbija cenę — ', b('im więcej sprzedasz naraz, tym mocniejszy spadek'), ' (do 40% przy dużej partii, minimum 30% ceny maks.). Cena wraca do dziennego poziomu ', b('~12% na godzinę'), '; szybkie klikanie sprzedaży na raty nic nie daje — pomaga tylko odczekanie.'),
+      P('Zebrane plony sprzedajesz automatowi (NPC) za coiny — w 🎒 Moim Majątku albo w panelu farmy. Plony możesz też oddać do ', b('📋 Zamówień'), ' (klienci kupujący mieszanki) albo do ', b('🏛️ Spichlerza'), ' (niżej).'),
+      P(b('Cena się waha.'), ' Cena w katalogu to ', b('cena MAKSYMALNA'), ' (pułap). Poziom zmienia się ', b('2 razy na dobę: o 00:00 i 12:00'), ' (czas polski). Historię z 7 dni masz w zakładce ', b('📈 Ceny'), ' (linia przerywana = cena maks.).'),
+      P(b('Sprzedaż obniża cenę.'), ' Każda transakcja chwilowo zbija cenę — ', b('im więcej naraz, tym mocniej'), '. Cena wraca ', b('~12% na godzinę'), '; sprzedawanie na raty nic nie daje — pomaga tylko odczekanie.'),
+      P(b('Skup ma budżet.'), ' NPC wydaje na plony tyle, ile biuro ', b('spala'), ' (skrzynki, ulepszenia, krzyżowanie, podatek, kasyno). Gdy biuro sprzedaje więcej, niż wynosi budżet, skup płaci mniejszy procent stawki — aktualny stan widać na karcie ', b('🌍 Rynek'), ' w 📈 Cenach. Im więcej biuro wydaje, tym lepsze ceny dla wszystkich.'),
+      P(b('⚖️ Uczciwy udział.'), ' Każdy gracz ma swój kawałek budżetu: ', b('budżet tygodnia ÷ liczba sprzedających'), '. Liczy się Twoja sprzedaż do skupu z ', b('ostatnich 7 dni'), ' (po cenie rynkowej):'),
+      el('ul', { className: 'farm-help-list' },
+        step(b(farmFairShareTierText(0)), ''),
+        step(b(farmFairShareTierText(1)), ''),
+        step(b(farmFairShareTierText(2)), '')),
+      P('Okno sprzedaży pokazuje to plakietką ', b('⚖️ 30%'), ' albo ', b('⚖️ 5%'), ', a ile już zużyłeś, widać w 🎒 Moim Majątku nad plonami. ', b('Zamówienia nie liczą się do udziału'), '. Udział sam się odnawia — sprzedaż starsza niż 7 dni wypada z licznika. Dzięki temu nadwyżka jednego gracza nie zbija cen pozostałym.'),
+      P(b('🏛️ Spichlerz i 🎪 Festyn.'), ' Plony, których nie opłaca się sprzedać (np. ponad udziałem), oddaj do Spichlerza — liczą się po ', b('pełnej cenie skupu'), ', bez monet dla Ciebie. Co ', b('50 000 🪙'), ' oddanych plonów włącza ', b('Festyn plonów: +10% do każdego zbioru dla całego biura przez 24 h'), '. Do tego ranking i tytuły: 🌾 Siewca → 🧺 Żniwiarz → 🏛️ Gospodarz Spichlerza → 👑 Dobrodziej Biura.'),
       P(b('Wszyscy widzą sprzedaże.'), ' Lista ', b('🧾 Ostatnie sprzedaże plonów'), ' (zakładka 📈 Ceny) pokazuje, kto co i za ile sprzedał.')),
 
     farmHelpSection('💎 Kolekcja NFT — pełny przewodnik',
