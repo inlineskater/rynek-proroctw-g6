@@ -261,7 +261,10 @@ AS $$
                              'bank_share_dividend',
                              -- bank-casino-share-removed.sql: the one-off
                              -- refund that offsets the burned bank_share_buy.
-                             'bank_share_buyback')
+                             'bank_share_buyback',
+                             -- community.sql: Głos Biura rewards (winning
+                             -- idea 5 000, confirmed bug 500).
+                             'community_idea_reward','community_bug_reward')
       ), 0::numeric) AS ledger_minted,
 
       -- weekly game prize payouts (game-defined top-three awards)
