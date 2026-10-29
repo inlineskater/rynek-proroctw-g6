@@ -1,5 +1,6 @@
 .agents/
-.claude/
+.claude/*
+!.claude/settings.json
 .mcp.json
 .playwright-mcp/
 projectswill-adam-drink/

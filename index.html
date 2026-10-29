@@ -8810,6 +8810,7 @@
           <button class="nav-menu-item" id="wallet-btn">💼 Portfel</button>
           <button class="nav-menu-item" id="activity-btn">📋 Aktywność</button>
           <button class="nav-menu-item hidden" id="documents-btn">📄 Moje Dokumenty</button>
+          <button class="nav-menu-item" id="report-bug-btn">🐞 Zgłoś błąd</button>
           <div class="nav-menu-divider"></div>
           <button class="nav-menu-item nav-menu-danger" id="logout-btn">🚪 Wyloguj</button>
         </div>
@@ -8848,6 +8849,8 @@
       </div>
     </div>
     <button class="nav-tab" data-tab="bank">🏦 Bank G6</button>
+    <button class="nav-tab" data-tab="community">🗳️ Pomysły <span class="nav-new-badge">Nowość</span></button>
+    <button class="nav-tab" data-tab="bugs">🐞 Zgłoszenia</button>
     <button class="nav-tab" data-tab="leaderboard">📈 Statystyki</button>
     <button class="nav-tab" data-tab="bug-jumper-test" id="nav-bug-jumper-test" style="display:none">🧪 Bug Test</button>
     <button class="nav-tab" data-tab="invoice-horde-test" id="nav-invoice-horde-test" style="display:none">🧪 Tickety Test</button>
@@ -8996,6 +8999,24 @@
   <div id="tab-archive" class="hidden">
     <main>
       <div id="archive-body">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 🗳️ Pomysły (Głos Biura) — ideas and votes; rendered by tabs/community.js. -->
+  <div id="tab-community" class="hidden">
+    <main>
+      <div id="community-body">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 🐞 Zgłoszenia — bug tickets; the same tabs/community.js module renders it. -->
+  <div id="tab-bugs" class="hidden">
+    <main>
+      <div id="bugs-body">
         <div class="loading-center"><div class="spinner"></div></div>
       </div>
     </main>
@@ -12274,6 +12295,7 @@ const TAB_MODULES = {
   farmevents:  'tabs/farm-events.js', // not a tab: 🌪️ random farm events (animations + banner)
   farmnft:     'tabs/farm-nft.js',   // not a tab: NFT cards, calendar, merge, breeding, explorer
   archive:     'tabs/archive.js',    // 📦 Archiwum: read-only history of ARCHIVED_TABS
+  community:   'tabs/community.js',  // 🗳️ Pomysły AND 🐞 Zgłoszenia — one module, two tabs (like plinko)
 };
 const _tabModulePromises = {};
 let _tabActivationId = 0;
@@ -12358,6 +12380,8 @@ function stopPokerClock() {}
 function stopPlinkoAnimation() {}
 function stopWheelAnimation() {}
 function stopBankTimer() {}
+// Overwritten by tabs/community.js; the realtime handler calls it unconditionally.
+function communityOnChange() {}
 function stopLotteryAnimation() {}
 function stopShopTimer() {}
 // Overwritten by tabs/hilo.js. switchTab() calls it unconditionally, so it has
@@ -13775,6 +13799,8 @@ function switchTab(tab) {
   const tCr = document.getElementById('tab-crash');
   const tWl = document.getElementById('tab-wheel');
   const tBk = document.getElementById('tab-bank');
+  const tCo = document.getElementById('tab-community');
+  const tBg = document.getElementById('tab-bugs');
   const tAr = document.getElementById('tab-archive');
   const tHl = document.getElementById('tab-hilo');
   const tTw = document.getElementById('tab-tower');
@@ -13792,6 +13818,8 @@ function switchTab(tab) {
   hide(tCr);
   hide(tWl);
   hide(tBk);
+  hide(tCo);
+  hide(tBg);
   hide(tAr);
   hide(tHl);
   hide(tTw);
@@ -13860,6 +13888,14 @@ function switchTab(tab) {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tAr);
     withTabModule('archive', () => loadArchive(), 'archive');
+  } else if (tab === 'community') {
+    hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
+    show(tCo);
+    withTabModule('community', () => loadCommunity(), 'community');
+  } else if (tab === 'bugs') {
+    hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
+    show(tBg);
+    withTabModule('community', () => loadCommunity(), 'bugs');
   } else if (tab === 'bank') {
     hide(tM); hide(tL); hide(tP); hide(tR); hide(tSl); hide(tWb); hide(tS); hide(tG);
     show(tBk);
@@ -14187,6 +14223,10 @@ const ACT_COIN_REASONS = {
   bank_resale_sale:           '🤝 sprzedał papier na rynku wtórnym',
   // Wspólny Cel Biura — a deliberate, public gesture: exactly what the feed is for.
   office_goal_contribution:   '🎯 dorzucił się do wspólnego celu',
+  // 🗳️ Głos Biura (community.sql) — rare, public, earned.
+  community_idea_reward:      '🗳️ dostał nagrodę za zwycięski pomysł',
+  community_bug_reward:       '🐞 dostał nagrodę za zgłoszony błąd',
+  community_abuse_fine:       '⚖️ dostał karę za próbę wyłudzenia',
   // daily_interest intentionally omitted — too noisy for the feed
 };
 const ACT_FB_PICK = { '1': 'gospodarzy', 'X': 'remis', '2': 'gości' };
@@ -14671,6 +14711,10 @@ function setupRealtime() {
       // while they watch, and a completion has to reveal the new plots at once.
       refreshOfficeGoal();
     })
+    // 🗳️ Pomysły / 🐞 Zgłoszenia: every RPC writes a community_log row, and
+    // votes move community_ideas. The module renders only while a tab shows.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'community_ideas' }, () => communityOnChange())
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_log' }, () => communityOnChange())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'canvas_pixels' }, (payload) => {
       applyCanvasPixelChange(payload.new);
     })
@@ -15734,6 +15778,12 @@ function openActivityModal() {
 function closeActivityModal() { stopActivityLive(); hide(afOverlay); document.body.style.overflow = ''; }
 
 document.getElementById('activity-btn').addEventListener('click', openActivityModal);
+// 🐞 from any tab: remember where the player was, then open the ticket form.
+document.getElementById('report-bug-btn').addEventListener('click', () => {
+  if (activeTab !== 'bugs') window.communityReportFrom = activeTab;
+  window.communityOpenView = 'report';
+  switchTab('bugs');
+});
 document.getElementById('btn-activity-all').addEventListener('click', openActivityModal);
 document.getElementById('af-close').addEventListener('click', closeActivityModal);
 afOverlay.addEventListener('click', e => { if (e.target === afOverlay) closeActivityModal(); });

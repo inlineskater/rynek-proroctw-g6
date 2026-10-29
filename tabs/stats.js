@@ -1735,6 +1735,14 @@ function buildBalancePoints({ userId, coins, createdAt, trades = [], games = [],
       // A pure burn (farm-neighbours.sql), so deliberately NOT in NEUTRAL.
       : t.reason === 'farm_scarecrow_buy'
       ? '🧑‍🌾 Strach na wróble'
+      // 🗳️ Głos Biura rewards: minted income, so deliberately NOT in NEUTRAL.
+      : t.reason === 'community_idea_reward'
+      ? '🗳️ Głos Biura: ' + (t.meta?.title || 'pomysł')
+      : t.reason === 'community_bug_reward'
+      ? '🐞 Zgłoszony błąd: ' + (t.meta?.title || '?')
+      // A burned fine, so deliberately NOT in NEUTRAL either.
+      : t.reason === 'community_abuse_fine'
+      ? '⚖️ Kara: ' + (t.meta?.title || 'próba wyłudzenia')
       : t.reason === 'farm_order_payout'
       ? '📋 Zamówienie: ' + (t.meta?.customer || 'NPC')
       : t.reason === 'daily_interest'
