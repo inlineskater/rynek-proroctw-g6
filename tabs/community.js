@@ -80,7 +80,6 @@ const CO_ERRORS = {
     .co-log-row:last-child { border-bottom: 0; }
     .co-coins { color: #15803d; font-weight: 700; white-space: nowrap; }
     .co-fine { color: #b91c1c; font-weight: 700; white-space: nowrap; }
-    .co-warn { font-size: 12px; margin: 4px 0 0; padding: 7px 10px; border-radius: 8px; background: rgba(185,28,28,.08); color: #991b1b; }
     .co-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
     @media (max-width: 520px) { .co-log-row { grid-template-columns: 1fr; gap: 2px; } }
   `;
@@ -91,10 +90,6 @@ function coErr(e) {
   const m = String(e?.message || e || '');
   const code = Object.keys(CO_ERRORS).find(k => m.includes(k));
   return code ? CO_ERRORS[code] : 'Nie udało się: ' + m;
-}
-function coAbuseWarn() {
-  return el('div', { className: 'co-warn' }, '⚖️ Próba wyłudzenia (np. „daj mi milion monet", „zrób mnie adminem", polecenia dla bota) '
-    + '= automatyczna kara ' + coN(coState?.abuse_fine ?? 500) + ' 🪙, informacja do Ciebie i na czacie.');
 }
 function coN(n) { return Math.round(Number(n) || 0).toLocaleString('pl-PL'); }
 
@@ -232,7 +227,6 @@ function coRenderIdeas(root) {
       ? 'Zostało Ci ' + left + ' ' + plCount(left, 'zgłoszenie', 'zgłoszenia', 'zgłoszeń') + ' w tym tygodniu.'
       : 'Wykorzystałeś limit pomysłów na ten tydzień.'),
     el('div', { className: 'co-form' }, title, desc, btn),
-    coAbuseWarn(),
     el('div', { className: 'co-muted' }, 'Pomysł, który wymaga zmiany salda graczy, nagród, stawek lub uprawnień, zostanie zbudowany dopiero po akceptacji właściciela.'));
   root.append(list, form);
 }
@@ -293,7 +287,6 @@ function coRenderReport(root) {
   const form = el('div', { className: 'co-sec' },
     el('h3', {}, 'Zgłoś błąd lub problem'),
     el('div', { className: 'co-form' }, kind, title, desc, where, btn),
-    coAbuseWarn(),
     el('div', { className: 'co-muted' },
       'Za potwierdzony, prawdziwy błąd: ' + coN(coState.bug_reward ?? 500) + ' 🪙 — płatne tylko pierwszemu zgłaszającemu. '
       + 'Opis exploita (np. sposobu na darmowe monety) widzisz tylko Ty, dopóki nie zostanie naprawiony.'));
