@@ -81,7 +81,26 @@ const CO_ERRORS = {
     .co-coins { color: #15803d; font-weight: 700; white-space: nowrap; }
     .co-fine { color: #b91c1c; font-weight: 700; white-space: nowrap; }
     .co-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+    .co-table-wrap { margin-top: 10px; }
+    .co-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .co-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .co-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+    .co-table tr:last-child td { border-bottom: 0; }
+    .co-table td:first-child, .co-table td:nth-child(2), .co-table td:last-child { white-space: nowrap; }
+    .co-table td:nth-child(5) { min-width: 200px; }
+    .co-st-fixed { border-color: #16a34a; } .co-st-confirmed, .co-st-fixing { border-color: #2563eb; }
+    .co-st-abuse { border-color: #b91c1c; }
+    details.co-sec > summary { cursor: pointer; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
     @media (max-width: 520px) { .co-log-row { grid-template-columns: 1fr; gap: 2px; } }
+    /* Phones: each ticket becomes a small card, every cell labelled. */
+    @media (max-width: 700px) {
+      .co-table thead { display: none; }
+      .co-table, .co-table tbody, .co-table tr, .co-table td { display: block; width: 100%; box-sizing: border-box; }
+      .co-table tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+      .co-table tr:last-child { border-bottom: 0; }
+      .co-table td { border: 0; padding: 3px 0; white-space: normal !important; min-width: 0 !important; display: grid; grid-template-columns: 96px 1fr; gap: 8px; }
+      .co-table td::before { content: attr(data-label); font-size: 11px; color: var(--muted); }
+    }
   `;
   document.head.append(s);
 })();
@@ -324,13 +343,59 @@ function coTicketRow(t) {
       t.note ? el('div', { className: 'co-note' }, '🤖 ' + t.note) : null));
 }
 
+// ── 📜 Dziennik zgłoszeń: one row per ticket ───────────────────────────────
+// Owner's brief: a table — the reported bug, its status and its solution.
+const CO_REPO_URL = 'https://github.com/inlineskater/rynek-proroctw-g6';
+function coTicketTable(root) {
+  const tickets = coState.tickets || [];
+  const sec = el('div', { className: 'co-sec' },
+    el('h3', {}, 'Dziennik zgłoszeń'),
+    el('div', { className: 'co-muted' }, 'Każde zgłoszenie, jego status i rozwiązanie. Nowe zgłoszenia automat analizuje co noc o 02:13.'));
+  if (!tickets.length) { sec.append(el('p', { className: 'co-muted' }, 'Brak zgłoszeń.')); root.append(sec); return; }
+  const table = el('table', { className: 'co-table' });
+  const hr = el('tr', {});
+  ['Data', 'Zgłaszający', 'Zgłoszony błąd', 'Status', 'Rozwiązanie', '🪙'].forEach(h => hr.append(el('th', {}, h)));
+  table.append(el('thead', {}, hr));
+  const tb = el('tbody', {});
+  tickets.forEach(t => {
+    const st = CO_TICKET_STATUS[t.status] || ['', t.status];
+    const solution = el('div', {});
+    if (t.note) solution.append(t.note);
+    else solution.append(el('span', { className: 'co-muted' }, t.status === 'new' ? 'Czeka na analizę.' : '—'));
+    if (t.commit_sha) solution.append(el('div', {}, el('a', {
+      href: CO_REPO_URL + '/commit/' + t.commit_sha, target: '_blank', rel: 'noopener',
+    }, 'poprawka ' + String(t.commit_sha).slice(0, 7))));
+    const coins = t.rewarded_at ? el('span', { className: 'co-coins' }, '+' + coN(coState.bug_reward ?? 500))
+      : t.fined_at ? el('span', { className: 'co-fine' }, 'kara') : '—';
+    // One wrapper per cell, so the phone layout's two-column grid (label | value) holds.
+    const cell = (label, ...kids) => el('td', { 'data-label': label }, el('div', {}, ...kids));
+    tb.append(el('tr', {},
+      cell('Data', el('span', { title: fmtDateTime(t.created_at) }, relTime(t.created_at))),
+      cell('Zgłaszający', t.author_nick || 'Gracz'),
+      cell('Zgłoszony błąd', el('b', {}, t.title),
+        el('div', { className: 'co-muted' }, (CO_KINDS[t.kind] || t.kind) + (t.tab ? ' · ' + t.tab : ''))),
+      cell('Status', el('span', { className: 'co-pill co-st-' + t.status }, st[0] + ' ' + st[1])),
+      cell('Rozwiązanie', solution),
+      cell('🪙', coins)));
+  });
+  table.append(tb);
+  sec.append(el('div', { className: 'co-table-wrap' }, table));
+  root.append(sec);
+}
+
 // ── 📜 Dziennik ────────────────────────────────────────────────────────────
 function coRenderLog(root, kind) {
   // The ideas log also carries week closures; each tab shows only its own half.
   const rows = (coState.log || []).filter(r => kind === 'ticket' ? r.ref_kind === 'ticket' : r.ref_kind !== 'ticket');
-  const sec = el('div', { className: 'co-sec' },
-    el('h3', {}, (kind === 'ticket' ? 'Dziennik zgłoszeń' : 'Dziennik pomysłów') + ' — każda decyzja i wypłata'),
-    el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'));
+  if (kind === 'ticket') coTicketTable(root);
+  // On the bug tab the table is the log; the raw event history folds away under it.
+  const sec = kind === 'ticket'
+    ? el('details', { className: 'co-sec' },
+        el('summary', {}, 'Historia zdarzeń — każda decyzja i wypłata'),
+        el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'))
+    : el('div', { className: 'co-sec' },
+        el('h3', {}, 'Dziennik pomysłów — każda decyzja i wypłata'),
+        el('div', { className: 'co-muted' }, '🤖 = decyzja automatu (Claude), 👤 = akcja gracza.'));
   if (!rows.length) sec.append(el('p', { className: 'co-muted' }, 'Pusto.'));
   rows.forEach(r => {
     const what = r.event === 'submitted' ? (r.ref_kind === 'idea' ? '💡 zgłosił pomysł' : '🐞 wysłał zgłoszenie')
