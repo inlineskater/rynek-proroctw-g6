@@ -516,6 +516,9 @@
        dropdowns above the page: without it the backdrop-filter stacking context
        paints below every position:relative card on the page. */
     .nav-tabs { position: sticky; top: var(--nav-top, 58px); z-index: 40; }
+    /* Merged into the header (placeNavTabs, ≥1100px): a plain row, no own bar. */
+    header > .nav-tabs { position: static; flex: 1 1 auto; min-width: 0; justify-content: center; padding: 0; border: 0;
+      background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
     .nav-tab {
       background: none; border: none; border-radius: var(--r-sm);
@@ -618,6 +621,22 @@
         overflow-y: auto; -webkit-overflow-scrolling: touch;
       }
       .nav-dropdown .nav-tab, .nav-dropdown .nav-menu-item { padding: 12px 16px; font-size: 13px; }
+    }
+    /* Phones (2026-10-29): ONE row — the six top-level entries become an icon
+       tab bar (icon over a short label), instead of pills wrapping to 2–3 lines.
+       Dropdowns still open as the full-width sheet above. */
+    @media (max-width: 600px) {
+      .nav-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 4px 4px; }
+      .nav-tabs > .nav-tab, .nav-tabs > .nav-group > .nav-group-btn { width: 100%; flex-direction: column; justify-content: center; gap: 2px;
+        min-height: 46px; padding: 5px 1px 4px; font-size: 10.5px; line-height: 1.1; }
+      .nav-tabs > .nav-tab { display: flex; align-items: center; }
+      .nav-tabs > .nav-tab[style*="display:none"] { display: none !important; }
+      .nav-tabs .nav-ic { font-size: 18px; line-height: 1; }
+      .nav-tabs .nav-lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .nav-tabs > .nav-group > .nav-group-btn > .nav-chevron { display: none; }
+      .nav-tabs > .nav-group > .nav-group-btn > .nav-hint-badge,
+      .nav-tabs > .nav-tab > .nav-hint-badge { position: absolute; top: 2px; right: 6px; min-height: 14px; padding: 1px 4px; font-size: 9px; }
+      .nav-tabs > .nav-group > .nav-group-btn, .nav-tabs > .nav-tab { position: relative; }
     }
 
     /* ── ACTIVITY STRIP ── */
@@ -2266,11 +2285,11 @@
       :root { --page-pad: 16px; }
 
       header {
-        align-items: flex-start; flex-wrap: wrap;
-        padding-top: 10px; padding-bottom: 10px;
+        align-items: center; flex-wrap: wrap;
+        padding-top: 8px; padding-bottom: 8px;
       }
-      .logo { flex: 1 1 100%; font-size: 16px; }
-      .user-info { width: 100%; justify-content: space-between; gap: 8px; }
+      .logo { flex: 1 1 auto; font-size: 16px; }
+      .user-info { justify-content: flex-end; gap: 8px; }
       .coins-badge, .btn-ghost { flex: 0 0 auto; }
       .header-nick { max-width: 90px; }
 
@@ -6451,58 +6470,59 @@
     /* 2026-10-29: no card at all — the garden is the hero, the bar above it is
        a quiet row of controls on the page background, not a second panel. */
     .farm-topbar { display: flex; flex-direction: column; gap: 8px; padding: 0 2px 2px; }
-    /* ── Top bar contents (2026-10-03, farmToolbar) ──
-       Left: the field filter („Wszystkie / Moje N / Do zbioru N") + one line of
-       what to do next. Right: hub buttons in four groups split by hairlines, flat
-       (no fills, no indigo primary) so the only colours in the bar are the two
-       that mean something: green = something to collect, red = debt. */
-    .ftb { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; }
-    .ftb-field { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
-    .ftb-field-row { display: flex; align-items: center; gap: 8px; }
-    .ftb-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface); }
-    .ftb-seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 7px;
-      background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
-      transition: background .12s, color .12s, box-shadow .12s; }
-    .ftb-seg-btn:hover:not(:disabled) { color: var(--text); }
-    .ftb-seg-btn.on { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(15,23,42,.14); }
+    /* ── Top bar contents (2026-10-29 rework, farmToolbar) ──
+       ONE row. Left: two filter chips that ARE the counts („Moje 6",
+       „Do zbioru 1"; green only when something is ripe) + the next harvest +
+       the table switch. Right: a single white dock with the five everyday
+       destinations and „Więcej ▾". The only colours mean something: green =
+       collect, red = debt. */
+    .ftb { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+    .ftb-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+    .ftb-seg { display: inline-flex; gap: 4px; }
+    .ftb-seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--card); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+      transition: background .12s, color .12s, border-color .12s; }
+    .ftb-seg-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-hi); }
+    .ftb-seg-btn.on { background: var(--text); border-color: var(--text); color: #fff; }
     .ftb-seg-btn:disabled { cursor: default; opacity: .55; }
     .ftb-seg-btn b { min-width: 20px; padding: 1px 6px; border-radius: 999px; box-sizing: border-box; background: rgba(15,23,42,.07);
       color: var(--text); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ftb-seg-btn.on b { background: rgba(255,255,255,.2); color: #fff; }
     .ftb-seg-btn.has b { background: #16a34a; color: #fff; }
-    .ftb-next { padding-left: 2px; font-size: 12px; color: var(--muted); }
-    .ftb-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; }
-    .ftb-group { display: flex; padding: 0 4px; }
-    .ftb-group:first-child { padding-left: 0; }
-    .ftb-group + .ftb-group { border-left: 1px solid var(--border); }
-    .ftb-group:last-child { padding-right: 0; }
-    .ftb-row { display: flex; gap: 2px; }
-    .ftb-btn { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 6px 6px; border: 0; border-radius: var(--r-sm);
-      background: transparent; color: var(--text); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    .ftb-next { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    .ftb-nav { display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 12px;
+      background: var(--card); box-shadow: var(--sh-sm); }
+    .ftb-btn { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border: 0; border-radius: 9px;
+      background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
       transition: background .12s; }
-    .ftb-btn:hover { background: var(--surface); }
+    .ftb-btn:hover, .ftb-more.open .ftb-more-btn { background: var(--surface); }
     .ftb-btn:focus-visible, .ftb-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .ftb-ic { font-size: 15px; line-height: 1; }
     .ftb-badge { min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px; box-sizing: border-box; background: #16a34a; color: #fff;
       font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; font-variant-numeric: tabular-nums; }
     .ftb-badge.warn { background: #dc2626; }
-    /* Phone: the filter spans the width, and the ten buttons become a 5×2 grid
-       of icon tiles — every destination visible, no sideways scroll strip
-       cutting labels in half. Groups flatten (display: contents) on purpose. */
+    .ftb-more { position: relative; }
+    .ftb-more-btn { color: var(--muted); }
+    .ftb-more-btn.has-dot::after { content: ''; position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #16a34a; }
+    .ftb-more-btn.dot-warn::after { background: #dc2626; }
+    .ftb-menu { display: none; position: fixed; z-index: 45; min-width: 200px; padding: 5px;
+      border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: 0 12px 32px rgba(15,23,42,.16); }
+    .ftb-more.open .ftb-menu { display: flex; flex-direction: column; }
+    .ftb-menu-item { width: 100%; justify-content: flex-start; }
+    .ftb-menu-item .ftb-badge { margin-left: auto; }
+    /* Phone: chips span the width; the dock becomes one row of six icon tiles. */
     @media (max-width: 600px) {
-      .farm-topbar { padding: 8px; }
-      .ftb { flex-direction: column; align-items: stretch; gap: 8px; }
-      .ftb-field { flex-direction: column; align-items: stretch; gap: 6px; }
-      .ftb-seg { display: flex; flex: 1 1 auto; min-width: 0; }
-      .ftb-field-row { gap: 6px; }
-      .farm-view-toggle { padding: 6px 8px; font-size: 12px; }
+      .ftb { flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+      .ftb-nav { flex: 1 1 auto; min-width: 0; }
+      .ftb-field { flex-wrap: nowrap; }
+      .ftb-seg { flex: 1 1 auto; }
       .ftb-seg-btn { flex: 1 1 0; padding: 7px 4px; font-size: 12px; }
-      .ftb-next { text-align: center; }
-      .ftb-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
-      .ftb-group, .ftb-row { display: contents; }
-      .ftb-btn { flex-direction: column; gap: 3px; padding: 7px 1px 6px; background: var(--surface); font-size: 10.5px; letter-spacing: -.01em; min-width: 0; }
-      .ftb-ic { font-size: 18px; }
-      .ftb-txt { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-      .ftb-badge { position: absolute; top: 3px; right: 4px; }
+      .ftb-nav { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .ftb-nav > .ftb-btn, .ftb-more-btn { width: 100%; flex-direction: column; gap: 3px; padding: 7px 1px 6px; font-size: 10.5px; letter-spacing: -.01em; min-width: 0; }
+      .ftb-nav .ftb-ic { font-size: 18px; }
+      .ftb-nav > .ftb-btn .ftb-txt, .ftb-more-btn .ftb-txt { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+      .ftb-nav > .ftb-btn .ftb-badge { position: absolute; top: 3px; right: 4px; }
+      .ftb-menu-item { flex-direction: row !important; font-size: 13px !important; }
     }
     /* Tile inspector now lives inside the one wooden top bar — strip its own plate look, add a divider + height cap. */
     /* The wooden side board (.farm-section / .farm-side) was removed when the hub
@@ -7078,8 +7098,27 @@
        is expanded, and scaleFarmPots measures the board's real top. */
     .farm-strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; align-items: stretch; }
     /* .garden-sky is pointer-events:none (decor) — the cards inside it must opt back in. */
-    .farm-sky-bar { position: relative; z-index: 5; padding: 10px 12px 18px; pointer-events: auto; }
+    .farm-sky-bar { position: relative; z-index: 5; padding: 10px 10px 18px; pointer-events: auto; }
+    .farm-sky-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .farm-sky-bar:not(:has(> :not(.hidden))) { padding: 0; }
+    /* Field HUD on the sky: frosted chips, so status reads as part of the scene. */
+    .farm-sky-hud { display: flex; min-width: 0; }
+    .farm-sky-nav { margin-left: auto; min-width: 0; }
+    /* No backdrop-filter here: it would become the containing block of the
+       position:fixed „Więcej" menu. */
+    .farm-sky-nav .ftb-nav { background: rgba(255,255,255,.94); border-color: rgba(255,255,255,.6); box-shadow: 0 2px 10px rgba(15,23,42,.12); }
+    /* The view switch reads as one more menu row while it sits in „Więcej". */
+    .ftb-menu .farm-view-toggle { width: 100%; text-align: left; border: 0; border-top: 1px solid var(--border); border-radius: 0 0 8px 8px;
+      margin-top: 3px; padding: 9px 11px; background: none; color: var(--text); font-size: 13px; font-weight: 600; }
+    .ftb-menu .farm-view-toggle:hover { background: var(--surface); }
+    .farm-sky-hud .ftb-seg-btn { border-color: rgba(255,255,255,.55); background: rgba(255,255,255,.82); color: #334155;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 1px 3px rgba(15,23,42,.12); }
+    .farm-sky-hud .ftb-seg-btn:disabled { opacity: .7; }
+    .farm-sky-hud .ftb-seg-btn.on { background: #0f172a; border-color: #0f172a; color: #fff; }
+    .farm-sky-hud .ftb-next { padding: 6px 12px; border-radius: 999px; background: rgba(15,23,42,.38); color: #fff; font-weight: 600;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+    .farm-sky-hud .ftb-next:empty { display: none; }
+    @media (max-width: 600px) { .farm-sky-hud { flex: 1 1 100%; } .farm-sky-hud .ftb-field { flex: 1 1 auto; gap: 6px; } .farm-sky-hud .ftb-next { padding: 6px 10px; font-size: 12px; } }
     .farm-sky-bar > .og-goal, .farm-sky-bar > #fw-banner { margin: 0; padding: 7px 12px; border-color: rgba(255,255,255,.7);
       background: rgba(255,255,255,.86); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
     .farm-sky-bar > .og-goal .og-goal-ic, .farm-sky-bar .fw-wx-ic { font-size: 18px; }
@@ -8847,11 +8886,11 @@
   </header>
 
   <nav class="nav-tabs">
-    <button class="nav-tab active" data-tab="farm">🌱 Ogródek</button>
+    <button class="nav-tab active" data-tab="farm"><span class="nav-ic">🌱</span> <span class="nav-lbl">Ogródek</span></button>
 
 
     <div class="nav-group" data-group="games">
-      <button class="nav-group-btn">🎮 Gry <span class="nav-chevron">▾</span></button>
+      <button class="nav-group-btn"><span class="nav-ic">🎮</span> <span class="nav-lbl">Gry</span> <span class="nav-chevron">▾</span></button>
       <div class="nav-dropdown">
         <div class="nav-dropdown-label">Kasyno</div>
         <button class="nav-tab" data-tab="plinko">📌 Plinko G6</button>
@@ -8867,7 +8906,7 @@
     </div>
 
     <div class="nav-group" data-group="shop">
-      <button class="nav-group-btn">🛒 Targowisko <span class="nav-chevron">▾</span></button>
+      <button class="nav-group-btn"><span class="nav-ic">🛒</span> <span class="nav-lbl">Targowisko</span> <span class="nav-chevron">▾</span></button>
       <div class="nav-dropdown">
         <button class="nav-tab" data-shop-target="marketplace-section">🤝 Ogłoszenia</button>
         <button class="nav-tab" data-shop-target="buy-orders-section">📥 Zlecenia zakupu</button>
@@ -8876,17 +8915,17 @@
         <button class="nav-tab" data-shop-target="cosmetics-section">🪴 Ozdoby</button>
       </div>
     </div>
-    <button class="nav-tab" data-tab="bank">🏦 Bank G6</button>
+    <button class="nav-tab" data-tab="bank"><span class="nav-ic">🏦</span> <span class="nav-lbl">Bank G6</span></button>
     <!-- Głos Biura: two tabs, one nav slot (2026-10-29 declutter — two separate
          „Nowość" tabs were the loudest thing in the bar). -->
     <div class="nav-group" data-group="community">
-      <button class="nav-group-btn">🗳️ Głos Biura <span class="nav-chevron">▾</span></button>
+      <button class="nav-group-btn"><span class="nav-ic">🗳️</span> <span class="nav-lbl">Głos Biura</span> <span class="nav-chevron">▾</span></button>
       <div class="nav-dropdown">
         <button class="nav-tab" data-tab="community">💡 Pomysły</button>
         <button class="nav-tab" data-tab="bugs">🐞 Zgłoszenia błędów</button>
       </div>
     </div>
-    <button class="nav-tab" data-tab="leaderboard">📈 Statystyki</button>
+    <button class="nav-tab" data-tab="leaderboard"><span class="nav-ic">📈</span> <span class="nav-lbl">Statystyki</span></button>
     <button class="nav-tab" data-tab="bug-jumper-test" id="nav-bug-jumper-test" style="display:none">🧪 Bug Test</button>
     <button class="nav-tab" data-tab="invoice-horde-test" id="nav-invoice-horde-test" style="display:none">🧪 Tickety Test</button>
   </nav>
@@ -11525,7 +11564,7 @@
   <div id="tab-farm" class="hidden">
     <main>
       <div class="farm-wrap">
-        <div class="farm-topbar" id="farm-topbar">
+        <div class="farm-topbar hidden" id="farm-topbar">
           <div class="farm-toolbar-host" id="farm-topbar-btns"></div>
         </div>
         <div class="farm-stage">
@@ -11537,6 +11576,13 @@
                  separate strip row plus a decorative sky band cost the board
                  ~200px of height, which is what sizes the plants. -->
             <div class="farm-strips farm-sky-bar">
+              <!-- Field HUD (2026-10-29): „Moje / Do zbioru" chips + next harvest,
+                   rendered by farmFieldFilter() — status belongs on the field. -->
+              <div class="farm-sky-hud" id="farm-sky-hud"></div>
+              <!-- The garden menu lives in the sky too, so nothing but the main
+                   header sits above the field. #farm-topbar (outside the stage)
+                   is only shown in table mode, for the „🌳 Pole" switch back. -->
+              <div class="farm-sky-nav" id="farm-sky-nav"></div>
               <div class="farm-starter-chip hidden" id="farm-starter-banner">
                 <span class="farm-starter-emoji" aria-hidden="true">🎁</span>
                 <span class="farm-starter-text"><strong>Prezent od serwera</strong><span>Darmowe skrzynki za 0 🪙</span></span>
@@ -11564,7 +11610,7 @@
         </div>
         <div class="farm-table-wrap hidden" id="farm-table-wrap"></div>
         <!-- moved into the top bar's filter row by farmFieldFilter() -->
-        <button class="farm-view-toggle" id="farm-view-toggle" type="button" title="Pokaż działki jako tabelę">📋 Tabela</button>
+        <button class="farm-view-toggle" id="farm-view-toggle" type="button" title="Pokaż działki jako tabelę">📋 Widok tabeli</button>
       </div>
     </main>
   </div>
@@ -13224,8 +13270,26 @@ function syncNavOffset() {
   const hh = header ? Math.round(header.getBoundingClientRect().height) : 0;
   const nh = nav ? Math.round(nav.getBoundingClientRect().height) : 0;
   if (hh > 0) root.setProperty('--nav-top', hh + 'px');
-  if (nh > 0) root.setProperty('--nav-h', nh + 'px');
+  // Merged into the header on wide screens (placeNavTabs) → no second bar.
+  if (header && nav && header.contains(nav)) root.setProperty('--nav-h', '0px');
+  else if (nh > 0) root.setProperty('--nav-h', nh + 'px');
 }
+// One bar instead of two (2026-10-29): on wide screens the tab row moves INTO
+// the header, between the logo and the coins, so the garden gets the 45 px a
+// second sticky bar cost. Narrow screens keep the original two-row layout —
+// the DOM is moved back, so none of the mobile nav CSS has to know.
+function placeNavTabs() {
+  const header = document.querySelector('#screen-app > header');
+  const nav = document.querySelector('#screen-app .nav-tabs');
+  const user = header && header.querySelector('.user-info');
+  if (!header || !nav || !user) return;
+  const wide = window.matchMedia('(min-width: 1100px)').matches;
+  if (wide && nav.parentElement !== header) header.insertBefore(nav, user);
+  else if (!wide && nav.parentElement === header) header.after(nav);
+  syncNavOffset();
+}
+placeNavTabs();
+window.matchMedia('(min-width: 1100px)').addEventListener('change', placeNavTabs);
 syncNavOffset();
 if (window.ResizeObserver) {
   const navRo = new ResizeObserver(syncNavOffset);
@@ -21631,6 +21695,19 @@ function toggleFarmView() {
   applyFarmViewMode();
 }
 
+// The field ⇄ table switch: the last item of the garden's „Więcej" menu in
+// field view; in table view the sky (and its menu) is hidden, so the switch
+// back moves to #farm-topbar above the table.
+function placeFarmViewToggle() {
+  const btn = document.getElementById('farm-view-toggle');
+  const top = document.getElementById('farm-topbar-btns');
+  const menu = document.querySelector('#farm-sky-nav .ftb-menu');
+  if (!btn) return;
+  if (farmViewMode === 'table') { if (top && btn.parentElement !== top) top.append(btn); }
+  else if (menu && btn.parentElement !== menu) menu.append(btn);
+  document.getElementById('farm-topbar')?.classList.toggle('hidden', farmViewMode !== 'table');
+}
+
 function applyFarmViewMode() {
   const stage = document.querySelector('#tab-farm .farm-stage');
   const tableWrap = document.getElementById('farm-table-wrap');
@@ -21638,8 +21715,10 @@ function applyFarmViewMode() {
   const isTable = farmViewMode === 'table';
   if (stage) stage.classList.toggle('hidden', isTable);
   if (tableWrap) tableWrap.classList.toggle('hidden', !isTable);
+  closeFarmToolbarMenu();
+  placeFarmViewToggle();
   if (btn) {
-    btn.textContent = isTable ? '🌳 Pole' : '📋 Tabela';
+    btn.textContent = isTable ? '🌳 Wróć do pola' : '📋 Widok tabeli';
     btn.title = isTable ? 'Wróć do widoku pola' : 'Pokaż działki jako tabelę';
   }
   if (isTable) renderFarmTable();
@@ -23012,8 +23091,11 @@ function updateFarmPlantNextLines() {
 
 // ── Side panels ─────────────────────────────────────────────────────────────
 function renderFarmPanels() {
-  const tb = document.getElementById('farm-topbar-btns');
-  if (tb) tb.replaceChildren(farmToolbar());
+  const hud = document.getElementById('farm-sky-hud');
+  if (hud) hud.replaceChildren(farmFieldFilter());
+  const nav = document.getElementById('farm-sky-nav');
+  if (nav) nav.replaceChildren(farmToolbar());
+  placeFarmViewToggle();
 }
 
 function farmChanceLabel(pct) {
@@ -23327,42 +23409,67 @@ function farmBoxLinkBtn() {
 // buttons, grouped by intent). Ten equal pills in one row with an indigo
 // primary was a wall nobody could scan. Ids index FARM_HUB_TABS, whose order
 // still drives the hub modal's own tab bar.
-const FARM_TOOLBAR_GROUPS = [
-  { label: 'Moja farma', ids: ['inventory', 'boxes', 'collections'] },
-  { label: 'Handel',     ids: ['market', 'orders', 'seasonal'] },
-  { label: 'Biuro',      ids: ['neighbours', 'nft'] },
-  { label: 'Wiedza',     ids: ['catalog', 'help'] },
-];
+// 2026-10-29 rework: ONE row. Left = where am I (filter chips + next harvest
+// + the table view switch), right = where do I go: the five destinations used
+// every day as plain buttons, the rest behind „Więcej ▾" (its button picks up
+// a dot when something inside has a badge). Ten equal buttons in four groups
+// was still a wall; this is the row a player actually scans.
+const FARM_TOOLBAR_PRIMARY = ['inventory', 'boxes', 'orders', 'market', 'nft'];
+const FARM_TOOLBAR_MORE = ['neighbours', 'seasonal', 'collections', 'catalog', 'help'];
 let fmBoardFilter = 'all';   // 'all' | 'mine' | 'ready'
-let fmSummaryRefs = null;    // { mine, ready, readyBtn, next, key } — patched by the 1s tick
+let fmSummaryRefs = null;    // { mine, ready, readyBtn, next, key, nav } — patched by the 1s tick
+
+function farmToolbarButton(t, inMenu) {
+  const words = (t.short && !inMenu ? t.short : t.label).split(' ');
+  const b = el('button', { className: inMenu ? 'ftb-btn ftb-menu-item' : 'ftb-btn', type: 'button', title: t.label },
+    el('span', { className: 'ftb-ic', 'aria-hidden': 'true' }, words[0]),
+    el('span', { className: 'ftb-txt' }, words.slice(1).join(' ') || t.label));
+  b.dataset.badge = t.id;
+  b.addEventListener('click', () => { closeFarmToolbarMenu(); openFarmHub(t.id); });
+  return b;
+}
+
+function closeFarmToolbarMenu() {
+  document.querySelectorAll('#farm-sky-nav .ftb-more.open').forEach(m => {
+    m.classList.remove('open');
+    m.querySelector('.ftb-more-btn')?.setAttribute('aria-expanded', 'false');
+  });
+}
 
 function farmToolbar() {
   const bar = el('div', { className: 'ftb' });
-  bar.append(farmFieldFilter());
   const nav = el('nav', { className: 'ftb-nav', 'aria-label': 'Menu Ogródka' });
-  FARM_TOOLBAR_GROUPS.forEach(g => {
-    const grp = el('div', { className: 'ftb-group', role: 'group', 'aria-label': g.label });
-    const row = el('div', { className: 'ftb-row' });
-    g.ids.forEach(id => {
-      const t = farmHubTabs().find(x => x.id === id);
-      if (!t) return;
-      const words = t.label.split(' ');
-      const short = (t.short && t.short.includes(' ')) ? t.short.split(' ').slice(1).join(' ') : words.slice(1).join(' ');
-      const b = el('button', { className: 'ftb-btn', type: 'button', title: t.label },
-        el('span', { className: 'ftb-ic', 'aria-hidden': 'true' }, words[0]),
-        el('span', { className: 'ftb-txt' }, short));
-      b.dataset.badge = id;
-      b.addEventListener('click', () => openFarmHub(t.id));
-      row.append(b);
-    });
-    grp.append(row);
-    nav.append(grp);
+  const tabs = farmHubTabs();
+  FARM_TOOLBAR_PRIMARY.forEach(id => { const t = tabs.find(x => x.id === id); if (t) nav.append(farmToolbarButton(t, false)); });
+  const more = el('div', { className: 'ftb-more' });
+  const moreBtn = el('button', { className: 'ftb-btn ftb-more-btn', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', title: 'Więcej' },
+    el('span', { className: 'ftb-ic', 'aria-hidden': 'true' }, '☰'), el('span', { className: 'ftb-txt' }, 'Więcej'));
+  const menu = el('div', { className: 'ftb-menu', role: 'menu' });
+  FARM_TOOLBAR_MORE.forEach(id => { const t = tabs.find(x => x.id === id); if (t) menu.append(farmToolbarButton(t, true)); });
+  moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !more.classList.contains('open');
+    closeFarmToolbarMenu();
+    more.classList.toggle('open', open);
+    moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    // Fixed, measured from the button: the sky it sits in clips overflow.
+    if (open) {
+      const r = moreBtn.getBoundingClientRect();
+      menu.style.top = Math.round(r.bottom + 6) + 'px';
+      menu.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+    }
   });
+  more.append(moreBtn, menu);
+  nav.append(more);
   bar.append(nav);
-  fmSummaryRefs.nav = nav;
+  if (fmSummaryRefs) fmSummaryRefs.nav = nav;
   updateFarmFieldSummary();
   return bar;
 }
+document.addEventListener('click', e => { if (!e.target.closest('.ftb-more')) closeFarmToolbarMenu(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFarmToolbarMenu(); });
+window.addEventListener('scroll', closeFarmToolbarMenu, { passive: true });
+window.addEventListener('resize', closeFarmToolbarMenu);
 
 // „Something to do here" badges on the hub buttons. Red = needs you (land-tax
 // debt, crops rotting within 24 h); green = you can do something there right
@@ -23404,6 +23511,12 @@ function syncFarmToolbarBadges(nav) {
     if (badge.textContent !== a.text) badge.textContent = a.text;
     if (badge.title !== a.title) badge.title = a.title;
   });
+  const moreBtn = nav.querySelector('.ftb-more-btn');
+  if (moreBtn) {
+    const hidden = [...nav.querySelectorAll('.ftb-menu .ftb-badge')];
+    moreBtn.classList.toggle('has-dot', hidden.length > 0);
+    moreBtn.classList.toggle('dot-warn', hidden.some(x => x.classList.contains('warn')));
+  }
 }
 
 function farmFieldStats(now = Date.now()) {
@@ -23430,14 +23543,12 @@ function farmFieldFilter() {
     seg.append(b);
     return b;
   };
-  mk('all', 'Wszystkie');
   const mineBtn = mk('mine', 'Moje ');
   const readyBtn = mk('ready', 'Do zbioru ');
   const mineN = el('b', {}, '0'), readyN = el('b', {}, '0');
   mineBtn.append(mineN); readyBtn.append(readyN);
   const next = el('span', { className: 'ftb-next' });
-  const viewToggle = document.getElementById('farm-view-toggle');
-  wrap.append(viewToggle ? el('div', { className: 'ftb-field-row' }, seg, viewToggle) : seg, next);
+  wrap.append(seg, next);
   fmSummaryRefs = { mine: mineN, ready: readyN, readyBtn, next, key: '' };
   updateFarmFieldSummary();
   return wrap;
@@ -23450,9 +23561,9 @@ function updateFarmFieldSummary(now = Date.now()) {
   const s = farmFieldStats(now);
   const nextText = !me ? ''
     : s.mine === 0 ? 'Nie masz jeszcze działki — kliknij wolne pole lub otwórz 📦 Skrzynki.'
-    : s.ready > 0 ? 'Kliknij dojrzałą roślinę, żeby zebrać plon.'
-    : s.growing > 0 ? 'Następny zbiór za ' + farmTableDuration(s.next - now)
-    : 'Nic nie rośnie — kliknij swoją działkę i zasadź kartę.';
+    : s.ready > 0 ? '🌾 Kliknij dojrzałą roślinę, żeby zebrać'
+    : s.growing > 0 ? '⏱ Zbiór za ' + farmTableDuration(s.next - now)
+    : '🌱 Nic nie rośnie — kliknij swoją działkę';
   const key = s.mine + '|' + s.ready + '|' + nextText;
   if (key !== r.key) {
     r.key = key;
@@ -23478,7 +23589,7 @@ function applyFarmBoardFilter() {
     stage.classList.toggle('fm-only-mine', fmBoardFilter === 'mine');
     stage.classList.toggle('fm-only-ready', fmBoardFilter === 'ready');
   }
-  document.querySelectorAll('#farm-topbar-btns .ftb-seg-btn').forEach(b => {
+  document.querySelectorAll('#farm-sky-hud .ftb-seg-btn').forEach(b => {
     const on = b.dataset.filter === fmBoardFilter;
     b.classList.toggle('on', on);
     b.setAttribute('aria-checked', on ? 'true' : 'false');
