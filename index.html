@@ -25224,8 +25224,10 @@ function renderOfficeGoalBar() {
   const bar = document.getElementById('og-goal');
   if (!bar) return;
   const g = fmOfficeGoal?.goal;
-  if (!g) { bar.classList.add('hidden'); return; }
-  const done = g.status === 'completed';
+  // Only an OPEN goal earns a card in the sky band. A finished one has nothing
+  // left to do, and there is no next goal queued (owner's call, 2026-10-29).
+  if (!g || g.status !== 'open') { bar.classList.add('hidden'); return; }
+  const done = false;
   const pct = ogGoalPct(g);
   bar.classList.remove('hidden');
   bar.classList.toggle('done', done);
