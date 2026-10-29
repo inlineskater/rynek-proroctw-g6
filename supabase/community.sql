@@ -2,8 +2,9 @@
 --  🗳️ „Głos Biura" — the office decides what gets built, and reports bugs
 -- ════════════════════════════════════════════════════════════════════════════
 --  Run AFTER: schema.sql, chat.sql, last-active.sql. Idempotent.
---  Then re-run economy-stats.sql (its ledger_minted list carries the new
---  `community_idea_reward` reason).
+--  economy_stats() is patched IN PLACE at the bottom of this file (deployed
+--  copies carry in-place patches the repo file lacks, so re-running
+--  economy-stats.sql is not needed and not advised for this change).
 --
 --  ── Why ────────────────────────────────────────────────────────────────────
 --  OSRS-style: players propose ideas, everyone votes, the weekly winner is
@@ -612,3 +613,37 @@ BEGIN
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.community_ideas;   EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.community_log;     EXCEPTION WHEN duplicate_object THEN NULL; END;
 END $$;
+
+
+-- ── economy_stats(): count the rewards as minted and the fine as burned ─────
+-- Same in-place technique as lottery-draw.sql: the live definition carries
+-- patches (lottery, hybrid stat_value) that supabase/economy-stats.sql may not,
+-- so it is edited where it stands. Guarded + idempotent; RAISEs if an anchor
+-- is missing instead of silently doing nothing.
+DO $$
+DECLARE v_def text; v_new text;
+BEGIN
+  SELECT pg_get_functiondef(p.oid) INTO v_def
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'economy_stats'
+   LIMIT 1;
+  IF v_def IS NULL THEN
+    RAISE NOTICE 'economy_stats() not installed — skipping (economy-stats.sql already lists the reasons).';
+    RETURN;
+  END IF;
+  IF position('community_idea_reward' IN v_def) > 0 THEN
+    RAISE NOTICE 'economy_stats() already counts Głos Biura — nothing to patch.';
+    RETURN;
+  END IF;
+  v_new := replace(v_def, '''bank_share_buyback'')',
+    '''bank_share_buyback'',''community_idea_reward'',''community_bug_reward'')');
+  v_new := replace(v_new, '''bank_share_buy'')',
+    '''bank_share_buy'',''community_abuse_fine'')');
+  IF position('community_idea_reward' IN v_new) = 0 OR position('community_abuse_fine' IN v_new) = 0 THEN
+    RAISE EXCEPTION 'economy_stats(): reason lists not found — add the community_* reasons by hand (see supabase/community.sql).';
+  END IF;
+  EXECUTE v_new;
+  RAISE NOTICE 'economy_stats(): Głos Biura reasons added.';
+END $$;
+
+NOTIFY pgrst, 'reload schema';
