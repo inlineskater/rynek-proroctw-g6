@@ -59,6 +59,8 @@ async function hiloAct(fn) {
 function hiloStart() {
   const bet = Math.trunc(Number(hiloBet ?? hiloState?.defaultBet ?? 50));
   if (!(bet >= 1)) { toast('Podaj stawkę.'); return; }
+  const maxBet = Number(hiloState?.maxBet);
+  if (maxBet > 0 && bet > maxBet) { toast('Maksymalna stawka to ' + hiloCoins(maxBet) + ' 🪙 — wyżej już pierwsza wygrana przebiłaby sufit wypłaty.'); return; }
   hiloAct(async () => {
     const res = await invokeHilo('start', { bet });
     hiloState = { ...hiloState, round: res.round, coins: res.coins };
@@ -137,7 +139,9 @@ function hiloBetRow() {
   }, hiloCoins(v))));
   row.append(chips);
   const input = el('input', {
-    className: 'hl-bet-input', type: 'number', min: '1', value: String(hiloBet ?? ''),
+    className: 'hl-bet-input', type: 'number', min: '1',
+    ...(hiloState?.maxBet ? { max: String(hiloState.maxBet), title: 'Maks. ' + hiloCoins(hiloState.maxBet) + ' 🪙' } : {}),
+    value: String(hiloBet ?? ''),
     oninput: e => { hiloBet = Math.trunc(Number(e.target.value) || 0); },
   });
   row.append(input);
