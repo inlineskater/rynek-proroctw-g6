@@ -340,6 +340,14 @@ RETURNS json LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $f
           FROM public.community_tickets t JOIN public.profiles p ON p.id = t.author_id
          ORDER BY t.created_at DESC LIMIT 80
       ) x), '[]'::json),
+    -- Every idea, newest first, for the 📜 Dziennik table (one row per idea).
+    'all_ideas', COALESCE((
+      SELECT json_agg(x ORDER BY x.created_at DESC) FROM (
+        SELECT i.id, i.title, i.status, i.votes, i.note, i.week_start, i.commit_sha,
+               i.rewarded_at, i.fined_at, i.created_at, p.nick AS author_nick
+          FROM public.community_ideas i JOIN public.profiles p ON p.id = i.author_id
+         ORDER BY i.created_at DESC LIMIT 80
+      ) x), '[]'::json),
     'bug_reward', public.community_bug_reward(),
     'abuse_fine', public.community_abuse_fine(),
     'log', COALESCE((
