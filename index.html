@@ -12406,6 +12406,7 @@ const TAB_MODULES = {
   farmworld:   'tabs/farm-world.js', // not a tab: Ogródek orders, weather, neighbours
   farmevents:  'tabs/farm-events.js', // not a tab: 🌪️ random farm events (animations + banner)
   farmnft:     'tabs/farm-nft.js',   // not a tab: NFT cards, calendar, merge, breeding, explorer
+  farmquick:   'tabs/farm-quick.js', // not a tab: Ogródek quick actions (harvest/orders/sell/water/plant all)
   archive:     'tabs/archive.js',    // 📦 Archiwum: read-only history of ARCHIVED_TABS
   community:   'tabs/community.js',  // 🗳️ Pomysły AND 🐞 Zgłoszenia — one module, two tabs (like plinko)
 };
@@ -23108,6 +23109,7 @@ function renderFarmPanels() {
   const nav = document.getElementById('farm-sky-nav');
   if (nav) nav.replaceChildren(farmToolbar());
   placeFarmViewToggle();
+  withTabModule('farmquick', () => farmQuickRender());
 }
 
 function farmChanceLabel(pct) {
@@ -23573,6 +23575,7 @@ function farmFieldFilter() {
 }
 
 function updateFarmFieldSummary(now = Date.now()) {
+  farmQuickSync(now);
   const r = fmSummaryRefs;
   if (!r || !r.next.isConnected) return;
   if (r.nav) syncFarmToolbarBadges(r.nav);
@@ -24635,6 +24638,7 @@ function farmNeighbourYieldMult() { return 1; }
 function farmWorldDecorateCell() {}
 // Toolbar badge counts (fillable 📋 orders, 🥷 stealable plots) — tabs/farm-world.js.
 function farmOrdersFillableCount() { return 0; }
+function farmQuickSync() {}   // tabs/farm-quick.js
 function farmStealableCount() { return 0; }
 // 🎯 crop donations to the Wspólny Cel — implemented in tabs/farm-world.js.
 function farmGoalDonateButton() { return ''; }
