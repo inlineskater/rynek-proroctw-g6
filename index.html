@@ -637,6 +637,7 @@
       .nav-tabs > .nav-group > .nav-group-btn > .nav-hint-badge,
       .nav-tabs > .nav-tab > .nav-hint-badge { position: absolute; top: 2px; right: 6px; min-height: 14px; padding: 1px 4px; font-size: 9px; }
       .nav-tabs > .nav-group > .nav-group-btn, .nav-tabs > .nav-tab { position: relative; }
+      .nav-tabs > .nav-group > .nav-group-btn > .nav-new-badge { position: absolute; top: 1px; right: 2px; margin: 0; padding: 1px 4px; font-size: 7.5px; }
     }
 
     /* ── ACTIVITY STRIP ── */
@@ -8944,10 +8945,10 @@
     <!-- Głos Biura: two tabs, one nav slot (2026-10-29 declutter — two separate
          „Nowość" tabs were the loudest thing in the bar). -->
     <div class="nav-group" data-group="community">
-      <button class="nav-group-btn"><span class="nav-ic">🗳️</span> <span class="nav-lbl">Głos Biura</span> <span class="nav-chevron">▾</span></button>
+      <button class="nav-group-btn"><span class="nav-ic">🗳️</span> <span class="nav-lbl">Głos Biura</span> <span class="nav-new-badge">Nowość</span> <span class="nav-chevron">▾</span></button>
       <div class="nav-dropdown">
-        <button class="nav-tab" data-tab="community">💡 Pomysły</button>
-        <button class="nav-tab" data-tab="bugs">🐞 Zgłoszenia błędów</button>
+        <button class="nav-tab" data-tab="community">💡 Pomysły <span class="nav-new-badge">Nowość</span></button>
+        <button class="nav-tab" data-tab="bugs">🐞 Zgłoszenia błędów <span class="nav-new-badge">Nowość</span></button>
       </div>
     </div>
     <button class="nav-tab" data-tab="leaderboard"><span class="nav-ic">📈</span> <span class="nav-lbl">Statystyki</span></button>

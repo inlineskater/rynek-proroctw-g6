@@ -40,6 +40,15 @@ const CHAT_ANNOUNCEMENTS = {
     tab: 'coinpusher',
     cta: '🎰 Zagraj teraz',
   },
+  'glos-biura': {
+    title: '🗳️ Nowość: Głos Biura — pomysły i polowanie na błędy',
+    text: '💡 Pomysły: zgłoś do 2 pomysłów tygodniowo i głosuj na cudze. Co poniedziałek pomysł z największą liczbą głosów (min. połowa aktywnych graczy) wygrywa i trafia do gry — autor dostaje 5 000 🪙. '
+      + '🐞 Zgłoszenia błędów: znalazłeś błąd, problem albo exploit? Opisz go (do 5 dziennie). Każde potwierdzone zgłoszenie prawdziwego błędu to 500 🪙 dla pierwszego zgłaszającego. '
+      + 'Wszystko jest jawne — widać głosy, zgłoszenia i werdykty. Uwaga: zmyślone błędy i proszenie o monety kosztują 500 🪙 kary. Znajdziesz to w menu 🗳️ Głos Biura.',
+    images: [],
+    tab: 'community',
+    cta: '🗳️ Otwórz Głos Biura',
+  },
 };
 let chatFxAdminIds = null;          // Set of admin profile ids, fetched once
 let chatFxAdminLoading = null;
@@ -68,6 +77,7 @@ function chatFxAnnCard(code) {
     img.addEventListener('click', () => window.open(src, '_blank', 'noopener'));
     imgs.appendChild(img);
   }
+  if (!a.images.length) imgs.style.display = 'none';
   const btn = el('button', { className: 'cfx-ann-btn', type: 'button' }, a.cta);
   btn.addEventListener('click', () => { if (typeof switchTab === 'function') switchTab(a.tab); });
   return el('div', { className: 'cfx-ann' },
