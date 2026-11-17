@@ -73,3 +73,35 @@ could be playtested first. A first version (v2: a two-dot Verlet stick on Three.
 judged unplayable and was replaced before it ever shipped. Free practice is the default
 in **Wszystkie Gry**. See [Moto Trial](moto-trial.md) for the physics model, the
 determinism rule, the solver, tests and the release checklist.
+
+## Ostatnia Karta G6 (`last_card`, debut week 2026-11-23)
+
+Głos Biura's first winning idea (the week of 2026-11-09: „gra sezonowa: uno — możliwość
+gry w uno przeciwko AI lub innym graczom; ranking: kto wygrał w najmniejszej liczbie
+tur, dalej wg najlepszego miejsca"). Built under our own name and look: a classic
+shedding game, not a copy of a branded deck. The player and three bots (🤖 Kadry,
+🤖 Księgowość, 🤖 IT) get seven cards from a 108-card deck — four colours with one 0 and
+two each of 1–9, ⏭ Urlop (skip), ⇄ Zmiana kierunku and +2 Nadgodziny, plus four 🌈 Zmiana
+priorytetów and four +4 Deadline. Match the colour or the symbol, or play a wild; with
+nothing playable draw one, which may be played at once. The starting card is always a
+plain number, the player always opens, and the deck reshuffles from the discard pile.
+Forgetting **📢 Ostatnia!** when going to one card costs two cards (bots always call).
+
+**Scope.** Only the „vs AI" half of the idea shipped: a seasonal week has to be playable
+by one person (the lesson of Filler), and live PvP would be a separate matchmaking
+project. **Ranking** packs the voted rule into the shared `score DESC, submitted_at ASC`
+stack: win = 1000 + 10 × (200 − turns), and every win outranks every non-win; a non-win
+scores (5 − place) × 100 + up to 49 for fewer cards left (place = 1 + the seats strictly
+ahead: the winner, then fewer cards, then fewer card points; ties go to the player);
+resign = 0. „Turns" counts every time the turn came to the player, including turns lost
+to ⏭ / +2 / +4. No hero-item bonus. Up to 30 ranked matches per Warsaw day; the free
+arcade has no cap. A 900-ply ceiling ends a match on card counts (never reached in
+9 000 simulated matches; the longest was ~250).
+
+**Bots** (`botPick`) see only their own hand, the top card/colour and the card counts:
+they keep wilds for when nothing else fits, dump high-point cards, stick to the colour
+they hold most of, and go aggressive (+4, +2, ⏭, ⇄) when the next seat has ≤ 2 cards.
+`scripts/last-card-balance.mjs` (rules + bots extracted from the Edge Function): random
+player 23 % wins, bot-strength 28 % (≈ a fair 1-in-4 table), call forgotten half the
+time 15 %; the fastest wins take the minimum 7 turns.
+

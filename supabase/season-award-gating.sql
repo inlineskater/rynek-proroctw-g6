@@ -61,14 +61,22 @@ AS $$
     -- Moto Trial G6: two consecutive weeks, one course each.
     WHEN '2026-10-19' THEN 'moto_trial'  -- Kamieniołom (debut)
     WHEN '2026-10-26' THEN 'moto_trial'  -- Górska Przełęcz
+    -- 2026-11-16: appending an 18th game („Ostatnia Karta G6", Głos Biura's
+    -- first winning idea) turns % 17 into % 18. These three are PINS, not
+    -- choices: they hold what the % 17 rotation gave them (11-02 and 11-09
+    -- are played, 11-16 is the week this shipped into).
+    WHEN '2026-11-02' THEN 'super_mariusz'  -- pinned (slot 24 % 17)
+    WHEN '2026-11-09' THEN 'popup_panic'    -- pinned (slot 25 % 17)
+    WHEN '2026-11-16' THEN 'tetris'         -- pinned (slot 26 % 17)
+    WHEN '2026-11-23' THEN 'last_card'      -- „Ostatnia Karta G6" debut
     -- SEASONAL_ROTATION from its 2026-05-18 Monday anchor.
     ELSE
       (ARRAY[
         'whack_boss','bug_jumper','flappy_pants','snake','invoice_horde',
         'var_patrol','egg_catch','super_mariusz','popup_panic','tetris','healer_dungeon','filler',
-        'bubble_breaker','saper','arkanoid','rps','moto_trial'
+        'bubble_breaker','saper','arkanoid','rps','moto_trial','last_card'
       ])[
-        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 17) + 1
+        (GREATEST(0, (p_week_start - DATE '2026-05-18') / 7) % 18) + 1
       ]
   END;
 $$;
@@ -241,5 +249,16 @@ SELECT cron.schedule(
       THEN json_build_object('ok', true, 'skipped', 'not_midnight_warsaw')
       WHEN public.seasonal_game_for_week(public.rps_week_start(now() - interval '7 days')) = 'rps'
       THEN public.award_rps_week(public.rps_week_start(now() - interval '7 days'))
+      ELSE json_build_object('ok', true, 'skipped', 'not_in_season') END;$$
+);
+
+-- „Ostatnia Karta G6" — debuts the week of 2026-11-23 (see supabase/last-card.sql).
+SELECT cron.schedule(
+  'last_card_weekly_awards',
+  '0 22,23 * * 0',
+  $$SELECT CASE WHEN EXTRACT(hour FROM (now() AT TIME ZONE 'Europe/Warsaw'))::integer <> 0
+      THEN json_build_object('ok', true, 'skipped', 'not_midnight_warsaw')
+      WHEN public.seasonal_game_for_week(public.last_card_week_start(now() - interval '7 days')) = 'last_card'
+      THEN public.award_last_card_week(public.last_card_week_start(now() - interval '7 days'))
       ELSE json_build_object('ok', true, 'skipped', 'not_in_season') END;$$
 );
