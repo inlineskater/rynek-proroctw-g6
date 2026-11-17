@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.moto-trial-action]
 verify_jwt = true
+
+[functions.last-card-action]
+verify_jwt = true
